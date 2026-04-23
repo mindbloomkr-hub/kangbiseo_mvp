@@ -1,0 +1,554 @@
+/* css/calendar.css — 강의 캘린더 전용 스타일 */
+
+/* ════════════════════════════════
+   PAGE HEADER
+════════════════════════════════ */
+.calendar-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+
+/* ════════════════════════════════
+   CALENDAR LAYOUT
+   왼쪽: 달력 / 오른쪽: 선택일 상세
+════════════════════════════════ */
+.calendar-shell {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+/* ════════════════════════════════
+   CALENDAR PANEL
+════════════════════════════════ */
+.calendar-panel {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+/* ── 월 네비게이션 헤더 ── */
+.cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-white);
+}
+
+.cal-nav-center {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.cal-month-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-extrabold);
+  color: var(--color-gray-900);
+  letter-spacing: -0.02em;
+  min-width: 120px;
+  text-align: center;
+}
+
+.cal-nav-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  color: var(--color-gray-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.cal-nav-btn:hover {
+  background: var(--color-primary-50);
+  border-color: var(--color-primary-400);
+  color: var(--color-primary-600);
+}
+
+.cal-today-btn {
+  padding: 0 var(--space-4);
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-gray-600);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cal-today-btn:hover {
+  background: var(--color-primary-500);
+  border-color: var(--color-primary-500);
+  color: var(--color-white);
+}
+
+/* 오른쪽 컨트롤 그룹 */
+.cal-nav-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* 범례 */
+.cal-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.cal-legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-medium);
+}
+
+.cal-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* ── 요일 헤더 ── */
+.cal-weekday-header {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-gray-50);
+}
+
+.cal-weekday-cell {
+  padding: var(--space-3) 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.cal-weekday-cell.sun { color: var(--color-danger-600); }
+.cal-weekday-cell.sat { color: var(--color-info-600); }
+
+/* ── 날짜 그리드 ── */
+.cal-body {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: minmax(110px, auto);
+}
+
+/* 날짜 셀 */
+.cal-cell {
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-2);
+  min-height: 110px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 마지막 열 오른쪽 테두리 제거 */
+.cal-cell:nth-child(7n) { border-right: none; }
+
+/* 마지막 행 아래 테두리 제거 */
+.cal-cell.last-row { border-bottom: none; }
+
+.cal-cell:hover {
+  background: var(--color-primary-50);
+}
+
+/* 다른 달 날짜 */
+.cal-cell.other-month {
+  background: var(--color-gray-50);
+  cursor: default;
+}
+
+.cal-cell.other-month:hover {
+  background: var(--color-gray-50);
+}
+
+/* 오늘 날짜 */
+.cal-cell.today {
+  background: rgba(37, 99, 196, 0.03);
+}
+
+/* 선택된 날짜 */
+.cal-cell.selected {
+  background: var(--color-primary-50);
+  outline: 2px solid var(--color-primary-400);
+  outline-offset: -2px;
+}
+
+/* 날짜 번호 */
+.cal-date-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-1);
+  flex-shrink: 0;
+}
+
+.cal-date-num.today-num {
+  background: var(--color-primary-500);
+  color: var(--color-white);
+  font-weight: var(--font-weight-bold);
+}
+
+.cal-date-num.sun-num { color: var(--color-danger-600); }
+.cal-date-num.sat-num { color: var(--color-info-600); }
+
+.cal-date-num.other-month-num {
+  color: var(--color-gray-300);
+}
+
+/* 강의 수 배지 (3건 초과 시) */
+.cal-more-badge {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-semibold);
+  padding: 1px var(--space-2);
+  margin-top: 2px;
+  cursor: pointer;
+}
+
+.cal-more-badge:hover { color: var(--color-primary-600); }
+
+/* ════════════════════════════════
+   강의 이벤트 칩 (달력 셀 내부)
+════════════════════════════════ */
+.cal-event {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: filter var(--transition-fast), transform var(--transition-fast);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+  line-height: 1.3;
+}
+
+.cal-event:hover {
+  filter: brightness(0.93);
+  transform: translateX(1px);
+}
+
+.cal-event-time {
+  font-size: 10px;
+  opacity: 0.8;
+  font-family: var(--font-family-mono);
+  flex-shrink: 0;
+}
+
+.cal-event-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+/* ── 카테고리별 색상 ── */
+/* 경영/리더십 — 파랑 계열 */
+.cat-leadership {
+  background: var(--color-primary-100);
+  color: var(--color-primary-800);
+  border-left: 3px solid var(--color-primary-500);
+}
+
+/* HRD/조직문화 — 보라 계열 */
+.cat-hrd {
+  background: #ede9fe;
+  color: #5b21b6;
+  border-left: 3px solid #7c3aed;
+}
+
+/* 디지털/IT — 청록 계열 */
+.cat-digital {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-left: 3px solid #0ea5e9;
+}
+
+/* 마케팅/영업 — 핑크/로즈 계열 */
+.cat-marketing {
+  background: #fce7f3;
+  color: #9d174d;
+  border-left: 3px solid #ec4899;
+}
+
+/* 인문학/소통 — 초록 계열 */
+.cat-humanities {
+  background: var(--color-success-100);
+  color: #065f46;
+  border-left: 3px solid var(--color-success-600);
+}
+
+/* 공공/교육기관 — 황토/오렌지 계열 */
+.cat-public {
+  background: var(--color-warning-100);
+  color: #92400e;
+  border-left: 3px solid var(--color-warning-600);
+}
+
+/* ── 강의 진행 상태 오버레이 ── */
+/* 완료 — 흐린 회색 */
+.cal-event.status-done {
+  opacity: 0.55;
+  filter: grayscale(40%);
+}
+
+/* 미입금 — 강렬한 빨간 테두리 + 텍스트 강조 */
+.cal-event.status-unpaid {
+  outline: 1.5px solid var(--color-danger-600);
+  outline-offset: -1px;
+  font-weight: var(--font-weight-bold);
+}
+
+.cal-event.status-unpaid .cal-event-title {
+  color: var(--color-danger-700);
+}
+
+/* 준비 임박 — 주황 강조 */
+.cal-event.status-urgent {
+  outline: 1.5px solid var(--color-warning-600);
+  outline-offset: -1px;
+}
+
+/* 서류 미비 — 보라 점선 */
+.cal-event.status-doc {
+  outline: 1.5px dashed #7c3aed;
+  outline-offset: -1px;
+}
+
+/* ════════════════════════════════
+   우측 패널: 선택일 상세
+════════════════════════════════ */
+.day-detail-panel {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-4));
+}
+
+.day-detail-header {
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-gray-50);
+}
+
+.day-detail-date {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-extrabold);
+  color: var(--color-gray-900);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin-bottom: var(--space-1);
+}
+
+.day-detail-dow {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.day-detail-body {
+  padding: var(--space-4) var(--space-5);
+  max-height: 520px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-gray-200) transparent;
+}
+
+.day-detail-body::-webkit-scrollbar { width: 4px; }
+.day-detail-body::-webkit-scrollbar-thumb {
+  background: var(--color-gray-200);
+  border-radius: var(--radius-full);
+}
+
+/* 선택일 강의 카드 */
+.day-lec-card {
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: var(--space-3);
+  cursor: pointer;
+  transition: box-shadow var(--transition-base), transform var(--transition-base);
+}
+
+.day-lec-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.day-lec-card:last-child { margin-bottom: 0; }
+
+.day-lec-stripe {
+  height: 4px;
+}
+
+.day-lec-body {
+  padding: var(--space-3) var(--space-4);
+}
+
+.day-lec-time-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.day-lec-time {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary-600);
+  font-family: var(--font-family-mono);
+}
+
+.day-lec-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-gray-900);
+  margin-bottom: var(--space-2);
+  line-height: var(--line-height-snug);
+}
+
+.day-lec-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.day-lec-meta-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.day-lec-meta-icon { font-size: 12px; flex-shrink: 0; }
+
+/* 빈 날짜 상태 */
+.day-empty-state {
+  text-align: center;
+  padding: var(--space-10) var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.day-empty-icon { font-size: 32px; margin-bottom: var(--space-3); }
+.day-empty-text { font-size: var(--font-size-sm); line-height: var(--line-height-relaxed); }
+
+/* 날짜 미선택 상태 */
+.day-placeholder {
+  text-align: center;
+  padding: var(--space-12) var(--space-4);
+  color: var(--color-gray-300);
+}
+
+.day-placeholder-icon { font-size: 40px; margin-bottom: var(--space-3); }
+.day-placeholder-text { font-size: var(--font-size-sm); }
+
+/* 상세 패널 하단 버튼 */
+.day-detail-footer {
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--color-border);
+}
+
+.day-add-btn {
+  width: 100%;
+  height: 40px;
+  border-radius: var(--radius-md);
+  border: 1.5px dashed var(--color-border-strong);
+  background: var(--color-white);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.day-add-btn:hover {
+  border-color: var(--color-primary-400);
+  color: var(--color-primary-500);
+  background: var(--color-primary-50);
+}
+
+/* ════════════════════════════════
+   MODAL (lectures.html과 동일 구조 재사용)
+   calendar.css에서는 오버라이드만 담당
+════════════════════════════════ */
+/* 모달은 lectures.css의 구조를 JS로 동적 생성하므로
+   calendar.html에서 lectures.css도 함께 로드 */
+
+/* ════════════════════════════════
+   RESPONSIVE
+════════════════════════════════ */
+@media (max-width: 1100px) {
+  .calendar-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .day-detail-panel {
+    position: static;
+  }
+
+  .cal-body {
+    grid-auto-rows: minmax(80px, auto);
+  }
+
+  .cal-event {
+    font-size: 10px;
+    padding: 2px var(--space-1);
+  }
+}
+
+@media (max-width: 768px) {
+  .cal-body {
+    grid-auto-rows: minmax(64px, auto);
+  }
+
+  .cal-event-time { display: none; }
+
+  .cal-legend { display: none; }
+
+  .calendar-page-header { flex-direction: column; }
+
+  .cal-nav-right { display: none; }
+}
