@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<!-- login.html — 강비서 로그인 / 회원가입 페이지 -->
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>로그인 / 회원가입 | 강비서</title>
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/reset.css" />
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/common.css" />
+  <link rel="stylesheet" href="css/login.css" />
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════
+       PAGE: 2-COLUMN LAYOUT
+  ══════════════════════════════════════ -->
+  <div class="login-page">
+
+    <!-- ────────────────────────────
+         LEFT: 브랜드 패널
+    ──────────────────────────────── -->
+    <aside class="login-brand-panel" aria-hidden="true">
+      <a href="index.html" class="back-to-landing">← 메인으로</a>
+
+      <div class="brand-panel-content">
+        <div class="brand-logo">강<span>비서</span></div>
+
+        <h2 class="brand-headline">
+          강의에만<br />
+          <em>집중하세요.</em><br />
+          나머지는 강비서가.
+        </h2>
+
+        <p class="brand-desc">
+          이동 버퍼타임 자동계산, 정산 미입금 알림,<br />
+          결과보고서 자동 초안까지.<br />
+          프리랜서 강사를 위한 통합 행정 비서입니다.
+        </p>
+
+        <div class="brand-features">
+          <div class="brand-feature-item">
+            <div class="brand-feature-icon">⏱</div>
+            <span class="brand-feature-text">강의 간 이동 버퍼타임 자동 계산</span>
+          </div>
+          <div class="brand-feature-item">
+            <div class="brand-feature-icon">💰</div>
+            <span class="brand-feature-text">미입금 정산 자동 감지 및 알림</span>
+          </div>
+          <div class="brand-feature-item">
+            <div class="brand-feature-icon">📄</div>
+            <span class="brand-feature-text">강의 결과보고서 초안 자동 생성</span>
+          </div>
+          <div class="brand-feature-item">
+            <div class="brand-feature-icon">📊</div>
+            <span class="brand-feature-text">월별 수익 통계 한눈에 확인</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="brand-panel-footer">
+        <div class="brand-stat">
+          <div class="brand-stat-value">1,200+</div>
+          <div class="brand-stat-label">누적 강사 회원</div>
+        </div>
+        <div class="brand-stat">
+          <div class="brand-stat-value">주 4.2h</div>
+          <div class="brand-stat-label">행정 시간 절감</div>
+        </div>
+        <div class="brand-stat">
+          <div class="brand-stat-value">98%</div>
+          <div class="brand-stat-label">정산 누락 방지율</div>
+        </div>
+      </div>
+    </aside>
+
+
+    <!-- ────────────────────────────
+         RIGHT: 폼 패널
+    ──────────────────────────────── -->
+    <main class="login-form-panel">
+      <div class="form-panel-inner">
+
+        <!-- 모바일 로고 -->
+        <div class="mobile-logo">강<span>비서</span></div>
+
+        <!-- 탭 스위처 -->
+        <div class="auth-tabs" role="tablist" aria-label="로그인 또는 회원가입 선택">
+          <button
+            class="auth-tab-btn active"
+            role="tab"
+            aria-selected="true"
+            data-tab="login"
+          >로그인</button>
+          <button
+            class="auth-tab-btn"
+            role="tab"
+            aria-selected="false"
+            data-tab="signup"
+          >회원가입</button>
+        </div>
+
+        <!-- 폼 헤더 (JS로 문구 전환) -->
+        <div class="form-header" id="form-header">
+          <h1 class="form-header-title">다시 오셨군요, 반갑습니다 👋</h1>
+          <p class="form-header-sub">강의 일정과 정산 현황을 확인하세요.</p>
+        </div>
+
+
+        <!-- ══════════════════════
+             소셜 로그인 (공통)
+        ══════════════════════ -->
+        <div class="social-login-section" style="margin-bottom: var(--space-6);">
+          <button class="btn btn--social btn--kakao" id="btn-kakao-login" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.74 1.636 5.15 4.1 6.622L5.1 21l4.5-2.4c.78.13 1.58.2 2.4.2 5.523 0 10-3.477 10-7.8C22 6.477 17.523 3 12 3z" fill="#191919"/>
+            </svg>
+            카카오로 시작하기
+          </button>
+
+          <button class="btn btn--social btn--google" id="btn-google-login" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            구글로 시작하기
+          </button>
+        </div>
+
+        <!-- OR 구분선 -->
+        <div class="divider-text" style="margin-bottom: var(--space-6);">또는 이메일로 계속하기</div>
+
+
+        <!-- ══════════════════════
+             로그인 폼
+        ══════════════════════ -->
+        <form class="auth-form active" id="form-login" novalidate>
+
+          <!-- 아이디 -->
+          <div class="form-group">
+            <label class="form-label" for="login-id">
+              아이디 <span class="required">*</span>
+            </label>
+            <div class="input-wrapper">
+              <span class="input-icon icon-id" aria-hidden="true"></span>
+              <input
+                class="form-input has-icon"
+                type="email"
+                id="login-id"
+                name="userId"
+                placeholder="아이디를 입력하세요"
+                autocomplete="username"
+                required
+              />
+            </div>
+          </div>
+
+          <!-- 비밀번호 -->
+          <div class="form-group">
+            <label class="form-label" for="login-pw">
+              비밀번호 <span class="required">*</span>
+            </label>
+            <div class="input-wrapper">
+              <span class="input-icon icon-lock" aria-hidden="true"></span>
+              <input
+                class="form-input has-icon"
+                type="password"
+                id="login-pw"
+                name="password"
+                placeholder="비밀번호를 입력하세요"
+                autocomplete="current-password"
+                required
+              />
+              <button
+                type="button"
+                class="input-toggle-btn"
+                data-target="login-pw"
+                aria-label="비밀번호 표시"
+              >👁</button>
+            </div>
+          </div>
+
+          <!-- 기억하기 + 비번 찾기 -->
+          <div class="form-options-row">
+            <label class="form-checkbox">
+              <input type="checkbox" id="login-remember" name="remember" />
+              <span class="form-checkbox-label">로그인 상태 유지</span>
+            </label>
+            <a href="#" class="form-link">비밀번호 찾기</a>
+          </div>
+
+          <!-- 제출 -->
+          <button type="submit" class="btn--form-submit">
+            로그인
+          </button>
+
+          <!-- 전환 안내 -->
+          <p class="auth-switch-prompt">
+            아직 계정이 없으신가요?
+            <a href="#signup" id="switch-to-signup">회원가입하기</a>
+          </p>
+
+        </form>
+
+
+        <!-- ══════════════════════
+             회원가입 폼
+        ══════════════════════ -->
+        <form class="auth-form" id="form-signup" novalidate>
+
+          <!-- 아이디 -->
+          <div class="form-group">
+            <label class="form-label" for="signup-userid">
+              아이디 <span class="required">*</span>
+            </label>
+            <div class="input-wrapper">
+              <span class="input-icon icon-id" aria-hidden="true"></span>
+              <input
+                class="form-input has-icon"
+                type="text"
+                id="signup-userid"
+                name="userId"
+                placeholder="영문·숫자·_ 4~20자"
+                autocomplete="username"
+                required
+              />
+            </div>
+            <span class="form-message form-message--error" id="signup-userid-error" aria-live="polite"></span>
+          </div>
+
+          <!-- 이름 + 전화번호 (2열) -->
+          <div class="form-row-2col">
+
+            <div class="form-group">
+              <label class="form-label" for="signup-name">
+                이름 <span class="required">*</span>
+              </label>
+              <div class="input-wrapper">
+                <span class="input-icon icon-user" aria-hidden="true"></span>
+                <input
+                  class="form-input has-icon"
+                  type="text"
+                  id="signup-name"
+                  name="name"
+                  placeholder="홍길동"
+                  autocomplete="name"
+                  required
+                />
+              </div>
+              <span class="form-message form-message--error" id="signup-name-error" aria-live="polite"></span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="signup-tel">
+                전화번호 <span class="required">*</span>
+              </label>
+              <div class="input-wrapper">
+                <span class="input-icon icon-phone" aria-hidden="true"></span>
+                <input
+                  class="form-input has-icon"
+                  type="tel"
+                  id="signup-tel"
+                  name="tel"
+                  placeholder="010-0000-0000"
+                  autocomplete="tel"
+                  required
+                />
+              </div>
+              <span class="form-message form-message--error" id="signup-tel-error" aria-live="polite"></span>
+            </div>
+
+          </div>
+
+          <!-- 이메일 -->
+          <div class="form-group">
+            <label class="form-label" for="signup-email">
+              이메일 <span class="required">*</span>
+            </label>
+            <div class="input-wrapper">
+              <span class="input-icon icon-mail" aria-hidden="true"></span>
+              <input
+                class="form-input has-icon"
+                type="email"
+                id="signup-email"
+                name="email"
+                placeholder="example@email.com"
+                autocomplete="email"
+                required
+              />
+            </div>
+            <span class="form-message form-message--error" id="signup-email-error" aria-live="polite"></span>
+          </div>
+
+          <!-- 비밀번호 -->
+          <div class="form-group">
+            <label class="form-label" for="signup-pw">
+              비밀번호 <span class="required">*</span>
+            </label>
+            <div class="input-wrapper">
+              <span class="input-icon icon-lock" aria-hidden="true"></span>
+              <input
+                class="form-input has-icon"
+                type="password"
+                id="signup-pw"
+                name="password"
+                placeholder="8자 이상, 영문·숫자 포함 권장"
+                autocomplete="new-password"
+                required
+              />
+              <button
+                type="button"
+                class="input-toggle-btn"
+                data-target="signup-pw"
+                aria-label="비밀번호 표시"
+              >👁</button>
+            </div>
+            <!-- 비밀번호 강도 바 -->
+            <div class="pw-strength-bar" aria-hidden="true">
+              <div class="pw-strength-fill" id="pw-strength-fill"></div>
+            </div>
+            <span class="pw-strength-text" id="pw-strength-text"></span>
+            <span class="form-message form-message--error" id="signup-pw-error" aria-live="polite"></span>
+          </div>
+
+          <!-- 약관 동의 -->
+          <div class="form-group" style="margin-top: var(--space-1);">
+            <label class="form-checkbox" for="signup-agree">
+              <input type="checkbox" id="signup-agree" name="agree" required />
+              <span class="form-checkbox-label">
+                <a href="#" tabindex="-1">이용약관</a> 및
+                <a href="#" tabindex="-1">개인정보처리방침</a>에 동의합니다.
+                <span class="required">*</span>
+              </span>
+            </label>
+          </div>
+
+          <!-- 제출 -->
+          <button type="submit" class="btn--form-submit">
+            무료 체험 시작하기
+          </button>
+
+          <!-- 전환 안내 -->
+          <p class="auth-switch-prompt">
+            이미 계정이 있으신가요?
+            <a href="#login" id="switch-to-login">로그인하기</a>
+          </p>
+
+        </form>
+
+      </div><!-- /.form-panel-inner -->
+    </main>
+
+  </div><!-- /.login-page -->
+
+
+  <!-- ══════════════════════════════════════
+       TOAST 알림 (JS 제어)
+  ══════════════════════════════════════ -->
+  <div class="toast" id="toast" role="alert" aria-live="assertive" aria-atomic="true"></div>
+
+
+  <!-- Scripts -->
+  <script type="module" src="js/pages/login.js"></script>
+</body>
+</html>
