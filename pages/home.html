@@ -367,7 +367,7 @@
               </div>
               <div>
                 <div class="add-form-section-title">상세 정보</div>
-                <div class="add-form-grid add-form-grid--4">
+                <div class="add-form-grid" style="grid-template-columns:repeat(2,1fr);gap:var(--space-3);">
                   <div class="add-form-field"><label class="add-form-label" for="af-session-current">현재 회차</label><input class="add-form-input" type="number" id="af-session-current" placeholder="1" min="1" /></div>
                   <div class="add-form-field"><label class="add-form-label" for="af-session-total">총 회차</label><input class="add-form-input" type="number" id="af-session-total" placeholder="4" min="1" /></div>
                   <div class="add-form-field"><label class="add-form-label" for="af-participants">수강 인원</label><input class="add-form-input" type="number" id="af-participants" placeholder="20" min="1" /></div>
@@ -452,7 +452,7 @@
   </div>
 
   <!-- Scripts: common 먼저 로드 후 home -->
-
+  <script src="../js/common.js"></script>
   <script type="module" src="../js/pages/home.js"></script>
 </body>
 </html>

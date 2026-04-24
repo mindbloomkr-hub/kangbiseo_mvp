@@ -411,7 +411,20 @@ function closeModal() {
 }
 
 document.getElementById('modal-close-btn')?.addEventListener('click', closeModal);
-modalBackdrop?.addEventListener('click', e => { if (e.target === modalBackdrop) closeModal(); });
+modalBackdrop?.addEventListener('click', e => {
+  if (e.target !== modalBackdrop) return;
+  /* [9] 폼 입력 중 백드롭 클릭 보호 */
+  const formPanel = document.getElementById('form-panel');
+  const isFormOpen = formPanel && formPanel.style.display !== 'none';
+  if (isFormOpen) {
+    const dirty = ['af-title','af-client','af-fee','af-topic','af-supplies','af-place','af-memo','af-group-info']
+      .some(id => (document.getElementById(id)?.value || '').trim() !== '');
+    if (dirty) {
+      if (!confirm('작성 중인 내용이 사라집니다. 계속 닫으시겠어요?')) return;
+    }
+  }
+  closeModal();
+});
 
 /* ── 강의 추가 → 폼 모드로 열기 ── */
 function openAddModal() {

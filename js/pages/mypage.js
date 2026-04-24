@@ -99,8 +99,10 @@ async function loadFirebaseProfile(uid) {
       fbTopics       = Array.isArray(d.topics)   ? d.topics   : [];
       topicIdCounter = fbTopics.length > 0
         ? Math.max(...fbTopics.map(t => t.id)) + 1 : 1;
-      setVal('profile-slogan', d.slogan || '');
-      setVal('profile-bio',    d.bio    || '');
+      setVal('profile-slogan',    d.slogan   || '');
+      setVal('profile-bio',       d.bio      || '');
+      /* [10] 닉네임 로드 */
+      setVal('profile-nickname',  d.nickname || '');
     } else {
       fbKeywords = []; fbTopics = [];
     }
@@ -379,9 +381,15 @@ function initFloatingSave() {
     btn.innerHTML = '<span class="floating-save-icon">⏳</span> 저장 중...';
 
     try {
+      /* [10] 닉네임을 localStorage에도 반영 */
+      const nickname = getVal('profile-nickname').trim();
+      if (nickname) localStorage.setItem('userNickname', nickname);
+      else          localStorage.removeItem('userNickname');
+
       await setDoc(doc(db, 'users', currentUser.uid), {
         slogan:    getVal('profile-slogan'),
         bio:       getVal('profile-bio'),
+        nickname,
         keywords:  fbKeywords,
         topics:    fbTopics,
         updatedAt: serverTimestamp(),
@@ -459,6 +467,17 @@ onAuthStateChanged(auth, async user => {
 
   initProfile(user);
   await loadFirebaseProfile(user.uid);
+
+  /* [10] Firestore 닉네임으로 사이드바 업데이트 */
+  const nickname = getVal('profile-nickname').trim();
+  if (nickname) {
+    localStorage.setItem('userNickname', nickname);
+    const sbName   = document.getElementById('sidebar-user-name');
+    const sbAvatar = document.getElementById('sidebar-avatar');
+    if (sbName)   sbName.textContent   = nickname + ' 강사';
+    if (sbAvatar) sbAvatar.textContent = nickname.charAt(0);
+  }
+
   renderKeywordChips();
   renderTopicTags();
 

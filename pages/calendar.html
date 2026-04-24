@@ -85,17 +85,14 @@
       font-weight: 500;
       padding: 6px 8px;
     }
+    /* [4] 오늘 날짜: 동그라미 제거 → 셀 전체 굵은 테두리 강조 */
     .fc .fc-day-today .fc-daygrid-day-number {
-      background: #0ea5e9;
-      color: #fff;
-      border-radius: 50%;
-      width: 28px;
-      height: 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 4px;
-      padding: 0;
+      color: #0284c7;
+      font-weight: 800;
+      font-size: 0.88rem;
+    }
+    .fc td.fc-day-today {
+      box-shadow: inset 0 0 0 2px #0ea5e9;
     }
     .fc .fc-day-sun .fc-daygrid-day-number { color: #ef4444; }
     .fc .fc-day-sat .fc-daygrid-day-number { color: #3b82f6; }
@@ -165,24 +162,28 @@
       flex-wrap: wrap;
     }
 
-    /* ─── 범례 바 ─── */
+    /* ─── [3] 범례 바 (고도화) ─── */
     .cal-legend-row {
       display: flex;
       align-items: center;
-      gap: 20px;
+      gap: 8px;
       flex-wrap: wrap;
       margin-top: 12px;
-      padding: 10px 16px;
+      padding: 12px 16px;
       background: var(--color-bg-card, #fff);
       border-radius: 10px;
       border: 1px solid var(--color-border, #e5e7eb);
     }
+    .cal-legend-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--color-text-muted, #9ca3af);
+      margin-right: 4px;
+      white-space: nowrap;
+    }
     .cal-legend-item-fc {
       display: flex;
       align-items: center;
-      gap: 7px;
-      font-size: 0.78rem;
-      color: var(--color-text-secondary, #6b7280);
     }
     .cal-legend-dot-fc {
       width: 10px;
@@ -226,16 +227,20 @@
       font-weight: 600;
     }
 
-    /* ─── 범례 레이블 ─── */
+    /* ─── 범례 배지 (pill 스타일) ─── */
     .cal-legend-badge {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      font-size: 0.72rem;
+      font-size: 0.73rem;
       font-weight: 600;
-      padding: 2px 7px;
-      border-radius: 4px;
+      padding: 4px 10px;
+      border-radius: 100px;
+      white-space: nowrap;
+      box-shadow: 0 1px 2px rgba(0,0,0,.06);
+      transition: opacity 120ms;
     }
+    .cal-legend-badge:hover { opacity: .8; }
   </style>
 </head>
 <body>
@@ -352,28 +357,50 @@
           </div>
         </div>
 
-        <!-- ── 색상 범례 ── -->
+        <!-- ── [3] 색상 범례 (고도화 배지) ── -->
         <div class="cal-legend-row" role="list" aria-label="색상 범례">
+          <span class="cal-legend-label">범례</span>
           <div class="cal-legend-item-fc" role="listitem">
-            <span class="cal-legend-badge" style="background:#ede9fe;color:#5b21b6;border:1px solid #a78bfa;">💬 논의 중</span>
+            <span class="cal-legend-badge"
+                  style="background:#ede9fe;color:#5b21b6;border:1.5px solid #c4b5fd;">
+              💬 논의 중
+            </span>
           </div>
           <div class="cal-legend-item-fc" role="listitem">
-            <span class="cal-legend-badge" style="background:#0ea5e9;color:#fff;">📅 강의 예정</span>
+            <span class="cal-legend-badge"
+                  style="background:#0ea5e9;color:#fff;">
+              📅 강의 예정
+            </span>
           </div>
           <div class="cal-legend-item-fc" role="listitem">
-            <span class="cal-legend-badge" style="background:#f59e0b;color:#fff;">⏳ 준비 임박 (7일↓)</span>
+            <span class="cal-legend-badge"
+                  style="background:#f59e0b;color:#fff;">
+              ⏳ 준비 임박 <small style="opacity:.8;font-size:.68rem;">7일↓</small>
+            </span>
           </div>
           <div class="cal-legend-item-fc" role="listitem">
-            <span class="cal-legend-badge" style="background:#d1fae5;color:#b91c1c;border:1px solid #6ee7b7;">🏃 행정 대기</span>
+            <span class="cal-legend-badge"
+                  style="background:#d1fae5;color:#065f46;border:1.5px solid #6ee7b7;">
+              🏃 행정 대기
+            </span>
           </div>
           <div class="cal-legend-item-fc" role="listitem">
-            <span class="cal-legend-badge" style="background:#059669;color:#fff;">✅ 진행 완료</span>
+            <span class="cal-legend-badge"
+                  style="background:#059669;color:#fff;">
+              ✅ 진행 완료
+            </span>
           </div>
           <div class="cal-legend-item-fc" role="listitem">
-            <span class="cal-legend-badge" style="background:#e5e7eb;color:#ef4444;border:1px solid #9ca3af;">💰 완료+미입금</span>
+            <span class="cal-legend-badge"
+                  style="background:#fee2e2;color:#ef4444;border:1.5px solid #fca5a5;">
+              💰 미입금
+            </span>
           </div>
           <div class="cal-legend-item-fc" role="listitem">
-            <span class="cal-legend-badge" style="background:#f9fafb;color:#9ca3af;border:1px dashed #d1d5db;text-decoration:line-through;">❌ 취소/드롭</span>
+            <span class="cal-legend-badge"
+                  style="background:#f3f4f6;color:#9ca3af;border:1.5px dashed #d1d5db;text-decoration:line-through;">
+              ❌ 취소
+            </span>
           </div>
         </div>
 
@@ -598,7 +625,7 @@
               <!-- ② 상세 정보 -->
               <div>
                 <div class="add-form-section-title">상세 정보</div>
-                <div class="add-form-grid add-form-grid--4">
+                <div class="add-form-grid" style="grid-template-columns:repeat(2,1fr);gap:var(--space-3);">
                   <div class="add-form-field">
                     <label class="add-form-label" for="af-session-current">현재 회차</label>
                     <input class="add-form-input" type="number" id="af-session-current" placeholder="1" min="1" />

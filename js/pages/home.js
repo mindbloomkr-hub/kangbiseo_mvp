@@ -7,7 +7,7 @@ import {
   signOut,
 } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-auth.js";
 import {
-  collection, doc, addDoc, updateDoc, deleteDoc,
+  collection, doc, getDoc, addDoc, updateDoc, deleteDoc,
   query, where, onSnapshot, serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js";
 
@@ -23,9 +23,30 @@ function escapeHtml(str) {
 }
 
 /* ════════════════════════════════════════
+   [1] 강의별 고유 색상 팔레트 (ID 해시 기반)
+════════════════════════════════════════ */
+const LECTURE_COLORS = [
+  '#0ea5e9', '#8b5cf6', '#ec4899', '#f59e0b',
+  '#10b981', '#f97316', '#3b82f6', '#ef4444',
+];
+
+function getLectureColor(id) {
+  if (!id) return LECTURE_COLORS[0];
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) & 0xffffffff;
+  }
+  return LECTURE_COLORS[Math.abs(hash) % LECTURE_COLORS.length];
+}
+
+/* ════════════════════════════════════════
    날짜 유틸
 ════════════════════════════════════════ */
 const DAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
+
+const _TODAY = new Date();
+_TODAY.setHours(0, 0, 0, 0);
+const _IN_7DAYS = new Date(_TODAY.getTime() + 7 * 24 * 60 * 60 * 1000);
 
 function getTodayString() {
   const now = new Date();
@@ -39,7 +60,6 @@ function getWeekDateStrings() {
   const diff = dow === 0 ? -6 : 1 - dow;
   const mon  = new Date(today);
   mon.setDate(today.getDate() + diff);
-
   const dates = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(mon);
@@ -49,24 +69,100 @@ function getWeekDateStrings() {
   return dates;
 }
 
+function parseDate(str) {
+  const [y, m, d] = str.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function formatDateKo(dateStr) {
+  const d = parseDate(dateStr);
+  return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()} (${DAY_KO[d.getDay()]})`;
+}
+
+function calcDuration(start, end) {
+  if (!start || !end) return '—';
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  const total = (eh * 60 + em) - (sh * 60 + sm);
+  if (total <= 0) return '—';
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h > 0 && m > 0) return `${h}시간 ${m}분`;
+  if (h > 0) return `${h}시간`;
+  return `${m}분`;
+}
+
+/* ════════════════════════════════════════
+   강의 상태 분류 + 메타
+════════════════════════════════════════ */
+const TAX_LABEL = {
+  income3_3: '사업소득 3.3%',
+  income8_8: '기타소득 8.8%',
+  exempt:    '면세',
+  other:     '기타',
+};
+
+const PROGRESS_LABEL = {
+  discussing: '논의 중',
+  scheduled:  '강의 예정',
+  admin:      '행정 대기',
+  done:       '진행 완료',
+  cancelled:  '취소/드롭',
+};
+
+const STATUS_META = {
+  discussing: { label: '논의 중',   cls: 'lec-badge--discussing' },
+  urgent:     { label: '준비 임박', cls: 'lec-badge--urgent'     },
+  upcoming:   { label: '강의 예정', cls: 'lec-badge--scheduled'  },
+  admin:      { label: '행정 대기', cls: 'lec-badge--admin'      },
+  done:       { label: '완료',      cls: 'lec-badge--done'       },
+  unpaid:     { label: '미입금',    cls: 'lec-badge--unpaid'     },
+  cancelled:  { label: '취소',      cls: 'lec-badge--cancelled'  },
+};
+
+function classifyStatus(lec) {
+  const prog = lec.progressStatus || 'scheduled';
+  if (prog === 'cancelled')  return 'cancelled';
+  if (prog === 'done')       return 'done';
+  if (prog === 'admin')      return 'admin';
+  if (prog === 'discussing') return 'discussing';
+  const d = parseDate(lec.date);
+  if (d < _TODAY) return lec.isPaid ? 'done' : 'unpaid';
+  if (d <= _IN_7DAYS) return 'urgent';
+  return 'upcoming';
+}
+
 /* ════════════════════════════════════════
    전역 상태
 ════════════════════════════════════════ */
-let currentUser      = null;
-let todos            = [];
-let allLectures      = [];   // 유저의 전체 강의 (Firestore)
-let todayLectures    = [];   // 오늘 강의 (allLectures에서 필터)
+let currentUser          = null;
+let todos                = [];
+let allLectures          = [];
+let todayLectures        = [];
 let unsubscribeTodos     = null;
 let unsubscribeLectures  = null;
+let activeModalId        = null;
+let editingLecId         = null;
+
+/* ════════════════════════════════════════
+   [10] 닉네임 우선 표시명
+════════════════════════════════════════ */
+function getDisplayName() {
+  return localStorage.getItem('userNickname')
+      || localStorage.getItem('userName')
+      || '강사';
+}
 
 /* ════════════════════════════════════════
    1. 사이드바 유저 정보
 ════════════════════════════════════════ */
-function updateSidebarUser(user) {
+function updateSidebarUser() {
   const nameEl   = document.querySelector('.sidebar-user-name');
   const avatarEl = document.querySelector('.sidebar-avatar');
   if (!nameEl || !avatarEl) return;
-  const name = localStorage.getItem('userName') || user.displayName || '강사';
+  const name = getDisplayName();
   nameEl.textContent   = name + ' 강사';
   avatarEl.textContent = name.charAt(0);
 }
@@ -82,7 +178,7 @@ function updateNavBadge() {
 }
 
 /* ════════════════════════════════════════
-   2. 환영 인사 (시간대 반응형)
+   2. 환영 인사 (닉네임 우선)
 ════════════════════════════════════════ */
 function renderGreeting() {
   const greetEl    = document.getElementById('greeting-text');
@@ -95,8 +191,8 @@ function renderGreeting() {
   else if (h < 18) { emoji = '🌤'; greet = '즐거운 오후예요';  }
   else             { emoji = '🌙'; greet = '수고하신 하루예요'; }
 
-  const userName = localStorage.getItem('userName') || '강사';
-  greetEl.innerHTML = `${emoji} ${userName} 강사님, ${greet}!`;
+  const name = getDisplayName();
+  greetEl.innerHTML = `${emoji} ${name} 강사님, ${greet}!`;
 
   if (subtitleEl) {
     subtitleEl.textContent = todayLectures.length > 0
@@ -106,27 +202,27 @@ function renderGreeting() {
 }
 
 /* ════════════════════════════════════════
-   3. 상단 통계 카드 (오늘 강의 기반)
+   3. 상단 통계 카드
 ════════════════════════════════════════ */
 function renderStatBar() {
   const container = document.getElementById('stat-bar');
   if (!container) return;
 
-  const totalFee   = todayLectures.reduce((sum, l) => sum + (Number(l.fee) || 0), 0);
-  const unpaidCnt  = allLectures.filter(l => {
-    const d = new Date(l.date);
-    d.setHours(0,0,0,0);
-    return !l.isPaid && d < new Date().setHours(0,0,0,0);
+  const totalFee  = todayLectures.reduce((sum, l) => sum + (Number(l.fee) || 0), 0);
+  const now0      = new Date(); now0.setHours(0,0,0,0);
+  const unpaidCnt = allLectures.filter(l => {
+    const d = new Date(l.date); d.setHours(0,0,0,0);
+    return !l.isPaid && d < now0;
   }).length;
-  const unpaidAmt  = allLectures
-    .filter(l => { const d = new Date(l.date); d.setHours(0,0,0,0); return !l.isPaid && d < new Date().setHours(0,0,0,0); })
+  const unpaidAmt = allLectures
+    .filter(l => { const d = new Date(l.date); d.setHours(0,0,0,0); return !l.isPaid && d < now0; })
     .reduce((s, l) => s + (Number(l.fee) || 0), 0);
 
   const stats = [
-    { icon: '📅', iconCls: 'stat-icon--blue',   value: `${todayLectures.length}건`,                      label: '오늘 강의',      delta: '' },
+    { icon: '📅', iconCls: 'stat-icon--blue',   value: `${todayLectures.length}건`,                             label: '오늘 강의',      delta: '' },
     { icon: '💰', iconCls: 'stat-icon--green',  value: totalFee > 0 ? `${(totalFee/10000).toFixed(0)}만원` : '—', label: '오늘 예상 수익', delta: '' },
-    { icon: '⏱',  iconCls: 'stat-icon--yellow', value: todayLectures.length > 1 ? '이동 확인' : '—',         label: '이동 버퍼 타임', delta: '' },
-    { icon: '💳', iconCls: 'stat-icon--red',    value: `${unpaidCnt}건`,                                  label: '미입금 정산',    delta: unpaidAmt > 0 ? `₩${unpaidAmt.toLocaleString()} 미수` : '' },
+    { icon: '⏱',  iconCls: 'stat-icon--yellow', value: todayLectures.length > 1 ? '이동 확인' : '—',              label: '이동 버퍼 타임', delta: '' },
+    { icon: '💳', iconCls: 'stat-icon--red',    value: `${unpaidCnt}건`,                                         label: '미입금 정산',    delta: unpaidAmt > 0 ? `₩${unpaidAmt.toLocaleString()} 미수` : '' },
   ];
 
   container.innerHTML = stats.map(s => `
@@ -143,6 +239,7 @@ function renderStatBar() {
 
 /* ════════════════════════════════════════
    4. 오늘의 강의 브리핑 카드
+   [1] 색상 동기화  [2] 클릭 시 상세 모달 열기
 ════════════════════════════════════════ */
 function renderBriefingCards() {
   const container = document.getElementById('briefing-list');
@@ -157,13 +254,13 @@ function renderBriefingCards() {
     return;
   }
 
-  container.innerHTML = todayLectures.map((l, idx) => {
-    const stripe = (idx % 3) + 1;
+  container.innerHTML = todayLectures.map((l) => {
+    const color      = getLectureColor(l.id);
     const mgrInitial = (l.managerName || '담').charAt(0);
     return `
-      <div class="lecture-briefing-card">
-        <div class="briefing-stripe briefing-stripe--${stripe}"></div>
-        <div class="briefing-body">
+      <div class="lecture-briefing-card" data-id="${escapeHtml(l.id)}"
+           style="cursor:pointer;position:relative;border-left:4px solid ${color};">
+        <div class="briefing-body" style="padding-left:8px;">
           <div class="briefing-row-top">
             <span class="briefing-time">${l.timeStart} – ${l.timeEnd}</span>
             <span class="status-chip status-chip--scheduled">예정</span>
@@ -178,19 +275,25 @@ function renderBriefingCards() {
         </div>
         <div class="briefing-footer">
           <div class="briefing-manager">
-            <div class="briefing-manager-avatar">${escapeHtml(mgrInitial)}</div>
+            <div class="briefing-manager-avatar" style="background:${color};">${escapeHtml(mgrInitial)}</div>
             <span>담당자 · ${escapeHtml(l.managerName || '미등록')}</span>
           </div>
           ${l.managerPhone
-            ? `<button class="briefing-contact-btn" onclick="window.location.href='tel:${l.managerPhone}'">📞 연락하기</button>`
+            ? `<button class="briefing-contact-btn" onclick="event.stopPropagation();window.location.href='tel:${l.managerPhone}'">📞 연락하기</button>`
             : ''}
         </div>
       </div>`;
   }).join('');
+
+  /* [2] 클릭 이벤트 연결 */
+  container.querySelectorAll('.lecture-briefing-card[data-id]').forEach(card => {
+    card.addEventListener('click', () => openModal(card.dataset.id));
+  });
 }
 
 /* ════════════════════════════════════════
-   5. 오늘의 타임스케줄 (실제 강의 데이터 기반)
+   5. 오늘의 타임스케줄
+   [1] 강의별 고유 색상 적용
 ════════════════════════════════════════ */
 function renderTimeline() {
   const container = document.getElementById('timeline-list');
@@ -225,11 +328,17 @@ function renderTimeline() {
 
   let nowInserted = false;
   const html = todayLectures.map((lec, idx) => {
-    const itemMin = timeToMin(lec.timeStart);
-    const nextMin = todayLectures[idx + 1] ? timeToMin(todayLectures[idx + 1].timeStart) : Infinity;
-    const isDone  = timeToMin(lec.timeEnd) < nowMin;
-    const cardCls = isDone ? 'tl-card tl-card--done' : 'tl-card tl-card--lecture';
-    const nodeCls = isDone ? 'tl-node tl-node--done' : 'tl-node tl-node--lecture';
+    const color    = getLectureColor(lec.id);
+    const itemMin  = timeToMin(lec.timeStart);
+    const nextMin  = todayLectures[idx + 1] ? timeToMin(todayLectures[idx + 1].timeStart) : Infinity;
+    const isDone   = timeToMin(lec.timeEnd) < nowMin;
+
+    const nodeStyle = isDone
+      ? 'background:#9ca3af;border-color:#9ca3af;'
+      : `background:${color};border-color:${color};`;
+    const cardBorderStyle = isDone
+      ? 'border-left:3px solid #9ca3af;opacity:0.7;'
+      : `border-left:3px solid ${color};`;
 
     let barBefore = '';
     let barAfter  = '';
@@ -246,12 +355,13 @@ function renderTimeline() {
       ${barBefore}
       <div class="timeline-item">
         <div class="tl-time-col"><div class="tl-time">${lec.timeStart}</div></div>
-        <div class="tl-track"><div class="${nodeCls}"></div></div>
+        <div class="tl-track"><div class="tl-node" style="${nodeStyle}"></div></div>
         <div class="tl-content">
-          <div class="${cardCls}">
+          <div class="tl-card ${isDone ? 'tl-card--done' : 'tl-card--lecture'}" style="${cardBorderStyle}">
             <div class="tl-card-title">${escapeHtml(lec.title)}</div>
             <div class="tl-card-sub">${escapeHtml(lec.place || lec.client)} · ${lec.timeStart}~${lec.timeEnd}</div>
-            <span class="tl-card-badge tl-card-badge--lecture">강의</span>
+            <span class="tl-card-badge tl-card-badge--lecture"
+                  style="background:${color}20;color:${color};border:1px solid ${color}40;">강의</span>
           </div>
         </div>
       </div>
@@ -262,7 +372,7 @@ function renderTimeline() {
 }
 
 /* ════════════════════════════════════════
-   6. 이번 주 일정 (실제 강의 데이터 기반)
+   6. 이번 주 일정 (강의별 고유 색상)
 ════════════════════════════════════════ */
 function renderWeekly() {
   const gridEl    = document.getElementById('weekly-day-grid');
@@ -272,18 +382,15 @@ function renderWeekly() {
   const today      = new Date();
   today.setHours(0, 0, 0, 0);
   const todayStr   = getTodayString();
-  const weekDates  = getWeekDateStrings(); // Mon~Sun
-
+  const weekDates  = getWeekDateStrings();
   const DAY_ORDER  = [1, 2, 3, 4, 5, 6, 0];
 
-  // 요일 인덱스 → 날짜 문자열 맵
   const dowToDateStr = {};
-  weekDates.forEach((dateStr, i) => {
+  weekDates.forEach(dateStr => {
     const d = new Date(dateStr);
     dowToDateStr[d.getDay()] = dateStr;
   });
 
-  // 날짜 문자열 → 강의 목록 맵
   const dateToLectures = {};
   allLectures.forEach(lec => {
     if (weekDates.includes(lec.date)) {
@@ -300,17 +407,21 @@ function renderWeekly() {
     const lectures = (dateToLectures[dateStr] || []).sort((a, b) => a.timeStart.localeCompare(b.timeStart));
 
     let daynameClass = 'week-col-dayname';
-    if (isToday)       daynameClass += ' today-col';
+    if (isToday)        daynameClass += ' today-col';
     else if (dow === 0) daynameClass += ' sun';
     else if (dow === 6) daynameClass += ' sat';
 
     const dateNum  = dateObj ? dateObj.getDate() : '—';
     const lecCards = lectures.length > 0
-      ? lectures.map(lec => `
-          <div class="week-lec-card" style="${isPast && !isToday ? 'opacity:0.55;' : ''}">
-            <div class="week-lec-time">${lec.timeStart}</div>
-            <div class="week-lec-title">${escapeHtml(lec.title)}</div>
-          </div>`).join('')
+      ? lectures.map(lec => {
+          const color = getLectureColor(lec.id);
+          return `
+            <div class="week-lec-card"
+                 style="${isPast && !isToday ? 'opacity:0.55;' : ''}border-left:3px solid ${color};">
+              <div class="week-lec-time">${lec.timeStart}</div>
+              <div class="week-lec-title">${escapeHtml(lec.title)}</div>
+            </div>`;
+        }).join('')
       : `<div class="week-empty-day">—</div>`;
 
     return `
@@ -341,11 +452,7 @@ function renderWeekly() {
 function initLectures(uid) {
   if (unsubscribeLectures) unsubscribeLectures();
 
-  const q = query(
-    collection(db, 'lectures'),
-    where('uid', '==', uid),
-  );
-
+  const q = query(collection(db, 'lectures'), where('uid', '==', uid));
   unsubscribeLectures = onSnapshot(q, snapshot => {
     allLectures = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
@@ -366,8 +473,383 @@ function initLectures(uid) {
 }
 
 /* ════════════════════════════════════════
-   8. To-do List — Firestore 실시간 연동
-   문서 구조: { uid, text, isDone, createdAt }
+   [2] 통합 강의 모달 — 뷰 패널 채우기
+════════════════════════════════════════ */
+function populateView(lec) {
+  if (!lec) return;
+  const status = classifyStatus(lec);
+  const meta   = STATUS_META[status] || { label: status, cls: '' };
+  const full   = formatDateKo(lec.date);
+
+  document.getElementById('modal-title').textContent       = lec.title || '(제목 없음)';
+  document.getElementById('modal-badge').className         = `lec-badge ${meta.cls}`;
+  document.getElementById('modal-badge').textContent       = meta.label;
+  document.getElementById('modal-date-meta').textContent   = `${full} · ${lec.timeStart}~${lec.timeEnd}`;
+  document.getElementById('modal-client-meta').textContent = lec.client || '—';
+
+  document.getElementById('v-date').textContent           = full;
+  document.getElementById('v-time').textContent           = `${lec.timeStart} ~ ${lec.timeEnd}`;
+  document.getElementById('v-total-duration').textContent = calcDuration(lec.timeStart, lec.timeEnd);
+  document.getElementById('v-title').textContent          = lec.title  || '—';
+  document.getElementById('v-client').textContent         = lec.client || '—';
+  document.getElementById('v-fee').textContent            = `₩${(Number(lec.fee) || 0).toLocaleString()}`;
+
+  document.getElementById('v-session-current').textContent = lec.sessionCurrent ? `${lec.sessionCurrent}회` : '—';
+  document.getElementById('v-session-total').textContent   = lec.sessionTotal   ? `${lec.sessionTotal}회`   : '—';
+  document.getElementById('v-participants').textContent    = lec.participants    ? `${lec.participants}명`   : '—';
+  document.getElementById('v-group-info').textContent      = lec.groupInfo      || '—';
+  document.getElementById('v-topic').textContent           = lec.topic          || '—';
+  document.getElementById('v-supplies').textContent        = lec.supplies       || '—';
+  document.getElementById('v-place').textContent           = lec.place          || '—';
+  document.getElementById('v-parking').textContent         = lec.parkingInfo    || '—';
+
+  const mgrName  = lec.managerName  || '';
+  const mgrPhone = lec.managerPhone || '';
+  const mgrEmail = lec.managerEmail || '';
+
+  document.getElementById('v-mgr-avatar').textContent         = mgrName ? mgrName.charAt(0) : '담';
+  document.getElementById('v-mgr-name').textContent           = mgrName  || '담당자 미등록';
+  document.getElementById('v-mgr-sub').textContent            = mgrPhone || '연락처 미등록';
+  document.getElementById('v-mgr-email-text').textContent     = mgrEmail || '—';
+
+  const phoneLink = document.getElementById('v-mgr-phone');
+  if (mgrPhone) { phoneLink.href = `tel:${mgrPhone}`;     phoneLink.style.opacity = ''; phoneLink.style.pointerEvents = ''; }
+  else          { phoneLink.href = '#'; phoneLink.style.opacity = '0.35'; phoneLink.style.pointerEvents = 'none'; }
+
+  const emailLink = document.getElementById('v-mgr-email-link');
+  if (mgrEmail) { emailLink.href = `mailto:${mgrEmail}`; emailLink.style.opacity = ''; emailLink.style.pointerEvents = ''; }
+  else          { emailLink.href = '#'; emailLink.style.opacity = '0.35'; emailLink.style.pointerEvents = 'none'; }
+
+  document.getElementById('v-progress').textContent    = PROGRESS_LABEL[lec.progressStatus || 'scheduled'] || '—';
+  const paidEl = document.getElementById('v-paid-status');
+  paidEl.textContent = lec.isPaid ? '✅ 입금 완료' : '❌ 미입금';
+  paidEl.className   = `modal-info-value paid-badge${lec.isPaid ? ' paid-badge--paid' : ' paid-badge--unpaid'}`;
+  document.getElementById('v-payment-date').textContent = lec.paymentDate || '미정';
+  document.getElementById('v-tax').textContent          = TAX_LABEL[lec.taxType] || '—';
+
+  const memoEl = document.getElementById('v-memo');
+  if (lec.memo) { memoEl.textContent = lec.memo; memoEl.classList.remove('is-empty'); }
+  else          { memoEl.textContent = '메모 없음'; memoEl.classList.add('is-empty'); }
+}
+
+function populateForm(lec) {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
+  set('af-date',            lec.date);
+  set('af-title',           lec.title);
+  set('af-client',          lec.client);
+  set('af-fee',             lec.fee);
+  set('af-session-current', lec.sessionCurrent);
+  set('af-session-total',   lec.sessionTotal);
+  set('af-participants',    lec.participants);
+  set('af-group-info',      lec.groupInfo);
+  set('af-topic',           lec.topic);
+  set('af-supplies',        lec.supplies);
+  set('af-place',           lec.place);
+  set('af-parking',         lec.parkingInfo);
+  set('af-manager-name',    lec.managerName);
+  set('af-manager-phone',   lec.managerPhone);
+  set('af-manager-email',   lec.managerEmail);
+  set('af-progress',        lec.progressStatus || 'scheduled');
+  set('af-payment-date',    lec.paymentDate);
+  set('af-memo',            lec.memo);
+
+  const startSel = document.getElementById('af-time-start');
+  if (startSel) {
+    startSel.innerHTML = buildTimeOptions();
+    startSel.value     = lec.timeStart || '';
+    syncEndTimeOptions(lec.timeEnd || '');
+  }
+  updateDurationDisplay();
+
+  const paidSel = document.getElementById('af-paid-status');
+  if (paidSel) paidSel.value = lec.isPaid ? 'true' : 'false';
+
+  const taxSel = document.getElementById('af-tax');
+  if (taxSel) taxSel.value = lec.taxType || 'income3_3';
+}
+
+/* ════════════════════════════════════════
+   모달 모드 전환
+════════════════════════════════════════ */
+function switchMode(mode) {
+  const viewPanel    = document.getElementById('view-panel');
+  const formPanel    = document.getElementById('form-panel');
+  const viewFooter   = document.getElementById('view-footer');
+  const formFooter   = document.getElementById('form-footer');
+  const metaRow      = document.getElementById('modal-meta-row');
+  const formSubtitle = document.getElementById('modal-form-subtitle');
+
+  const isView = (mode === 'view');
+  if (viewPanel)    viewPanel.style.display    = isView ? '' : 'none';
+  if (formPanel)    formPanel.style.display    = isView ? 'none' : '';
+  if (viewFooter)   viewFooter.style.display   = isView ? 'flex' : 'none';
+  if (formFooter)   formFooter.style.display   = isView ? 'none' : 'flex';
+  if (metaRow)      metaRow.style.display      = isView ? '' : 'none';
+  if (formSubtitle) formSubtitle.style.display = isView ? 'none' : '';
+}
+
+/* ════════════════════════════════════════
+   모달 열기 / 닫기
+════════════════════════════════════════ */
+const modalBackdrop   = document.getElementById('modal-backdrop');
+const confirmBackdrop = document.getElementById('confirm-backdrop');
+
+function openModal(id) {
+  const lec = allLectures.find(l => l.id === id);
+  if (!lec || !modalBackdrop) return;
+  activeModalId = id;
+  editingLecId  = null;
+
+  populateView(lec);
+  switchMode('view');
+
+  modalBackdrop.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('modal-close-btn')?.focus();
+}
+
+function closeModal() {
+  modalBackdrop?.classList.remove('open');
+  document.body.style.overflow = '';
+  activeModalId = null;
+  editingLecId  = null;
+}
+
+document.getElementById('modal-close-btn')?.addEventListener('click', closeModal);
+modalBackdrop?.addEventListener('click', e => {
+  if (e.target !== modalBackdrop) return;
+  closeModal();
+});
+
+/* 수정하기 */
+document.getElementById('btn-modal-edit')?.addEventListener('click', () => {
+  if (!activeModalId) return;
+  const lec = allLectures.find(l => l.id === activeModalId);
+  if (!lec) return;
+  editingLecId = activeModalId;
+  document.getElementById('modal-title').textContent = '강의 수정';
+  const sub = document.getElementById('modal-form-subtitle');
+  if (sub) sub.textContent = '강의 정보를 수정하세요.';
+  initTimeSelects();
+  populateForm(lec);
+  switchMode('form');
+  document.getElementById('af-title')?.focus();
+});
+
+/* 폼 취소 */
+document.getElementById('btn-form-cancel')?.addEventListener('click', () => {
+  if (editingLecId) {
+    const id = activeModalId;
+    editingLecId = null;
+    const lec = allLectures.find(l => l.id === id);
+    if (lec) { populateView(lec); switchMode('view'); }
+    else closeModal();
+  } else {
+    closeModal();
+  }
+});
+
+/* 폼 저장 */
+document.getElementById('btn-form-submit')?.addEventListener('click', async () => {
+  const get = id => document.getElementById(id)?.value?.trim() ?? '';
+  const date      = get('af-date');
+  const timeStart = get('af-time-start');
+  const timeEnd   = get('af-time-end');
+  const title     = get('af-title');
+  const client    = get('af-client');
+  const feeRaw    = get('af-fee');
+
+  if (!date || !timeStart || !timeEnd || !title || !client || !feeRaw) {
+    window.showToast?.('날짜, 시간, 강의명, 고객사, 강사료는 필수 입력 항목이에요.', 'error');
+    return;
+  }
+  if (timeEnd <= timeStart) {
+    window.showToast?.('종료 시간은 시작 시간보다 이후여야 합니다.', 'error');
+    return;
+  }
+
+  const submitBtn = document.getElementById('btn-form-submit');
+  submitBtn.disabled    = true;
+  submitBtn.textContent = '저장 중...';
+
+  const isPaid  = document.getElementById('af-paid-status')?.value === 'true';
+  const taxType = document.getElementById('af-tax')?.value || 'income3_3';
+
+  const payload = {
+    date, timeStart, timeEnd, title, client,
+    fee:            Number(feeRaw),
+    sessionCurrent: Number(get('af-session-current')) || null,
+    sessionTotal:   Number(get('af-session-total'))   || null,
+    participants:   Number(get('af-participants'))     || null,
+    groupInfo:      get('af-group-info'),
+    topic:          get('af-topic'),
+    supplies:       get('af-supplies'),
+    place:          get('af-place'),
+    parkingInfo:    get('af-parking'),
+    managerName:    get('af-manager-name'),
+    managerPhone:   get('af-manager-phone'),
+    managerEmail:   get('af-manager-email'),
+    progressStatus: get('af-progress') || 'scheduled',
+    isPaid,
+    paymentDate:    get('af-payment-date'),
+    taxType,
+    memo:           get('af-memo'),
+  };
+
+  try {
+    if (editingLecId) {
+      await updateDoc(doc(db, 'lectures', editingLecId), payload);
+      window.showToast?.('강의가 수정되었습니다.', 'success');
+      const idx = allLectures.findIndex(l => l.id === editingLecId);
+      if (idx >= 0) {
+        allLectures[idx] = { ...allLectures[idx], ...payload };
+        activeModalId = editingLecId;
+        editingLecId  = null;
+        populateView(allLectures[idx]);
+        switchMode('view');
+      } else {
+        closeModal();
+      }
+    } else {
+      if (!currentUser) return;
+      await addDoc(collection(db, 'lectures'), {
+        uid: currentUser.uid, ...payload, isDocumented: false, createdAt: serverTimestamp(),
+      });
+      window.showToast?.('강의가 등록되었습니다.', 'success');
+      closeModal();
+    }
+  } catch (err) {
+    console.error('[강비서] 강의 저장 오류:', err);
+    window.showToast?.('저장에 실패했습니다.', 'error');
+  } finally {
+    submitBtn.disabled    = false;
+    submitBtn.textContent = '저장하기';
+  }
+});
+
+/* 삭제 컨펌 */
+function closeConfirm() { confirmBackdrop?.classList.remove('open'); }
+
+document.getElementById('btn-modal-delete')?.addEventListener('click', () => {
+  confirmBackdrop?.classList.add('open');
+});
+document.getElementById('btn-confirm-cancel')?.addEventListener('click', closeConfirm);
+confirmBackdrop?.addEventListener('click', e => { if (e.target === confirmBackdrop) closeConfirm(); });
+
+document.getElementById('btn-confirm-delete')?.addEventListener('click', async () => {
+  if (!activeModalId) return;
+  const id = activeModalId;
+  closeConfirm(); closeModal();
+  try {
+    await deleteDoc(doc(db, 'lectures', id));
+    window.showToast?.('강의가 삭제되었습니다.', 'error');
+  } catch (err) {
+    console.error('[강비서] 강의 삭제 오류:', err);
+    window.showToast?.('삭제에 실패했습니다.', 'error');
+  }
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeModal(); closeConfirm(); }
+});
+
+/* ════════════════════════════════════════
+   시간 선택 유틸 (폼 수정 모드용)
+════════════════════════════════════════ */
+function buildTimeOptions(minAfter = '') {
+  const opts = ['<option value="">시간 선택</option>'];
+  for (let h = 7; h <= 22; h++) {
+    for (let m = 0; m < 60; m += 10) {
+      if (h === 22 && m > 0) break;
+      const t = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+      if (!minAfter || t > minAfter) opts.push(`<option value="${t}">${t}</option>`);
+    }
+  }
+  return opts.join('');
+}
+
+function syncEndTimeOptions(keepValue = '') {
+  const startSel = document.getElementById('af-time-start');
+  const endSel   = document.getElementById('af-time-end');
+  if (!startSel || !endSel) return;
+  const prev = keepValue || endSel.value;
+  endSel.innerHTML = buildTimeOptions(startSel.value);
+  if (prev) endSel.value = prev;
+  updateDurationDisplay();
+}
+
+function updateDurationDisplay() {
+  const start = document.getElementById('af-time-start')?.value;
+  const end   = document.getElementById('af-time-end')?.value;
+  const el    = document.getElementById('af-duration-computed');
+  if (el) el.value = (start && end) ? calcDuration(start, end) : '';
+}
+
+function initTimeSelects() {
+  const startSel = document.getElementById('af-time-start');
+  const endSel   = document.getElementById('af-time-end');
+  if (startSel) startSel.innerHTML = buildTimeOptions();
+  if (endSel)   endSel.innerHTML   = buildTimeOptions();
+  startSel?.addEventListener('change', () => syncEndTimeOptions());
+  endSel?.addEventListener('change',   updateDurationDisplay);
+}
+
+/* ════════════════════════════════════════
+   [8] 알림 벨 아이콘 — 드롭다운 피드백
+════════════════════════════════════════ */
+(function initNotificationBell() {
+  const bell = document.querySelector('.topbar-notification');
+  if (!bell) return;
+
+  const dropdown = document.createElement('div');
+  dropdown.id = 'notification-dropdown';
+  Object.assign(dropdown.style, {
+    display:      'none',
+    position:     'absolute',
+    top:          'calc(100% + 8px)',
+    right:        '0',
+    width:        '280px',
+    background:   '#fff',
+    border:       '1px solid #e5e7eb',
+    borderRadius: '10px',
+    boxShadow:    '0 8px 24px rgba(0,0,0,.12)',
+    zIndex:       '9999',
+    padding:      '0',
+    overflow:     'hidden',
+  });
+  dropdown.innerHTML = `
+    <div style="padding:12px 16px;font-weight:700;color:#111827;border-bottom:1px solid #f3f4f6;font-size:0.9rem;">
+      🔔 알림
+    </div>
+    <div style="padding:24px 16px;text-align:center;color:#9ca3af;font-size:0.85rem;">
+      새로운 알림이 없습니다.
+    </div>`;
+
+  bell.style.position = 'relative';
+  bell.appendChild(dropdown);
+
+  let isOpen = false;
+  bell.addEventListener('click', e => {
+    e.stopPropagation();
+    isOpen = !isOpen;
+    dropdown.style.display = isOpen ? 'block' : 'none';
+    bell.setAttribute('aria-expanded', String(isOpen));
+  });
+
+  document.addEventListener('click', () => {
+    if (!isOpen) return;
+    isOpen = false;
+    dropdown.style.display = 'none';
+  });
+
+  bell.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); bell.click(); }
+    if (e.key === 'Escape')                 { isOpen = false; dropdown.style.display = 'none'; }
+  });
+})();
+
+/* ════════════════════════════════════════
+   To-do List — Firestore 실시간 연동
 ════════════════════════════════════════ */
 function renderTodoList() {
   const list    = document.getElementById('todo-list');
@@ -415,11 +897,7 @@ function renderTodoList() {
 function initTodos(uid) {
   if (unsubscribeTodos) unsubscribeTodos();
 
-  const q = query(
-    collection(db, 'todos'),
-    where('uid', '==', uid),
-  );
-
+  const q = query(collection(db, 'todos'), where('uid', '==', uid));
   unsubscribeTodos = onSnapshot(q, snapshot => {
     todos = snapshot.docs
       .map(d => ({ id: d.id, ...d.data() }))
@@ -492,6 +970,7 @@ document.getElementById('logout-btn')?.addEventListener('click', async e => {
     if (unsubscribeLectures) unsubscribeLectures();
     await signOut(auth);
     localStorage.removeItem('userName');
+    localStorage.removeItem('userNickname');
     localStorage.removeItem('userUid');
     localStorage.removeItem('userEmail');
     window.location.replace('../login.html');
@@ -513,7 +992,7 @@ renderTodoList();
 /* ════════════════════════════════════════
    인증 상태 감지 — 권한 가드 + 구독 시작
 ════════════════════════════════════════ */
-onAuthStateChanged(auth, user => {
+onAuthStateChanged(auth, async user => {
   if (!user) {
     window.location.replace('../login.html');
     return;
@@ -524,7 +1003,19 @@ onAuthStateChanged(auth, user => {
   localStorage.setItem('userUid',   user.uid);
   localStorage.setItem('userEmail', user.email || '');
 
-  updateSidebarUser(user);
+  /* [10] Firestore에서 닉네임 로드 */
+  try {
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    if (snap.exists()) {
+      const nickname = snap.data().nickname || '';
+      if (nickname) localStorage.setItem('userNickname', nickname);
+      else          localStorage.removeItem('userNickname');
+    }
+  } catch (err) {
+    console.error('[강비서] 닉네임 로드 오류:', err);
+  }
+
+  updateSidebarUser();
   renderGreeting();
 
   initLectures(user.uid);

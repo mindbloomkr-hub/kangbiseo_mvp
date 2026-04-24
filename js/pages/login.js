@@ -1,6 +1,6 @@
 // js/pages/login.js — Firebase Auth 연동 (module)
 
-import { auth, googleProvider } from '../api.js';
+import { auth, db, googleProvider } from '../api.js';
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -8,6 +8,9 @@ import {
   signInWithPopup,
   updateProfile,
 } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-auth.js";
+import {
+  doc, setDoc, serverTimestamp,
+} from "https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js";
 
 /* ════════════════════════════════════════
    이미 로그인된 사용자 → 홈으로 리다이렉트
@@ -202,6 +205,15 @@ signupForm?.addEventListener('submit', async e => {
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, pw);
     await updateProfile(cred.user, { displayName: name });
+    /* [6] Firestore에 사용자 프로필 문서 초기 생성 */
+    await setDoc(doc(db, 'users', cred.user.uid), {
+      displayName: name,
+      email,
+      nickname:   '',
+      keywords:   [],
+      topics:     [],
+      createdAt:  serverTimestamp(),
+    }, { merge: true });
     window.location.href = 'pages/home.html';
   } catch (err) {
     console.error('[강비서] 회원가입 오류:', err.code);
