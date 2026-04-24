@@ -956,12 +956,139 @@
 .btn--add-submit:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* ════════════════════════════════
+   통합 모달 확장 스타일
+════════════════════════════════ */
+
+/* 폼 모드일 때 더 넓은 모달 */
+.modal--unified {
+  max-width: 760px;
+}
+
+/* 3열 정보 그리드 */
+.modal-info-grid--3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+/* 4열 정보 그리드 */
+.modal-info-grid--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* 강의명 강조 */
+.modal-info-value--title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-gray-900);
+}
+
+/* 뷰 패널 메모 표시 */
+.view-memo {
+  font-size: var(--font-size-sm);
+  color: var(--color-gray-700);
+  line-height: var(--line-height-relaxed);
+  white-space: pre-wrap;
+  min-height: 40px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.view-memo.is-empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* 4열 폼 그리드 */
+.add-form-grid--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* 읽기 전용 자동계산 입력 */
+.add-form-input--readonly {
+  background: var(--color-gray-100);
+  color: var(--color-text-secondary);
+  cursor: default;
+  border-color: var(--color-border);
+}
+
+.add-form-input--readonly:focus {
+  border-color: var(--color-border);
+  box-shadow: none;
+}
+
+/* 폼 모달 푸터 버튼 */
+.btn--form-cancel {
+  height: 40px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  border: 1.5px solid var(--color-border-strong);
+  background: var(--color-white);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn--form-cancel:hover { background: var(--color-gray-100); }
+
+.btn--form-submit {
+  height: 40px;
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  background: var(--color-primary-500);
+  color: var(--color-white);
+  border: none;
+  cursor: pointer;
+  box-shadow: var(--shadow-primary);
+  transition: all var(--transition-fast);
+}
+
+.btn--form-submit:hover { background: var(--color-primary-700); }
+.btn--form-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* 뷰 패널 담당자 이메일 행 */
+.modal-manager-email-row {
+  margin-top: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.modal-manager-email-row .modal-info-label {
+  min-width: 90px;
+  margin-bottom: 0;
+}
+
+/* 정산 상태 배지 */
+.paid-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.paid-badge--paid   { color: var(--color-success-600); }
+.paid-badge--unpaid { color: var(--color-danger-600); font-weight: var(--font-weight-bold); }
+
+/* ════════════════════════════════
    RESPONSIVE
 ════════════════════════════════ */
 @media (max-width: 768px) {
   .modal { max-width: 100%; border-radius: var(--radius-xl) var(--radius-xl) 0 0; }
   .modal-backdrop { align-items: flex-end; padding: 0; }
   .modal-info-grid { grid-template-columns: 1fr; }
+  .modal-info-grid--3 { grid-template-columns: 1fr 1fr; }
+  .modal-info-grid--4 { grid-template-columns: 1fr 1fr; }
+  .add-form-grid--4 { grid-template-columns: 1fr 1fr; }
   .doc-status-grid { grid-template-columns: repeat(3, 1fr); }
   .modal-header, .modal-body, .modal-footer { padding-inline: var(--space-5); }
   .lectures-header { flex-direction: column; }

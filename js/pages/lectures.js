@@ -15,7 +15,13 @@ const TODAY  = new Date();
 TODAY.setHours(0, 0, 0, 0);
 const IN_7DAYS = new Date(TODAY.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-const TAX_LABEL = { income3_3: '사업소득 3.3%', income8_8: '기타소득 8.8%' };
+const TAX_LABEL = {
+  income3_3: '사업소득 3.3%',
+  income8_8: '기타소득 8.8%',
+  exempt:    '면세',
+  other:     '기타',
+};
+
 const PROGRESS_LABEL = {
   discussing: '논의 중',
   scheduled:  '강의 예정',
@@ -31,8 +37,8 @@ let currentUser   = null;
 let allLectures   = [];
 let currentFilter = 'all';
 let searchQuery   = '';
-let activeModalId = null;
-let editingLecId  = null;
+let activeModalId = null;  // 현재 열린 모달의 강의 ID
+let editingLecId  = null;  // null=추가모드, string=수정모드
 let unsubLectures = null;
 
 /* ════════════════════════════════════════
@@ -53,12 +59,37 @@ function escapeHtml(str) {
 
 function formatDateKo(dateStr) {
   const d = parseDate(dateStr);
-  return { main: `${d.getMonth() + 1}/${d.getDate()}`, day: DAY_KO[d.getDay()] };
+  return {
+    main: `${d.getMonth() + 1}/${d.getDate()}`,
+    day:  DAY_KO[d.getDay()],
+    full: `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()} (${DAY_KO[d.getDay()]})`,
+  };
+}
+
+/* 시작~종료 시간으로 총 강의 시간 계산 */
+function calcDuration(start, end) {
+  if (!start || !end) return '—';
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  const total = (eh * 60 + em) - (sh * 60 + sm);
+  if (total <= 0) return '—';
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h > 0 && m > 0) return `${h}시간 ${m}분`;
+  if (h > 0) return `${h}시간`;
+  return `${m}분`;
+}
+
+/* af-duration-computed 필드 갱신 */
+function updateDurationDisplay() {
+  const start = document.getElementById('af-time-start')?.value;
+  const end   = document.getElementById('af-time-end')?.value;
+  const el    = document.getElementById('af-duration-computed');
+  if (el) el.value = (start && end) ? calcDuration(start, end) : '';
 }
 
 /* ════════════════════════════════════════
    강의 상태 자동 분류
-   progressStatus 우선, 미지정 시 날짜 기반
 ════════════════════════════════════════ */
 function classifyStatus(lec) {
   const prog = lec.progressStatus || 'scheduled';
@@ -67,7 +98,6 @@ function classifyStatus(lec) {
   if (prog === 'admin')      return 'admin';
   if (prog === 'discussing') return 'discussing';
 
-  /* scheduled / legacy: 날짜 기반 세분화 */
   const d = parseDate(lec.date);
   if (d < TODAY) return lec.isPaid ? 'done' : 'unpaid';
   if (d <= IN_7DAYS) return 'urgent';
@@ -88,12 +118,14 @@ const STATUS_META = {
    필터 함수
 ════════════════════════════════════════ */
 const FILTER_FN = {
-  all:      ()  => true,
-  urgent:   l   => l._status === 'urgent',
-  upcoming: l   => ['upcoming', 'urgent', 'discussing'].includes(l._status),
-  doc:      l   => l._status === 'admin',        // 행정 대기
-  unpaid:   l   => l._status === 'unpaid',
-  done:     l   => ['done', 'cancelled'].includes(l._status),
+  all:        ()  => true,
+  urgent:     l   => l._status === 'urgent',
+  upcoming:   l   => l._status === 'upcoming',
+  admin:      l   => l._status === 'admin',
+  done:       l   => l._status === 'done',
+  discussing: l   => l._status === 'discussing',
+  cancelled:  l   => l._status === 'cancelled',
+  unpaid:     l   => l._status === 'unpaid',
 };
 
 function getFilteredLectures() {
@@ -114,16 +146,15 @@ function getFilteredLectures() {
 /* ════════════════════════════════════════
    DOM 참조
 ════════════════════════════════════════ */
-const filterTabs       = document.querySelectorAll('.filter-tab');
-const tableBody        = document.getElementById('lectures-tbody');
-const resultCountEl    = document.getElementById('result-count');
-const searchInput      = document.getElementById('table-search');
-const modalBackdrop    = document.getElementById('modal-backdrop');
-const confirmBackdrop  = document.getElementById('confirm-backdrop');
-const addModalBackdrop = document.getElementById('add-modal-backdrop');
+const filterTabs      = document.querySelectorAll('.filter-tab');
+const tableBody       = document.getElementById('lectures-tbody');
+const resultCountEl   = document.getElementById('result-count');
+const searchInput     = document.getElementById('table-search');
+const modalBackdrop   = document.getElementById('modal-backdrop');
+const confirmBackdrop = document.getElementById('confirm-backdrop');
 
 /* ════════════════════════════════════════
-   탭 카운트 + 요약 칩 업데이트
+   탭 카운트 + 요약 칩
 ════════════════════════════════════════ */
 function updateTabCounts() {
   filterTabs.forEach(tab => {
@@ -138,7 +169,7 @@ function updateSummaryChips() {
   const now      = new Date();
   const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const thisMonthFee = allLectures
-    .filter(l => l.date.startsWith(monthStr))
+    .filter(l => l.date?.startsWith(monthStr))
     .reduce((s, l) => s + (Number(l.fee) || 0), 0);
   const unpaid   = allLectures.filter(l => l._status === 'unpaid');
   const upcoming = allLectures.filter(l => ['upcoming', 'urgent', 'discussing'].includes(l._status));
@@ -158,7 +189,7 @@ function updateNavBadge() {
   localStorage.setItem('navBadgeCount', String(count));
   const badgeEl = document.getElementById('nav-badge-lectures');
   if (!badgeEl) return;
-  badgeEl.textContent  = count;
+  badgeEl.textContent   = count;
   badgeEl.style.display = count > 0 ? '' : 'none';
 }
 
@@ -217,73 +248,155 @@ function renderTable() {
 }
 
 /* ════════════════════════════════════════
-   상세 모달 열기
+   모달 모드 전환 헬퍼
 ════════════════════════════════════════ */
-function openModal(id) {
-  const lec = allLectures.find(l => l.id === id);
-  if (!lec) return;
-  activeModalId = id;
+function switchMode(mode) {
+  const viewPanel     = document.getElementById('view-panel');
+  const formPanel     = document.getElementById('form-panel');
+  const viewFooter    = document.getElementById('view-footer');
+  const formFooter    = document.getElementById('form-footer');
+  const metaRow       = document.getElementById('modal-meta-row');
+  const formSubtitle  = document.getElementById('modal-form-subtitle');
 
-  const { main, day } = formatDateKo(lec.date);
+  const isView = (mode === 'view');
+  viewPanel.style.display    = isView ? '' : 'none';
+  formPanel.style.display    = isView ? 'none' : '';
+  viewFooter.style.display   = isView ? 'flex' : 'none';
+  formFooter.style.display   = isView ? 'none' : 'flex';
+  metaRow.style.display      = isView ? '' : 'none';
+  if (formSubtitle) formSubtitle.style.display = isView ? 'none' : '';
+}
+
+/* ════════════════════════════════════════
+   뷰 패널 데이터 채우기
+════════════════════════════════════════ */
+function populateView(lec) {
+  if (!lec) return;
+
+  const { full, day } = formatDateKo(lec.date);
   const meta = STATUS_META[lec._status] || { label: lec._status, cls: '' };
 
   /* 헤더 */
-  document.getElementById('modal-title').textContent       = escapeHtml(lec.title);
-  document.getElementById('modal-subtitle').textContent    = '';
+  document.getElementById('modal-title').textContent       = lec.title || '(제목 없음)';
   document.getElementById('modal-badge').className         = `lec-badge ${meta.cls}`;
   document.getElementById('modal-badge').textContent       = meta.label;
-  document.getElementById('modal-date-meta').textContent   = `${main} (${day}) · ${lec.timeStart}~${lec.timeEnd}`;
-  document.getElementById('modal-client-meta').textContent = escapeHtml(lec.client || '—');
+  document.getElementById('modal-date-meta').textContent   = `${full} · ${lec.timeStart}~${lec.timeEnd}`;
+  document.getElementById('modal-client-meta').textContent = lec.client || '—';
 
-  /* 기본 정보 */
-  document.getElementById('modal-place').textContent   = escapeHtml(lec.place    || '—');
-  document.getElementById('modal-parking').textContent = escapeHtml(lec.parkingInfo || '—');
-  document.getElementById('modal-time').textContent    = `${lec.timeStart} ~ ${lec.timeEnd}`;
-  document.getElementById('modal-fee').textContent     = `₩${(Number(lec.fee) || 0).toLocaleString()}`;
-  document.getElementById('modal-progress').textContent = PROGRESS_LABEL[lec.progressStatus || 'scheduled'] || '—';
+  /* 섹션 1: 기본 정보 */
+  document.getElementById('v-date').textContent           = full;
+  document.getElementById('v-time').textContent           = `${lec.timeStart} ~ ${lec.timeEnd}`;
+  document.getElementById('v-total-duration').textContent = calcDuration(lec.timeStart, lec.timeEnd);
+  document.getElementById('v-title').textContent          = lec.title || '—';
+  document.getElementById('v-client').textContent         = lec.client || '—';
+  document.getElementById('v-fee').textContent            = `₩${(Number(lec.fee) || 0).toLocaleString()}`;
 
-  /* 상세 정보 */
-  const sessionCurr  = lec.sessionCurrent ? String(lec.sessionCurrent) : '';
-  const sessionTotal = lec.sessionTotal   ? String(lec.sessionTotal)   : '';
-  document.getElementById('modal-session').textContent =
-    sessionCurr && sessionTotal ? `${sessionCurr} / ${sessionTotal} 회` :
-    sessionCurr ? `${sessionCurr} 회` : '—';
-  document.getElementById('modal-participants').textContent = lec.participants ? `${lec.participants}명` : '—';
-  document.getElementById('modal-duration').textContent    = escapeHtml(lec.durationText || '—');
-  document.getElementById('modal-group-info').textContent  = escapeHtml(lec.groupInfo    || '—');
-  document.getElementById('modal-topic').textContent       = escapeHtml(lec.topic        || '—');
-  document.getElementById('modal-supplies').textContent    = escapeHtml(lec.supplies     || '—');
+  /* 섹션 2: 상세 정보 */
+  document.getElementById('v-session-current').textContent = lec.sessionCurrent ? `${lec.sessionCurrent}회` : '—';
+  document.getElementById('v-session-total').textContent   = lec.sessionTotal   ? `${lec.sessionTotal}회`   : '—';
+  document.getElementById('v-participants').textContent    = lec.participants    ? `${lec.participants}명`   : '—';
+  document.getElementById('v-group-info').textContent      = lec.groupInfo  || '—';
+  document.getElementById('v-topic').textContent           = lec.topic      || '—';
+  document.getElementById('v-supplies').textContent        = lec.supplies   || '—';
+  document.getElementById('v-place').textContent           = lec.place      || '—';
+  document.getElementById('v-parking').textContent         = lec.parkingInfo || '—';
 
-  /* 담당자 */
-  const mgrName  = lec.managerName  || '—';
+  /* 섹션 3: 담당자 */
+  const mgrName  = lec.managerName  || '';
   const mgrPhone = lec.managerPhone || '';
   const mgrEmail = lec.managerEmail || '';
-  document.getElementById('modal-mgr-avatar').textContent = mgrName.charAt(0);
-  document.getElementById('modal-mgr-name').textContent   = escapeHtml(mgrName);
-  document.getElementById('modal-mgr-sub').textContent    = mgrPhone || '연락처 미등록';
 
-  const phoneLink = document.getElementById('modal-mgr-phone');
+  document.getElementById('v-mgr-avatar').textContent = mgrName ? mgrName.charAt(0) : '담';
+  document.getElementById('v-mgr-name').textContent   = mgrName || '담당자 미등록';
+  document.getElementById('v-mgr-sub').textContent    = mgrPhone || '연락처 미등록';
+  document.getElementById('v-mgr-email-text').textContent = mgrEmail || '—';
+
+  const phoneLink = document.getElementById('v-mgr-phone');
   if (mgrPhone) {
     phoneLink.href = `tel:${mgrPhone}`; phoneLink.style.opacity = ''; phoneLink.style.pointerEvents = '';
   } else {
     phoneLink.href = '#'; phoneLink.style.opacity = '0.35'; phoneLink.style.pointerEvents = 'none';
   }
-  const emailLink = document.getElementById('modal-mgr-email');
+  const emailLink = document.getElementById('v-mgr-email-link');
   if (mgrEmail) {
     emailLink.href = `mailto:${mgrEmail}`; emailLink.style.opacity = ''; emailLink.style.pointerEvents = '';
   } else {
     emailLink.href = '#'; emailLink.style.opacity = '0.35'; emailLink.style.pointerEvents = 'none';
   }
 
-  /* 정산 & 행정 */
-  document.getElementById('modal-paiddate').textContent = lec.paymentDate || '미정';
-  document.getElementById('modal-tax').textContent      = TAX_LABEL[lec.taxType] || '—';
-  /* 정산 상태 라디오 */
-  const paidRadio = document.querySelector(`input[name="modal-paid"][value="${lec.isPaid ? 'true' : 'false'}"]`);
-  if (paidRadio) paidRadio.checked = true;
+  /* 섹션 4: 정산 & 행정 */
+  document.getElementById('v-progress').textContent     = PROGRESS_LABEL[lec.progressStatus || 'scheduled'] || '—';
+  const paidEl = document.getElementById('v-paid-status');
+  paidEl.textContent = lec.isPaid ? '✅ 입금 완료' : '❌ 미입금';
+  paidEl.className   = `modal-info-value paid-badge${lec.isPaid ? ' paid-badge--paid' : ' paid-badge--unpaid'}`;
+  document.getElementById('v-payment-date').textContent = lec.paymentDate || '미정';
+  document.getElementById('v-tax').textContent          = TAX_LABEL[lec.taxType] || '—';
 
-  /* 메모 */
-  document.getElementById('modal-memo').value = lec.memo || '';
+  /* 섹션 5: 메모 */
+  const memoEl = document.getElementById('v-memo');
+  if (lec.memo) {
+    memoEl.textContent = lec.memo;
+    memoEl.classList.remove('is-empty');
+  } else {
+    memoEl.textContent = '메모 없음';
+    memoEl.classList.add('is-empty');
+  }
+}
+
+/* ════════════════════════════════════════
+   폼 패널 데이터 채우기
+════════════════════════════════════════ */
+function populateForm(lec) {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
+
+  set('af-date',            lec.date);
+  set('af-title',           lec.title);
+  set('af-client',          lec.client);
+  set('af-fee',             lec.fee);
+  set('af-session-current', lec.sessionCurrent);
+  set('af-session-total',   lec.sessionTotal);
+  set('af-participants',    lec.participants);
+  set('af-group-info',      lec.groupInfo);
+  set('af-topic',           lec.topic);
+  set('af-supplies',        lec.supplies);
+  set('af-place',           lec.place);
+  set('af-parking',         lec.parkingInfo);
+  set('af-manager-name',    lec.managerName);
+  set('af-manager-phone',   lec.managerPhone);
+  set('af-manager-email',   lec.managerEmail);
+  set('af-progress',        lec.progressStatus || 'scheduled');
+  set('af-payment-date',    lec.paymentDate);
+  set('af-memo',            lec.memo);
+
+  /* 시간 셀렉트 */
+  const startSel = document.getElementById('af-time-start');
+  if (startSel) {
+    startSel.innerHTML = buildTimeOptions();
+    startSel.value     = lec.timeStart || '';
+    syncEndTimeOptions(lec.timeEnd || '');
+  }
+  updateDurationDisplay();
+
+  /* 정산 상태 */
+  const paidSel = document.getElementById('af-paid-status');
+  if (paidSel) paidSel.value = lec.isPaid ? 'true' : 'false';
+
+  /* 세금 정보 */
+  const taxSel = document.getElementById('af-tax');
+  if (taxSel) taxSel.value = lec.taxType || 'income3_3';
+}
+
+/* ════════════════════════════════════════
+   통합 모달 열기
+════════════════════════════════════════ */
+function openModal(id) {
+  const lec = allLectures.find(l => l.id === id);
+  if (!lec || !modalBackdrop) return;
+  activeModalId = id;
+  editingLecId  = null;
+
+  populateView(lec);
+  switchMode('view');
 
   modalBackdrop.classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -294,32 +407,170 @@ function closeModal() {
   modalBackdrop?.classList.remove('open');
   document.body.style.overflow = '';
   activeModalId = null;
+  editingLecId  = null;
 }
 
 document.getElementById('modal-close-btn')?.addEventListener('click', closeModal);
 modalBackdrop?.addEventListener('click', e => { if (e.target === modalBackdrop) closeModal(); });
 
-/* ── 메모 + 정산 상태 저장 ── */
-document.getElementById('btn-modal-save')?.addEventListener('click', async () => {
+/* ── 강의 추가 → 폼 모드로 열기 ── */
+function openAddModal() {
+  activeModalId = null;
+  editingLecId  = null;
+  document.getElementById('modal-title').textContent = '강의 추가';
+  const sub = document.getElementById('modal-form-subtitle');
+  if (sub) sub.textContent = '새 강의 일정을 등록하세요.';
+
+  document.getElementById('lec-form')?.reset();
+
+  /* 오늘 날짜 기본값 */
+  const now = new Date();
+  const af  = document.getElementById('af-date');
+  if (af) af.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
+  /* 시간 셀렉트 초기화 */
+  const startSel = document.getElementById('af-time-start');
+  if (startSel) { startSel.innerHTML = buildTimeOptions(); startSel.value = '09:00'; }
+  syncEndTimeOptions('10:00');
+  updateDurationDisplay();
+
+  /* 기본값 */
+  const progressSel = document.getElementById('af-progress');
+  if (progressSel) progressSel.value = 'scheduled';
+  const paidSel = document.getElementById('af-paid-status');
+  if (paidSel) paidSel.value = 'false';
+  const taxSel = document.getElementById('af-tax');
+  if (taxSel) taxSel.value = 'income3_3';
+
+  switchMode('form');
+  modalBackdrop?.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('af-title')?.focus();
+}
+
+document.getElementById('btn-add-lecture')?.addEventListener('click', openAddModal);
+
+/* ── 수정하기 버튼 → 폼 모드로 전환 ── */
+document.getElementById('btn-modal-edit')?.addEventListener('click', () => {
   if (!activeModalId) return;
-  const memo     = document.getElementById('modal-memo').value;
-  const isPaidRaw = document.querySelector('input[name="modal-paid"]:checked')?.value;
-  const isPaid   = isPaidRaw === 'true';
-  try {
-    await updateDoc(doc(db, 'lectures', activeModalId), { memo, isPaid });
+  const lec = allLectures.find(l => l.id === activeModalId);
+  if (!lec) return;
+  editingLecId = activeModalId;
+
+  document.getElementById('modal-title').textContent = '강의 수정';
+  const sub = document.getElementById('modal-form-subtitle');
+  if (sub) sub.textContent = '강의 정보를 수정하세요.';
+
+  populateForm(lec);
+  switchMode('form');
+  document.getElementById('af-title')?.focus();
+});
+
+/* ── 폼 모드 취소 ── */
+document.getElementById('btn-form-cancel')?.addEventListener('click', () => {
+  if (editingLecId) {
+    /* 수정 중 취소 → 상세 보기로 복귀 */
+    const id = activeModalId;
+    editingLecId = null;
+    const lec = allLectures.find(l => l.id === id);
+    if (lec) { populateView(lec); switchMode('view'); }
+    else closeModal();
+  } else {
+    /* 신규 추가 취소 → 모달 닫기 */
     closeModal();
-    window.showToast?.('저장되었습니다.', 'success');
-  } catch (err) {
-    console.error('[강비서] 저장 오류:', err);
-    window.showToast?.('저장에 실패했습니다.', 'error');
   }
 });
 
-/* ── 수정 버튼 → 수정 폼 ── */
-document.getElementById('btn-modal-edit')?.addEventListener('click', () => {
-  const id = activeModalId;
-  closeModal();
-  openEditModal(id);
+/* ── 폼 저장 ── */
+document.getElementById('btn-form-submit')?.addEventListener('click', async () => {
+  const get = id => document.getElementById(id)?.value?.trim() ?? '';
+
+  const date      = get('af-date');
+  const timeStart = get('af-time-start');
+  const timeEnd   = get('af-time-end');
+  const title     = get('af-title');
+  const client    = get('af-client');
+  const feeRaw    = get('af-fee');
+
+  if (!date || !timeStart || !timeEnd || !title || !client || !feeRaw) {
+    window.showToast?.('날짜, 시간, 강의명, 고객사, 강사료는 필수 입력 항목이에요.', 'error');
+    return;
+  }
+  if (timeEnd <= timeStart) {
+    window.showToast?.('종료 시간은 시작 시간보다 이후여야 합니다.', 'error');
+    return;
+  }
+
+  const submitBtn = document.getElementById('btn-form-submit');
+  submitBtn.disabled    = true;
+  submitBtn.textContent = '저장 중...';
+
+  const isPaid  = document.getElementById('af-paid-status')?.value === 'true';
+  const taxType = document.getElementById('af-tax')?.value || 'income3_3';
+
+  const payload = {
+    date,
+    timeStart,
+    timeEnd,
+    title,
+    client,
+    fee:            Number(feeRaw),
+    sessionCurrent: Number(get('af-session-current')) || null,
+    sessionTotal:   Number(get('af-session-total'))   || null,
+    participants:   Number(get('af-participants'))     || null,
+    groupInfo:      get('af-group-info'),
+    topic:          get('af-topic'),
+    supplies:       get('af-supplies'),
+    place:          get('af-place'),
+    parkingInfo:    get('af-parking'),
+    managerName:    get('af-manager-name'),
+    managerPhone:   get('af-manager-phone'),
+    managerEmail:   get('af-manager-email'),
+    progressStatus: get('af-progress') || 'scheduled',
+    isPaid,
+    paymentDate:    get('af-payment-date'),
+    taxType,
+    memo:           get('af-memo'),
+  };
+
+  try {
+    if (editingLecId) {
+      await updateDoc(doc(db, 'lectures', editingLecId), payload);
+      window.showToast?.('강의가 수정되었습니다.', 'success');
+
+      /* 낙관적 업데이트 후 뷰 모드 복귀 */
+      const idx = allLectures.findIndex(l => l.id === editingLecId);
+      if (idx >= 0) {
+        allLectures[idx] = {
+          ...allLectures[idx],
+          ...payload,
+          _status: classifyStatus({ ...allLectures[idx], ...payload }),
+        };
+        activeModalId = editingLecId;
+        editingLecId  = null;
+        populateView(allLectures[idx]);
+        switchMode('view');
+      } else {
+        closeModal();
+      }
+    } else {
+      if (!currentUser) return;
+      await addDoc(collection(db, 'lectures'), {
+        uid: currentUser.uid,
+        ...payload,
+        isDocumented: false,
+        createdAt:    serverTimestamp(),
+      });
+      window.showToast?.('강의가 등록되었습니다.', 'success');
+      closeModal();
+    }
+  } catch (err) {
+    console.error('[강비서] 강의 저장 오류:', err);
+    window.showToast?.('저장에 실패했습니다.', 'error');
+  } finally {
+    submitBtn.disabled    = false;
+    submitBtn.textContent = '저장하기';
+  }
 });
 
 /* ════════════════════════════════════════
@@ -347,7 +598,7 @@ document.getElementById('btn-confirm-delete')?.addEventListener('click', async (
 });
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModal(); closeConfirm(); closeAddModal(); }
+  if (e.key === 'Escape') { closeModal(); closeConfirm(); }
 });
 
 /* ════════════════════════════════════════
@@ -372,6 +623,7 @@ function syncEndTimeOptions(keepValue = '') {
   const prev = keepValue || endSel.value;
   endSel.innerHTML = buildTimeOptions(startSel.value);
   if (prev) endSel.value = prev;
+  updateDurationDisplay();
 }
 
 function initTimeSelects() {
@@ -380,176 +632,8 @@ function initTimeSelects() {
   if (startSel) startSel.innerHTML = buildTimeOptions();
   if (endSel)   endSel.innerHTML   = buildTimeOptions();
   startSel?.addEventListener('change', () => syncEndTimeOptions());
+  endSel?.addEventListener('change',   updateDurationDisplay);
 }
-
-/* ════════════════════════════════════════
-   강의 추가 / 수정 통합 모달
-════════════════════════════════════════ */
-function openAddModal() {
-  editingLecId = null;
-  document.getElementById('add-modal-title').textContent = '강의 추가';
-  document.getElementById('add-lecture-form')?.reset();
-
-  /* 오늘 날짜 기본값 */
-  const now = new Date();
-  const af  = document.getElementById('af-date');
-  if (af) af.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-
-  /* 시간 셀렉트 초기화 */
-  const startSel = document.getElementById('af-time-start');
-  const endSel   = document.getElementById('af-time-end');
-  if (startSel) { startSel.innerHTML = buildTimeOptions(); startSel.value = '09:00'; }
-  if (endSel)   { syncEndTimeOptions('10:00'); }
-
-  /* 기본 진행 상태 */
-  const progressSel = document.getElementById('af-progress');
-  if (progressSel) progressSel.value = 'scheduled';
-
-  /* 기본 라디오 */
-  const paidRadio = document.querySelector('input[name="af-paid"][value="false"]');
-  if (paidRadio) paidRadio.checked = true;
-  const taxRadio = document.querySelector('input[name="af-tax"][value="income3_3"]');
-  if (taxRadio) taxRadio.checked = true;
-
-  addModalBackdrop?.classList.add('open');
-  document.body.style.overflow = 'hidden';
-  document.getElementById('af-title')?.focus();
-}
-
-function openEditModal(id) {
-  const lec = allLectures.find(l => l.id === id);
-  if (!lec) return;
-  editingLecId = id;
-  document.getElementById('add-modal-title').textContent = '강의 수정';
-
-  const set = (elId, val) => { const el = document.getElementById(elId); if (el) el.value = val ?? ''; };
-  set('af-date',            lec.date);
-  set('af-title',           lec.title);
-  set('af-client',          lec.client);
-  set('af-fee',             lec.fee);
-  set('af-place',           lec.place);
-  set('af-parking',         lec.parkingInfo);
-  set('af-session-current', lec.sessionCurrent);
-  set('af-session-total',   lec.sessionTotal);
-  set('af-duration',        lec.durationText);
-  set('af-participants',    lec.participants);
-  set('af-group-info',      lec.groupInfo);
-  set('af-topic',           lec.topic);
-  set('af-supplies',        lec.supplies);
-  set('af-manager-name',    lec.managerName);
-  set('af-manager-phone',   lec.managerPhone);
-  set('af-manager-email',   lec.managerEmail);
-  set('af-progress',        lec.progressStatus || 'scheduled');
-  set('af-payment-date',    lec.paymentDate);
-  set('af-memo',            lec.memo);
-
-  /* 시간 셀렉트 */
-  const startSel = document.getElementById('af-time-start');
-  if (startSel) {
-    startSel.innerHTML = buildTimeOptions();
-    startSel.value     = lec.timeStart || '';
-    syncEndTimeOptions(lec.timeEnd || '');
-  }
-
-  /* 라디오 */
-  const paidVal  = lec.isPaid ? 'true' : 'false';
-  const paidR    = document.querySelector(`input[name="af-paid"][value="${paidVal}"]`);
-  if (paidR) paidR.checked = true;
-  const taxR = document.querySelector(`input[name="af-tax"][value="${lec.taxType || 'income3_3'}"]`);
-  if (taxR) taxR.checked = true;
-
-  addModalBackdrop?.classList.add('open');
-  document.body.style.overflow = 'hidden';
-  document.getElementById('af-title')?.focus();
-}
-
-function closeAddModal() {
-  addModalBackdrop?.classList.remove('open');
-  document.body.style.overflow = '';
-  editingLecId = null;
-}
-
-document.getElementById('btn-add-lecture')?.addEventListener('click', openAddModal);
-document.getElementById('add-modal-close')?.addEventListener('click', closeAddModal);
-document.getElementById('add-modal-cancel')?.addEventListener('click', closeAddModal);
-addModalBackdrop?.addEventListener('click', e => { if (e.target === addModalBackdrop) closeAddModal(); });
-
-/* ── 추가 / 수정 저장 ── */
-document.getElementById('add-modal-submit')?.addEventListener('click', async () => {
-  const get = id => document.getElementById(id)?.value?.trim() ?? '';
-
-  const date      = get('af-date');
-  const timeStart = get('af-time-start');
-  const timeEnd   = get('af-time-end');
-  const title     = get('af-title');
-  const client    = get('af-client');
-  const feeRaw    = get('af-fee');
-
-  if (!date || !timeStart || !timeEnd || !title || !client || !feeRaw) {
-    window.showToast?.('날짜, 시간, 강의명, 고객사, 강사료는 필수 입력 항목이에요.', 'error');
-    return;
-  }
-  if (timeEnd <= timeStart) {
-    window.showToast?.('종료 시간은 시작 시간보다 이후여야 합니다.', 'error');
-    return;
-  }
-
-  const submitBtn = document.getElementById('add-modal-submit');
-  submitBtn.disabled    = true;
-  submitBtn.textContent = '저장 중...';
-
-  const isPaid = document.querySelector('input[name="af-paid"]:checked')?.value === 'true';
-  const taxType = document.querySelector('input[name="af-tax"]:checked')?.value || 'income3_3';
-
-  const payload = {
-    date,
-    timeStart,
-    timeEnd,
-    title,
-    client,
-    place:          get('af-place'),
-    parkingInfo:    get('af-parking'),
-    fee:            Number(feeRaw),
-    sessionCurrent: Number(get('af-session-current'))  || null,
-    sessionTotal:   Number(get('af-session-total'))     || null,
-    durationText:   get('af-duration'),
-    participants:   Number(get('af-participants'))      || null,
-    groupInfo:      get('af-group-info'),
-    topic:          get('af-topic'),
-    supplies:       get('af-supplies'),
-    managerName:    get('af-manager-name'),
-    managerPhone:   get('af-manager-phone'),
-    managerEmail:   get('af-manager-email'),
-    progressStatus: get('af-progress') || 'scheduled',
-    isPaid,
-    paymentDate:    get('af-payment-date'),
-    taxType,
-    memo:           get('af-memo'),
-  };
-
-  try {
-    if (editingLecId) {
-      await updateDoc(doc(db, 'lectures', editingLecId), payload);
-      window.showToast?.('강의가 수정되었습니다.', 'success');
-    } else {
-      if (!currentUser) return;
-      await addDoc(collection(db, 'lectures'), {
-        uid:       currentUser.uid,
-        ...payload,
-        isDocumented: false,
-        createdAt: serverTimestamp(),
-      });
-      window.showToast?.('강의가 등록되었습니다.', 'success');
-    }
-    closeAddModal();
-  } catch (err) {
-    console.error('[강비서] 강의 저장 오류:', err);
-    window.showToast?.('저장에 실패했습니다.', 'error');
-  } finally {
-    submitBtn.disabled    = false;
-    submitBtn.textContent = '저장하기';
-  }
-});
 
 /* ════════════════════════════════════════
    필터 탭
@@ -634,7 +718,7 @@ onAuthStateChanged(auth, user => {
 });
 
 /* ════════════════════════════════════════
-   초기화 (데이터 로딩 전 빈 렌더 + 시간 셀렉트)
+   초기화
 ════════════════════════════════════════ */
 renderTable();
 updateTabCounts();

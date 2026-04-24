@@ -210,6 +210,32 @@
       animation: spin .7s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── 취소 이벤트: 점선 테두리 + 취소선 ─── */
+    .fc .fc-event.fc-cancelled-lec {
+      opacity: 0.6;
+      border-style: dashed !important;
+    }
+    .fc .fc-event.fc-cancelled-lec .fc-event-title,
+    .fc .fc-event.fc-cancelled-lec .fc-list-event-title {
+      text-decoration: line-through;
+    }
+
+    /* ─── 행정 대기 / 미입금완료: 밝은 배경 이벤트 글씨 강조 ─── */
+    .fc .fc-daygrid-event .fc-event-title {
+      font-weight: 600;
+    }
+
+    /* ─── 범례 레이블 ─── */
+    .cal-legend-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
@@ -329,24 +355,25 @@
         <!-- ── 색상 범례 ── -->
         <div class="cal-legend-row" role="list" aria-label="색상 범례">
           <div class="cal-legend-item-fc" role="listitem">
-            <div class="cal-legend-dot-fc" style="background:#0ea5e9;"></div>
-            <span>강의 예정</span>
+            <span class="cal-legend-badge" style="background:#ede9fe;color:#5b21b6;border:1px solid #a78bfa;">💬 논의 중</span>
           </div>
           <div class="cal-legend-item-fc" role="listitem">
-            <div class="cal-legend-dot-fc" style="background:#f59e0b;"></div>
-            <span>준비 임박 (7일 이내)</span>
+            <span class="cal-legend-badge" style="background:#0ea5e9;color:#fff;">📅 강의 예정</span>
           </div>
           <div class="cal-legend-item-fc" role="listitem">
-            <div class="cal-legend-dot-fc" style="background:#059669;"></div>
-            <span>완료</span>
+            <span class="cal-legend-badge" style="background:#f59e0b;color:#fff;">⏳ 준비 임박 (7일↓)</span>
           </div>
           <div class="cal-legend-item-fc" role="listitem">
-            <div class="cal-legend-dot-fc" style="background:#9ca3af; border: 1px solid #d1d5db;"></div>
-            <span>미입금 (회색)</span>
+            <span class="cal-legend-badge" style="background:#d1fae5;color:#b91c1c;border:1px solid #6ee7b7;">🏃 행정 대기</span>
           </div>
           <div class="cal-legend-item-fc" role="listitem">
-            <div class="cal-legend-dot-fc" style="background:#d97706;"></div>
-            <span>서류 미비</span>
+            <span class="cal-legend-badge" style="background:#059669;color:#fff;">✅ 진행 완료</span>
+          </div>
+          <div class="cal-legend-item-fc" role="listitem">
+            <span class="cal-legend-badge" style="background:#e5e7eb;color:#ef4444;border:1px solid #9ca3af;">💰 완료+미입금</span>
+          </div>
+          <div class="cal-legend-item-fc" role="listitem">
+            <span class="cal-legend-badge" style="background:#f9fafb;color:#9ca3af;border:1px dashed #d1d5db;text-decoration:line-through;">❌ 취소/드롭</span>
           </div>
         </div>
 
@@ -368,100 +395,341 @@
 
 
   <!-- ══════════════════════════════════════
-       강의 상세 모달
+       통합 강의 모달 (상세 보기 + 입력 폼)
   ══════════════════════════════════════ -->
   <div class="modal-backdrop" id="modal-backdrop"
        role="dialog" aria-modal="true" aria-labelledby="modal-title">
-    <div class="modal">
+    <div class="modal modal--unified">
 
-      <!-- 모달 헤더 -->
+      <!-- ── 모달 헤더 ── -->
       <div class="modal-header">
         <div class="modal-title-block">
-          <h2 class="modal-title" id="modal-title">강의 제목</h2>
-          <div class="modal-meta-row">
+          <h2 class="modal-title" id="modal-title">강의 상세</h2>
+          <div class="modal-meta-row" id="modal-meta-row">
             <span class="lec-badge" id="modal-badge"></span>
             <span class="modal-meta-item">📅 <span id="modal-date-meta"></span></span>
             <span class="modal-meta-item">🏢 <span id="modal-client-meta"></span></span>
           </div>
+          <p id="modal-form-subtitle" style="display:none;font-size:var(--font-size-sm);color:var(--color-text-muted);margin-top:4px;"></p>
         </div>
         <button class="modal-close" id="modal-close-btn" aria-label="닫기">✕</button>
       </div>
 
-      <!-- 모달 바디 -->
+      <!-- ── 모달 바디 ── -->
       <div class="modal-body">
 
-        <!-- 섹션 1: 기본 정보 -->
-        <div class="modal-section">
-          <div class="modal-section-title">기본 정보</div>
-          <div class="modal-info-grid">
-            <div class="modal-info-item">
-              <div class="modal-info-label">강의 장소</div>
-              <div class="modal-info-value" id="modal-place"></div>
+        <!-- ◆ 상세 보기 패널 ◆ -->
+        <div id="view-panel">
+
+          <!-- 섹션 1: 기본 정보 -->
+          <div class="modal-section">
+            <div class="modal-section-title">기본 정보</div>
+            <div class="modal-info-grid modal-info-grid--3">
+              <div class="modal-info-item">
+                <div class="modal-info-label">날짜</div>
+                <div class="modal-info-value" id="v-date"></div>
+              </div>
+              <div class="modal-info-item">
+                <div class="modal-info-label">강의 시간</div>
+                <div class="modal-info-value" id="v-time"></div>
+              </div>
+              <div class="modal-info-item">
+                <div class="modal-info-label">총 강의 시간</div>
+                <div class="modal-info-value" id="v-total-duration"></div>
+              </div>
             </div>
-            <div class="modal-info-item">
-              <div class="modal-info-label">강의 시간</div>
-              <div class="modal-info-value" id="modal-time"></div>
+            <div class="modal-info-grid modal-info-grid--3" style="margin-top:var(--space-3)">
+              <div class="modal-info-item" style="grid-column:1/3">
+                <div class="modal-info-label">강의명</div>
+                <div class="modal-info-value modal-info-value--title" id="v-title"></div>
+              </div>
+              <div class="modal-info-item">
+                <div class="modal-info-label">강사료</div>
+                <div class="modal-info-value fee" id="v-fee"></div>
+              </div>
             </div>
-            <div class="modal-info-item">
-              <div class="modal-info-label">강사료</div>
-              <div class="modal-info-value fee" id="modal-fee"></div>
-            </div>
-            <div class="modal-info-item">
-              <div class="modal-info-label">입금 예정일</div>
-              <div class="modal-info-value" id="modal-paiddate"></div>
-            </div>
-            <div class="modal-info-item">
-              <div class="modal-info-label">입금 상태</div>
-              <div class="modal-info-value" id="modal-paidstatus"></div>
-            </div>
-            <div class="modal-info-item">
-              <div class="modal-info-label">서류 현황</div>
-              <div class="modal-info-value" id="modal-doc-status"></div>
+            <div class="modal-info-grid" style="margin-top:var(--space-3)">
+              <div class="modal-info-item">
+                <div class="modal-info-label">고객사</div>
+                <div class="modal-info-value" id="v-client"></div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- 섹션 2: 담당자 정보 -->
-        <div class="modal-section">
-          <div class="modal-section-title">담당자 정보</div>
-          <div class="modal-manager-card">
-            <div class="modal-manager-avatar" id="modal-mgr-avatar">담</div>
-            <div class="modal-manager-info">
-              <div class="modal-manager-name" id="modal-mgr-name"></div>
-              <div class="modal-manager-sub"  id="modal-mgr-sub"></div>
+          <!-- 섹션 2: 상세 정보 -->
+          <div class="modal-section">
+            <div class="modal-section-title">상세 정보</div>
+            <div class="modal-info-grid modal-info-grid--4">
+              <div class="modal-info-item">
+                <div class="modal-info-label">현재 회차</div>
+                <div class="modal-info-value" id="v-session-current"></div>
+              </div>
+              <div class="modal-info-item">
+                <div class="modal-info-label">총 회차</div>
+                <div class="modal-info-value" id="v-session-total"></div>
+              </div>
+              <div class="modal-info-item">
+                <div class="modal-info-label">수강 인원</div>
+                <div class="modal-info-value" id="v-participants"></div>
+              </div>
+              <div class="modal-info-item">
+                <div class="modal-info-label">조 편성</div>
+                <div class="modal-info-value" id="v-group-info"></div>
+              </div>
             </div>
-            <div class="modal-manager-actions">
-              <a class="modal-contact-btn" id="modal-mgr-phone" href="tel:">📞 전화</a>
+            <div class="modal-info-grid" style="margin-top:var(--space-3)">
+              <div class="modal-info-item" style="grid-column:1/-1">
+                <div class="modal-info-label">강의 주제</div>
+                <div class="modal-info-value" id="v-topic"></div>
+              </div>
+            </div>
+            <div class="modal-info-grid" style="margin-top:var(--space-3)">
+              <div class="modal-info-item" style="grid-column:1/-1">
+                <div class="modal-info-label">준비물</div>
+                <div class="modal-info-value" id="v-supplies"></div>
+              </div>
+            </div>
+            <div class="modal-info-grid" style="margin-top:var(--space-3)">
+              <div class="modal-info-item">
+                <div class="modal-info-label">강의 장소</div>
+                <div class="modal-info-value" id="v-place"></div>
+              </div>
+              <div class="modal-info-item">
+                <div class="modal-info-label">주차 정보</div>
+                <div class="modal-info-value" id="v-parking"></div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- 섹션 3: 메모 -->
-        <div class="modal-section">
-          <div class="modal-section-title">메모 · 특이사항</div>
-          <textarea
-            class="modal-note"
-            id="modal-memo"
-            placeholder="강의 관련 특이사항, 요청사항 등을 자유롭게 기록하세요."
-            rows="3"
-          ></textarea>
-        </div>
+          <!-- 섹션 3: 담당자 정보 -->
+          <div class="modal-section">
+            <div class="modal-section-title">담당자 정보</div>
+            <div class="modal-manager-card">
+              <div class="modal-manager-avatar" id="v-mgr-avatar">담</div>
+              <div class="modal-manager-info">
+                <div class="modal-manager-name" id="v-mgr-name"></div>
+                <div class="modal-manager-sub" id="v-mgr-sub"></div>
+              </div>
+              <div class="modal-manager-actions">
+                <a class="modal-contact-btn" id="v-mgr-phone" href="tel:">📞 전화</a>
+                <a class="modal-contact-btn" id="v-mgr-email-link" href="mailto:">✉️ 이메일</a>
+              </div>
+            </div>
+            <div class="modal-manager-email-row">
+              <div class="modal-info-label">담당자 이메일</div>
+              <div class="modal-info-value" id="v-mgr-email-text"></div>
+            </div>
+          </div>
+
+          <!-- 섹션 4: 정산 & 행정 -->
+          <div class="modal-section">
+            <div class="modal-section-title">정산 &amp; 행정</div>
+            <div class="modal-info-grid modal-info-grid--4">
+              <div class="modal-info-item">
+                <div class="modal-info-label">진행 상태</div>
+                <div class="modal-info-value" id="v-progress"></div>
+              </div>
+              <div class="modal-info-item">
+                <div class="modal-info-label">정산 상태</div>
+                <div class="modal-info-value" id="v-paid-status"></div>
+              </div>
+              <div class="modal-info-item">
+                <div class="modal-info-label">예상 지급일</div>
+                <div class="modal-info-value" id="v-payment-date"></div>
+              </div>
+              <div class="modal-info-item">
+                <div class="modal-info-label">세금 정보</div>
+                <div class="modal-info-value" id="v-tax"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 섹션 5: 메모 -->
+          <div class="modal-section">
+            <div class="modal-section-title">메모 · 특이사항</div>
+            <div class="view-memo" id="v-memo"></div>
+          </div>
+
+        </div><!-- /#view-panel -->
+
+
+        <!-- ◆ 입력 폼 패널 ◆ -->
+        <div id="form-panel" style="display:none">
+          <form id="lec-form" novalidate>
+            <div class="add-form-sections">
+
+              <!-- ① 기본 정보 -->
+              <div>
+                <div class="add-form-section-title">기본 정보</div>
+                <div class="add-form-grid add-form-grid--4">
+                  <div class="add-form-field">
+                    <label class="add-form-label" for="af-date">날짜 <span class="required">*</span></label>
+                    <input class="add-form-input" type="date" id="af-date" required />
+                  </div>
+                  <div class="add-form-field">
+                    <label class="add-form-label" for="af-time-start">시작 시간 <span class="required">*</span></label>
+                    <select class="add-form-input" id="af-time-start" required></select>
+                  </div>
+                  <div class="add-form-field">
+                    <label class="add-form-label" for="af-time-end">종료 시간 <span class="required">*</span></label>
+                    <select class="add-form-input" id="af-time-end" required></select>
+                  </div>
+                  <div class="add-form-field">
+                    <label class="add-form-label">총 강의 시간</label>
+                    <input class="add-form-input add-form-input--readonly" type="text" id="af-duration-computed" readonly placeholder="자동 계산" />
+                  </div>
+                </div>
+                <div class="add-form-field" style="margin-top:var(--space-3)">
+                  <label class="add-form-label" for="af-title">강의명 <span class="required">*</span></label>
+                  <input class="add-form-input" type="text" id="af-title" placeholder="예) AI 비즈니스 활용 특강" required />
+                </div>
+                <div class="add-form-grid" style="margin-top:var(--space-3)">
+                  <div class="add-form-field">
+                    <label class="add-form-label" for="af-client">고객사 <span class="required">*</span></label>
+                    <input class="add-form-input" type="text" id="af-client" placeholder="예) 삼성SDS" required />
+                  </div>
+                  <div class="add-form-field">
+                    <label class="add-form-label" for="af-fee">강사료 (원) <span class="required">*</span></label>
+                    <input class="add-form-input" type="number" id="af-fee" placeholder="예) 500000" min="0" required />
+                  </div>
+                </div>
+              </div>
+
+              <!-- ② 상세 정보 -->
+              <div>
+                <div class="add-form-section-title">상세 정보</div>
+                <div class="add-form-grid add-form-grid--4">
+                  <div class="add-form-field">
+                    <label class="add-form-label" for="af-session-current">현재 회차</label>
+                    <input class="add-form-input" type="number" id="af-session-current" placeholder="1" min="1" />
+                  </div>
+                  <div class="add-form-field">
+                    <label class="add-form-label" for="af-session-total">총 회차</label>
+                    <input class="add-form-input" type="number" id="af-session-total" placeholder="4" min="1" />
+                  </div>
+                  <div class="add-form-field">
+                    <label class="add-form-label" for="af-participants">수강 인원</label>
+                    <input class="add-form-input" type="number" id="af-participants" placeholder="20" min="1" />
+                  </div>
+                  <div class="add-form-field">
+                    <label class="add-form-label" for="af-group-info">조 편성</label>
+                    <input class="add-form-input" type="text" id="af-group-info" placeholder="예) 5조 4명씩" />
+                  </div>
+                </div>
+                <div class="add-form-field" style="margin-top:var(--space-3)">
+                  <label class="add-form-label" for="af-topic">강의 주제</label>
+                  <input class="add-form-input" type="text" id="af-topic" placeholder="예) 리더십, 조직문화" />
+                </div>
+                <div class="add-form-field" style="margin-top:var(--space-3)">
+                  <label class="add-form-label" for="af-supplies">준비물</label>
+                  <input class="add-form-input" type="text" id="af-supplies" placeholder="예) 마커, A4용지, 스티커" />
+                </div>
+                <div class="add-form-grid" style="margin-top:var(--space-3)">
+                  <div class="add-form-field">
+                    <label class="add-form-label" for="af-place">강의 장소</label>
+                    <input class="add-form-input" type="text" id="af-place" placeholder="예) 서울 강남구 SSDC 4F" />
+                  </div>
+                  <div class="add-form-field">
+                    <label class="add-form-label" for="af-parking">주차 정보</label>
+                    <input class="add-form-input" type="text" id="af-parking" placeholder="예) 지하 2시간 무료" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- ③ 담당자 정보 -->
+              <div>
+                <div class="add-form-section-title">담당자 정보</div>
+                <div class="add-form-grid add-form-grid--3">
+                  <div class="add-form-field">
+                    <label class="add-form-label" for="af-manager-name">담당자 이름</label>
+                    <input class="add-form-input" type="text" id="af-manager-name" placeholder="예) 홍길동" />
+                  </div>
+                  <div class="add-form-field">
+                    <label class="add-form-label" for="af-manager-phone">연락처</label>
+                    <input class="add-form-input" type="tel" id="af-manager-phone" placeholder="예) 010-1234-5678" />
+                  </div>
+                  <div class="add-form-field">
+                    <label class="add-form-label" for="af-manager-email">담당자 이메일</label>
+                    <input class="add-form-input" type="email" id="af-manager-email" placeholder="예) hong@company.com" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- ④ 정산 & 행정 -->
+              <div>
+                <div class="add-form-section-title">정산 &amp; 행정</div>
+                <div class="add-form-field">
+                  <label class="add-form-label" for="af-progress">진행 상태</label>
+                  <select class="add-form-input" id="af-progress">
+                    <option value="discussing">논의 중 — 일정·견적 조율 중</option>
+                    <option value="scheduled" selected>강의 예정 — 출강 확정</option>
+                    <option value="admin">행정 대기 — 강의 완료, 서류·정산 처리 중</option>
+                    <option value="done">진행 완료 — 서류·정산 100% 완료</option>
+                    <option value="cancelled">취소 / 드롭</option>
+                  </select>
+                </div>
+                <div class="add-form-grid add-form-grid--3" style="margin-top:var(--space-3)">
+                  <div class="add-form-field">
+                    <label class="add-form-label" for="af-paid-status">정산 상태</label>
+                    <select class="add-form-input" id="af-paid-status">
+                      <option value="false">미입금</option>
+                      <option value="true">입금 완료</option>
+                    </select>
+                  </div>
+                  <div class="add-form-field">
+                    <label class="add-form-label" for="af-payment-date">예상 지급일</label>
+                    <input class="add-form-input" type="date" id="af-payment-date" />
+                  </div>
+                  <div class="add-form-field">
+                    <label class="add-form-label" for="af-tax">세금 정보</label>
+                    <select class="add-form-input" id="af-tax">
+                      <option value="income3_3">사업소득 3.3%</option>
+                      <option value="income8_8">기타소득 8.8%</option>
+                      <option value="exempt">면세</option>
+                      <option value="other">기타</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ⑤ 기타 (메모) -->
+              <div>
+                <div class="add-form-section-title">기타</div>
+                <div class="add-form-field">
+                  <label class="add-form-label" for="af-memo">메모</label>
+                  <textarea class="add-form-input add-form-textarea" id="af-memo"
+                    placeholder="특이사항, 요청사항 등을 자유롭게 기록하세요." rows="3"></textarea>
+                </div>
+              </div>
+
+            </div>
+          </form>
+        </div><!-- /#form-panel -->
 
       </div><!-- /.modal-body -->
 
-      <!-- 모달 푸터 -->
-      <div class="modal-footer">
+      <!-- ── 뷰 모드 푸터 ── -->
+      <div class="modal-footer" id="view-footer">
         <div class="modal-footer-left">
           <button class="btn--modal-delete" id="btn-modal-delete">🗑 삭제</button>
         </div>
         <div class="modal-footer-right">
-          <button class="btn--modal-edit" id="btn-modal-edit">✏️ 수정</button>
-          <button class="btn--modal-save" id="btn-modal-save">저장</button>
+          <button class="btn--modal-edit" id="btn-modal-edit">✏️ 수정하기</button>
+        </div>
+      </div>
+
+      <!-- ── 폼 모드 푸터 ── -->
+      <div class="modal-footer" id="form-footer" style="display:none">
+        <div class="modal-footer-left">
+          <button class="btn--form-cancel" id="btn-form-cancel">취소</button>
+        </div>
+        <div class="modal-footer-right">
+          <button class="btn--form-submit" id="btn-form-submit">저장하기</button>
         </div>
       </div>
 
     </div><!-- /.modal -->
-  </div><!-- /.modal-backdrop -->
+  </div><!-- /#modal-backdrop -->
 
 
   <!-- ══════════════════════════════════════
@@ -482,108 +750,6 @@
       </div>
     </div>
   </div><!-- /.confirm-backdrop -->
-
-
-  <!-- ══════════════════════════════════════
-       강의 추가 / 수정 통합 모달
-  ══════════════════════════════════════ -->
-  <div class="modal-backdrop" id="add-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="add-modal-title">
-    <div class="modal" style="max-width:580px;">
-
-      <div class="modal-header">
-        <div class="modal-title-block">
-          <h2 class="modal-title" id="add-modal-title">강의 추가</h2>
-          <p style="font-size:var(--font-size-sm);color:var(--color-text-muted);margin-top:4px;">강의 일정을 입력하세요.</p>
-        </div>
-        <button class="modal-close" id="add-modal-close" aria-label="닫기">✕</button>
-      </div>
-
-      <div class="modal-body">
-        <form id="add-lecture-form" novalidate>
-          <div class="add-form-sections">
-
-            <!-- 일정 정보 -->
-            <div>
-              <div class="add-form-section-title">일정 정보</div>
-              <div class="add-form-grid add-form-grid--3">
-                <div class="add-form-field" style="grid-column:1/2">
-                  <label class="add-form-label" for="af-date">날짜 <span class="required">*</span></label>
-                  <input class="add-form-input" type="date" id="af-date" required />
-                </div>
-                <div class="add-form-field">
-                  <label class="add-form-label" for="af-time-start">시작 시간 <span class="required">*</span></label>
-                  <input class="add-form-input" type="time" id="af-time-start" required />
-                </div>
-                <div class="add-form-field">
-                  <label class="add-form-label" for="af-time-end">종료 시간 <span class="required">*</span></label>
-                  <input class="add-form-input" type="time" id="af-time-end" required />
-                </div>
-              </div>
-            </div>
-
-            <!-- 강의 정보 -->
-            <div>
-              <div class="add-form-section-title">강의 정보</div>
-              <div class="add-form-grid add-form-grid--full" style="gap:var(--space-3)">
-                <div class="add-form-field">
-                  <label class="add-form-label" for="af-title">강의명 <span class="required">*</span></label>
-                  <input class="add-form-input" type="text" id="af-title" placeholder="예) AI 비즈니스 활용 특강" required />
-                </div>
-                <div class="add-form-grid">
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-client">고객사 <span class="required">*</span></label>
-                    <input class="add-form-input" type="text" id="af-client" placeholder="예) 삼성SDS" required />
-                  </div>
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-fee">강사료 (원) <span class="required">*</span></label>
-                    <input class="add-form-input" type="number" id="af-fee" placeholder="예) 500000" min="0" required />
-                  </div>
-                </div>
-                <div class="add-form-field">
-                  <label class="add-form-label" for="af-place">강의 장소</label>
-                  <input class="add-form-input" type="text" id="af-place" placeholder="예) 서울 강남구 SSDC 교육장 4F" />
-                </div>
-              </div>
-            </div>
-
-            <!-- 담당자 정보 -->
-            <div>
-              <div class="add-form-section-title">담당자 정보</div>
-              <div class="add-form-grid">
-                <div class="add-form-field">
-                  <label class="add-form-label" for="af-manager-name">담당자 이름</label>
-                  <input class="add-form-input" type="text" id="af-manager-name" placeholder="예) 홍길동" />
-                </div>
-                <div class="add-form-field">
-                  <label class="add-form-label" for="af-manager-phone">담당자 연락처</label>
-                  <input class="add-form-input" type="tel" id="af-manager-phone" placeholder="예) 010-1234-5678" />
-                </div>
-              </div>
-            </div>
-
-            <!-- 메모 -->
-            <div>
-              <div class="add-form-section-title">메모</div>
-              <div class="add-form-field">
-                <textarea class="add-form-input add-form-textarea" id="af-memo"
-                  placeholder="특이사항, 준비물, 요청사항 등을 자유롭게 기록하세요." rows="3"></textarea>
-              </div>
-            </div>
-
-          </div>
-        </form>
-      </div>
-
-      <div class="modal-footer">
-        <div class="modal-footer-left"></div>
-        <div class="modal-footer-right">
-          <button class="btn--add-cancel" id="add-modal-cancel">취소</button>
-          <button class="btn--add-submit" id="add-modal-submit">저장하기</button>
-        </div>
-      </div>
-
-    </div>
-  </div>
 
 
   <!-- Scripts (순서 중요: common → FullCalendar → calendar module) -->
