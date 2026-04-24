@@ -11,6 +11,7 @@ body {
   color: var(--color-text-primary);
   background-color: var(--color-bg-base);
   line-height: var(--line-height-normal);
+  word-break: keep-all;
 }
 
 /* ── Layout Container ── */

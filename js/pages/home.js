@@ -56,14 +56,12 @@ function getTodayString() {
 function getWeekDateStrings() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const dow  = today.getDay();
-  const diff = dow === 0 ? -6 : 1 - dow;
-  const mon  = new Date(today);
-  mon.setDate(today.getDate() + diff);
+  const sun = new Date(today);
+  sun.setDate(today.getDate() - today.getDay());
   const dates = [];
   for (let i = 0; i < 7; i++) {
-    const d = new Date(mon);
-    d.setDate(mon.getDate() + i);
+    const d = new Date(sun);
+    d.setDate(sun.getDate() + i);
     dates.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
   }
   return dates;
@@ -360,8 +358,6 @@ function renderTimeline() {
           <div class="tl-card ${isDone ? 'tl-card--done' : 'tl-card--lecture'}" style="${cardBorderStyle}">
             <div class="tl-card-title">${escapeHtml(lec.title)}</div>
             <div class="tl-card-sub">${escapeHtml(lec.place || lec.client)} · ${lec.timeStart}~${lec.timeEnd}</div>
-            <span class="tl-card-badge tl-card-badge--lecture"
-                  style="background:${color}20;color:${color};border:1px solid ${color}40;">강의</span>
           </div>
         </div>
       </div>
@@ -383,7 +379,7 @@ function renderWeekly() {
   today.setHours(0, 0, 0, 0);
   const todayStr   = getTodayString();
   const weekDates  = getWeekDateStrings();
-  const DAY_ORDER  = [1, 2, 3, 4, 5, 6, 0];
+  const DAY_ORDER  = [0, 1, 2, 3, 4, 5, 6];
 
   const dowToDateStr = {};
   weekDates.forEach(dateStr => {
@@ -416,7 +412,7 @@ function renderWeekly() {
       ? lectures.map(lec => {
           const color = getLectureColor(lec.id);
           return `
-            <div class="week-lec-card"
+            <div class="week-lec-card" data-id="${escapeHtml(lec.id)}"
                  style="${isPast && !isToday ? 'opacity:0.55;' : ''}border-left:3px solid ${color};">
               <div class="week-lec-time">${lec.timeStart}</div>
               <div class="week-lec-title">${escapeHtml(lec.title)}</div>
@@ -433,6 +429,11 @@ function renderWeekly() {
         ${lecCards}
       </div>`;
   }).join('');
+
+  /* [4] 이번 주 강의 카드 클릭 → 상세 모달 */
+  gridEl.querySelectorAll('.week-lec-card[data-id]').forEach(card => {
+    card.addEventListener('click', () => openModal(card.dataset.id));
+  });
 
   const weekTotal    = Object.values(dateToLectures).flat().length;
   const weekTotalFee = Object.values(dateToLectures).flat().reduce((s, l) => s + (Number(l.fee)||0), 0);
