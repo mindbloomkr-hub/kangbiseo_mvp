@@ -7,6 +7,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithPopup,
   updateProfile,
+  GoogleAuthProvider,
 } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-auth.js";
 import {
   doc, setDoc, serverTimestamp,
@@ -231,7 +232,11 @@ signupForm?.addEventListener('submit', async e => {
 ════════════════════════════════════════ */
 document.getElementById('btn-google-login')?.addEventListener('click', async () => {
   try {
-    await signInWithPopup(auth, googleProvider);
+    const result     = await signInWithPopup(auth, googleProvider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (credential?.accessToken) {
+      sessionStorage.setItem('gcal_token', credential.accessToken);
+    }
     window.location.href = 'pages/home.html';
   } catch (err) {
     if (err.code !== 'auth/popup-closed-by-user') {

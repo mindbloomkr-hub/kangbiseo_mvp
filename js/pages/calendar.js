@@ -1,97 +1,21 @@
 // js/pages/calendar.js — 강의 캘린더 (Firebase + FullCalendar)
 
-import { auth, db } from '../api.js';
-import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-auth.js';
+import { auth, db, subscribeLectures, authGuard, setupLogout } from '../api.js';
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
-  query, where, onSnapshot, serverTimestamp,
+  serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
+import {
+  TODAY, IN_7DAYS, TAX_LABEL, PROGRESS_LABEL,
+  STATUS_META as STATUS_META_BASE,
+  parseDate, escapeHtml, formatDateKo, calcDuration,
+  buildTimeOptions, updateDurationDisplay, syncEndTimeOptions, initTimeSelects,
+  getTodayString, updateSidebarProfile,
+} from '../utils.js';
 
 /* ════════════════════════════════════════
-   상수
-════════════════════════════════════════ */
-const DAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
-const TODAY  = new Date();
-TODAY.setHours(0, 0, 0, 0);
-const IN_7DAYS = new Date(TODAY.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-const TAX_LABEL = {
-  income3_3: '사업소득 3.3%',
-  income8_8: '기타소득 8.8%',
-  exempt:    '면세',
-  other:     '기타',
-};
-
-const PROGRESS_LABEL = {
-  discussing: '논의 중',
-  scheduled:  '강의 예정',
-  admin:      '행정 대기',
-  done:       '진행 완료',
-  cancelled:  '취소/드롭',
-};
-
-/* ════════════════════════════════════════
-   상태
-════════════════════════════════════════ */
-let calendar      = null;
-let currentUser   = null;
-let allLectures   = [];
-let activeModalId = null;
-let editingLecId  = null;
-let unsubLectures = null;
-
-/* ════════════════════════════════════════
-   유틸
-════════════════════════════════════════ */
-function parseDate(str) {
-  const [y, m, d] = str.split('-').map(Number);
-  const date = new Date(y, m - 1, d);
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
-
-function escapeHtml(str) {
-  return String(str ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function formatDateKo(dateStr) {
-  const d = parseDate(dateStr);
-  return {
-    main: `${d.getMonth() + 1}/${d.getDate()}`,
-    day:  DAY_KO[d.getDay()],
-    full: `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()} (${DAY_KO[d.getDay()]})`,
-  };
-}
-
-function todayString() {
-  const n = new Date();
-  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
-}
-
-function calcDuration(start, end) {
-  if (!start || !end) return '—';
-  const [sh, sm] = start.split(':').map(Number);
-  const [eh, em] = end.split(':').map(Number);
-  const total = (eh * 60 + em) - (sh * 60 + sm);
-  if (total <= 0) return '—';
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  if (h > 0 && m > 0) return `${h}시간 ${m}분`;
-  if (h > 0) return `${h}시간`;
-  return `${m}분`;
-}
-
-function updateDurationDisplay() {
-  const start = document.getElementById('af-time-start')?.value;
-  const end   = document.getElementById('af-time-end')?.value;
-  const el    = document.getElementById('af-duration-computed');
-  if (el) el.value = (start && end) ? calcDuration(start, end) : '';
-}
-
-/* ════════════════════════════════════════
-   강의 상태 자동 분류 (색상 결정용)
+   calendar.js 전용 확장
+   — doc(서류 미비) 상태가 추가되므로 classifyStatus와 STATUS_META를 로컬 오버라이드
 ════════════════════════════════════════ */
 function classifyStatus(lec) {
   const prog = lec.progressStatus || 'scheduled';
@@ -111,15 +35,19 @@ function classifyStatus(lec) {
 }
 
 const STATUS_META = {
-  discussing: { label: '논의 중',   cls: 'lec-badge--discussing' },
-  urgent:     { label: '준비 임박', cls: 'lec-badge--urgent'     },
-  upcoming:   { label: '강의 예정', cls: 'lec-badge--scheduled'  },
-  admin:      { label: '행정 대기', cls: 'lec-badge--admin'      },
-  doc:        { label: '서류 미비', cls: 'lec-badge--doc'        },
-  done:       { label: '완료',      cls: 'lec-badge--done'       },
-  unpaid:     { label: '미입금',    cls: 'lec-badge--unpaid'     },
-  cancelled:  { label: '취소',      cls: 'lec-badge--cancelled'  },
+  ...STATUS_META_BASE,
+  doc: { label: '서류 미비', cls: 'lec-badge--doc' },
 };
+
+/* ════════════════════════════════════════
+   상태
+════════════════════════════════════════ */
+let calendar      = null;
+let currentUser   = null;
+let allLectures   = [];
+let activeModalId = null;
+let editingLecId  = null;
+let unsubLectures = null;
 
 /* ════════════════════════════════════════
    이벤트 색상 — 투트랙 (progressStatus + isPaid)
@@ -128,42 +56,32 @@ function getEventColor(lec) {
   const prog = lec.progressStatus || 'scheduled';
   const d    = parseDate(lec.date);
 
-  /* 1. 취소/드롭: 흰 배경 + 회색 글씨 (취소선은 eventDidMount에서) */
   if (prog === 'cancelled') {
     return { bg: '#f9fafb', border: '#d1d5db', text: '#9ca3af' };
   }
 
-  /* 2. 진행 완료
-        └ 미입금: 회색 배경 + 빨간 글씨 (완료됐는데 돈을 못 받음)
-        └ 입금 완료: 초록색                                          */
   if (prog === 'done') {
     return lec.isPaid
       ? { bg: '#059669', border: '#047857', text: '#fff' }
       : { bg: '#e5e7eb', border: '#9ca3af', text: '#ef4444' };
   }
 
-  /* 3. 행정 대기: 연한 초록 배경 + 빨간 텍스트 (서류·정산 진행 중 강조) */
   if (prog === 'admin') {
     return { bg: '#d1fae5', border: '#6ee7b7', text: '#b91c1c' };
   }
 
-  /* 4. 논의 중: 연한 보라 */
   if (prog === 'discussing') {
     return { bg: '#ede9fe', border: '#a78bfa', text: '#5b21b6' };
   }
 
-  /* 5. 강의 예정(scheduled) — 날짜 기반 세분화 */
   if (d < TODAY) {
-    /* 날짜가 지났는데 scheduled 상태: 미입금이면 회색+빨강, 나머지는 중립 회색 */
     return lec.isPaid
       ? { bg: '#9ca3af', border: '#6b7280', text: '#fff' }
       : { bg: '#e5e7eb', border: '#9ca3af', text: '#ef4444' };
   }
   if (d <= IN_7DAYS) {
-    /* 준비 임박 (7일 이내): 주황/경고 */
     return { bg: '#f59e0b', border: '#d97706', text: '#fff' };
   }
-  /* 강의 예정 (7일 초과 미래): 파란색 */
   return { bg: '#0ea5e9', border: '#0284c7', text: '#fff' };
 }
 
@@ -172,8 +90,8 @@ function getEventColor(lec) {
    기본 07:00 ~ 21:00, 강의 데이터에 맞춰 확장
 ════════════════════════════════════════ */
 function calcDynamicSlotRange(lectures) {
-  let minH = 7;   /* 기본 하한 */
-  let maxH = 21;  /* 기본 상한 */
+  let minH = 7;
+  let maxH = 21;
 
   lectures.forEach(lec => {
     if (lec.timeStart) {
@@ -182,7 +100,6 @@ function calcDynamicSlotRange(lectures) {
     }
     if (lec.timeEnd) {
       const [h, m] = lec.timeEnd.split(':').map(Number);
-      /* 분이 남아 있으면 한 시간 올림 (예: 21:30 → maxH=22) */
       const endH = m > 0 ? h + 1 : h;
       if (endH > maxH) maxH = endH;
     }
@@ -248,14 +165,12 @@ function initCalendar() {
       const lec  = event.extendedProps;
       const prog = lec.progressStatus || 'scheduled';
 
-      /* 툴팁 */
-      const paidMark = lec.isPaid ? '' : '[미입금] ';
+      const paidMark   = lec.isPaid ? '' : '[미입금] ';
       const statusHint = prog === 'cancelled' ? '[취소] ' : '';
       evEl.setAttribute('title',
         `${statusHint}${paidMark}${lec.title || ''}\n${lec.timeStart}~${lec.timeEnd}  ${lec.client || ''}`
       );
 
-      /* 취소/드롭: 제목에 취소선 + 투명도 + 점선 테두리 */
       if (prog === 'cancelled') {
         evEl.style.opacity = '0.6';
         evEl.style.borderStyle = 'dashed';
@@ -263,12 +178,10 @@ function initCalendar() {
         if (titleEl) titleEl.style.textDecoration = 'line-through';
       }
 
-      /* 행정 대기: 왼쪽 빨간 강조선 */
       if (prog === 'admin') {
         evEl.style.borderLeft = '3px solid #b91c1c';
       }
 
-      /* 미입금 완료 (done + !isPaid): 왼쪽 빨간 강조선 */
       if ((prog === 'done' || (parseDate(lec.date) < TODAY && prog === 'scheduled')) && !lec.isPaid) {
         evEl.style.borderLeft = '3px solid #ef4444';
       }
@@ -283,7 +196,6 @@ function initCalendar() {
 function updateCalendarEvents() {
   if (!calendar) return;
 
-  /* 동적 시간 범위 적용 */
   const { slotMinTime, slotMaxTime } = calcDynamicSlotRange(allLectures);
   calendar.setOption('slotMinTime', slotMinTime);
   calendar.setOption('slotMaxTime', slotMaxTime);
@@ -296,7 +208,7 @@ function updateCalendarEvents() {
    nav-badge 업데이트
 ════════════════════════════════════════ */
 function updateNavBadge() {
-  const count = allLectures.filter(l => l.date >= todayString()).length;
+  const count = allLectures.filter(l => l.date >= getTodayString()).length;
   localStorage.setItem('navBadgeCount', String(count));
   const badgeEl = document.getElementById('nav-badge-lectures');
   if (!badgeEl) return;
@@ -355,14 +267,12 @@ function populateView(lec) {
   const meta   = STATUS_META[status] || { label: status, cls: '' };
   const { full } = formatDateKo(lec.date);
 
-  /* 헤더 */
   document.getElementById('modal-title').textContent       = lec.title || '(제목 없음)';
   document.getElementById('modal-badge').className         = `lec-badge ${meta.cls}`;
   document.getElementById('modal-badge').textContent       = meta.label;
   document.getElementById('modal-date-meta').textContent   = `${full} · ${lec.timeStart}~${lec.timeEnd}`;
   document.getElementById('modal-client-meta').textContent = lec.client || '—';
 
-  /* 섹션 1: 기본 정보 */
   document.getElementById('v-date').textContent           = full;
   document.getElementById('v-time').textContent           = `${lec.timeStart} ~ ${lec.timeEnd}`;
   document.getElementById('v-total-duration').textContent = calcDuration(lec.timeStart, lec.timeEnd);
@@ -370,7 +280,6 @@ function populateView(lec) {
   document.getElementById('v-client').textContent         = lec.client || '—';
   document.getElementById('v-fee').textContent            = `₩${(Number(lec.fee) || 0).toLocaleString()}`;
 
-  /* 섹션 2: 상세 정보 */
   document.getElementById('v-session-current').textContent = lec.sessionCurrent ? `${lec.sessionCurrent}회` : '—';
   document.getElementById('v-session-total').textContent   = lec.sessionTotal   ? `${lec.sessionTotal}회`   : '—';
   document.getElementById('v-participants').textContent    = lec.participants    ? `${lec.participants}명`   : '—';
@@ -380,7 +289,6 @@ function populateView(lec) {
   document.getElementById('v-place').textContent           = lec.place       || '—';
   document.getElementById('v-parking').textContent         = lec.parkingInfo || '—';
 
-  /* 섹션 3: 담당자 */
   const mgrName  = lec.managerName  || '';
   const mgrPhone = lec.managerPhone || '';
   const mgrEmail = lec.managerEmail || '';
@@ -398,7 +306,6 @@ function populateView(lec) {
   if (mgrEmail) { emailLink.href = `mailto:${mgrEmail}`; emailLink.style.opacity = ''; emailLink.style.pointerEvents = ''; }
   else          { emailLink.href = '#'; emailLink.style.opacity = '0.35'; emailLink.style.pointerEvents = 'none'; }
 
-  /* 섹션 4: 정산 & 행정 */
   document.getElementById('v-progress').textContent     = PROGRESS_LABEL[lec.progressStatus || 'scheduled'] || '—';
   const paidEl = document.getElementById('v-paid-status');
   paidEl.textContent = lec.isPaid ? '✅ 입금 완료' : '❌ 미입금';
@@ -406,7 +313,6 @@ function populateView(lec) {
   document.getElementById('v-payment-date').textContent = lec.paymentDate || '미정';
   document.getElementById('v-tax').textContent          = TAX_LABEL[lec.taxType] || '—';
 
-  /* 섹션 5: 메모 */
   const memoEl = document.getElementById('v-memo');
   if (lec.memo) { memoEl.textContent = lec.memo; memoEl.classList.remove('is-empty'); }
   else          { memoEl.textContent = '메모 없음'; memoEl.classList.add('is-empty'); }
@@ -662,71 +568,16 @@ document.addEventListener('keydown', e => {
 });
 
 /* ════════════════════════════════════════
-   시간 선택 (10분 단위 select)
-════════════════════════════════════════ */
-function buildTimeOptions(minAfter = '') {
-  const opts = ['<option value="">시간 선택</option>'];
-  for (let h = 7; h <= 22; h++) {
-    for (let m = 0; m < 60; m += 10) {
-      if (h === 22 && m > 0) break;
-      const t = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-      if (!minAfter || t > minAfter) opts.push(`<option value="${t}">${t}</option>`);
-    }
-  }
-  return opts.join('');
-}
-
-function syncEndTimeOptions(keepValue = '') {
-  const startSel = document.getElementById('af-time-start');
-  const endSel   = document.getElementById('af-time-end');
-  if (!startSel || !endSel) return;
-  const prev = keepValue || endSel.value;
-  endSel.innerHTML = buildTimeOptions(startSel.value);
-  if (prev) endSel.value = prev;
-  updateDurationDisplay();
-}
-
-function initTimeSelects() {
-  const startSel = document.getElementById('af-time-start');
-  const endSel   = document.getElementById('af-time-end');
-  if (startSel) startSel.innerHTML = buildTimeOptions();
-  if (endSel)   endSel.innerHTML   = buildTimeOptions();
-  startSel?.addEventListener('change', () => syncEndTimeOptions());
-  endSel?.addEventListener('change',   updateDurationDisplay);
-}
-
-/* ════════════════════════════════════════
-   사이드바 유저 정보
-════════════════════════════════════════ */
-function updateSidebarUser(user) {
-  const name     = localStorage.getItem('userName') || user.displayName || '강사';
-  const nameEl   = document.getElementById('sidebar-user-name');
-  const avatarEl = document.getElementById('sidebar-avatar');
-  if (nameEl)   nameEl.textContent   = `${name} 강사`;
-  if (avatarEl) avatarEl.textContent = name.charAt(0);
-}
-
-/* ════════════════════════════════════════
    로그아웃
 ════════════════════════════════════════ */
-document.getElementById('logout-btn')?.addEventListener('click', async () => {
-  try {
-    if (unsubLectures) unsubLectures();
-    await signOut(auth);
-    window.location.replace('../login.html');
-  } catch (err) {
-    console.error('[강비서] 로그아웃 오류:', err);
-  }
-});
+setupLogout(() => { if (unsubLectures) unsubLectures(); });
 
 /* ════════════════════════════════════════
    Firestore 실시간 구독
 ════════════════════════════════════════ */
 function initLectures(uid) {
   if (unsubLectures) unsubLectures();
-
-  const q = query(collection(db, 'lectures'), where('uid', '==', uid));
-  unsubLectures = onSnapshot(q, snapshot => {
+  unsubLectures = subscribeLectures(uid, snapshot => {
     document.getElementById('cal-loading')?.classList.add('hidden');
     allLectures = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     updateCalendarEvents();
@@ -741,13 +592,9 @@ function initLectures(uid) {
 /* ════════════════════════════════════════
    인증 상태 감지
 ════════════════════════════════════════ */
-onAuthStateChanged(auth, user => {
-  if (!user) { window.location.replace('../login.html'); return; }
+authGuard(user => {
   currentUser = user;
-  localStorage.setItem('userName',  user.displayName || '강사');
-  localStorage.setItem('userUid',   user.uid);
-  localStorage.setItem('userEmail', user.email || '');
-  updateSidebarUser(user);
+  updateSidebarProfile(localStorage.getItem('userName') || '강사');
   initCalendar();
   initLectures(user.uid);
   initTimeSelects();

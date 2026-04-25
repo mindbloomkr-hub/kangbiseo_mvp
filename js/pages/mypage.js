@@ -1,10 +1,14 @@
 // js/pages/mypage.js — 마이 페이지 (Firebase Auth + Firestore 연동, ES Module)
 
-import { auth, db } from '../api.js';
-import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-auth.js';
+import { auth, db, fetchGoogleCalendarEvents, authGuard } from '../api.js';
 import {
-  doc, getDoc, setDoc, serverTimestamp,
+  collection, doc, getDoc, setDoc, addDoc,
+  query, where, getDocs, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
+import {
+  escapeHtml, classifyStatus, STATUS_META,
+  showToast, setVal, getVal, updateSidebarProfile,
+} from '../utils.js';
 
 /* ════════════════════════════════════════
    기기 전용 설정 (스케줄러·정산) — localStorage
@@ -189,7 +193,7 @@ function renderKeywordChips() {
   fbKeywords.forEach(kw => {
     const chip = document.createElement('span');
     chip.className = 'keyword-chip';
-    chip.innerHTML = `${escHtml(kw)}<button class="keyword-chip-del" type="button" aria-label="${escHtml(kw)} 삭제">×</button>`;
+    chip.innerHTML = `${escapeHtml(kw)}<button class="keyword-chip-del" type="button" aria-label="${escapeHtml(kw)} 삭제">×</button>`;
     chip.querySelector('.keyword-chip-del').addEventListener('click', () => {
       fbKeywords = fbKeywords.filter(k => k !== kw);
       renderKeywordChips();
@@ -334,8 +338,8 @@ function renderTopicTags() {
     el.className = 'topic-tag';
     el.style.background = tag.color;
     el.setAttribute('role', 'listitem');
-    el.innerHTML = `<span class="topic-tag-text">${escHtml(tag.name)}</span>
-      <button type="button" class="topic-tag-del" aria-label="${escHtml(tag.name)} 삭제">×</button>`;
+    el.innerHTML = `<span class="topic-tag-text">${escapeHtml(tag.name)}</span>
+      <button type="button" class="topic-tag-del" aria-label="${escapeHtml(tag.name)} 삭제">×</button>`;
     el.querySelector('.topic-tag-del').addEventListener('click', () => {
       fbTopics = fbTopics.filter(t => t.id !== tag.id);
       renderTopicTags();
@@ -362,6 +366,257 @@ function initSubscription() {
   document.getElementById('plan-upgrade-btn')?.addEventListener('click',   () => showToast('플랜 변경 페이지는 준비 중입니다.', 'info'));
   document.getElementById('billing-cancel-btn')?.addEventListener('click', () => showToast('구독 취소 기능은 준비 중입니다.', 'info'));
   document.getElementById('billing-method-btn')?.addEventListener('click', () => showToast('결제 수단 변경 기능은 준비 중입니다.', 'info'));
+}
+
+/* ════════════════════════════════════════
+   구글 캘린더 가져오기
+   — 변환 헬퍼 → 목록 모달 → Firestore 저장
+════════════════════════════════════════ */
+
+/* Google Calendar dateTime 문자열 → { date: 'YYYY-MM-DD', time: 'HH:MM' } */
+function parseGcalDateTime(dtStr) {
+  if (!dtStr) return { date: '', time: '' };
+  if (dtStr.length === 10) return { date: dtStr, time: '' }; // 종일 이벤트
+  const d = new Date(dtStr);
+  return {
+    date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+    time: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
+  };
+}
+
+/*
+ * Google Calendar event → lectures 컬렉션 구조로 변환
+ * classifyStatus 를 사용해 날짜 기반 progressStatus 를 자동 결정한다.
+ *   - 이미 지난 일정 → progressStatus: 'done'
+ *   - 앞으로의 일정 → progressStatus: 'scheduled'
+ * _status 는 모달 UI 표시용으로만 포함하며 Firestore 에는 저장하지 않는다.
+ */
+function mapGcalToLecture(ev) {
+  const { date, time: timeStart } = parseGcalDateTime(ev.start?.dateTime || ev.start?.date || '');
+  const { time: timeEnd }         = parseGcalDateTime(ev.end?.dateTime   || ev.end?.date   || '');
+
+  const base = {
+    googleEventId:  ev.id,
+    title:          ev.summary  || '(제목 없음)',
+    date,
+    timeStart:      timeStart   || '09:00',
+    timeEnd:        timeEnd     || '10:00',
+    place:          ev.location || '',
+    client:         '',
+    fee:            0,
+    isPaid:         false,
+    taxType:        'income3_3',
+    isDocumented:   false,
+    memo:           '',
+    progressStatus: 'scheduled',
+  };
+
+  // classifyStatus 로 상태 판단 → 지난 일정은 'done' 으로 자동 세팅
+  const autoStatus = classifyStatus(base);
+  if (autoStatus === 'unpaid' || autoStatus === 'done') {
+    base.progressStatus = 'done';
+  }
+
+  return { ...base, _status: classifyStatus(base) }; // _status 재계산
+}
+
+function initGcalImport() {
+  /* ── 1. 카드 삽입 ── */
+  const anchor = document.getElementById('section-subscription');
+  if (!anchor) return;
+
+  const card = document.createElement('section');
+  card.className = 'mypage-card';
+  card.id        = 'section-gcal-import';
+  card.innerHTML = `
+    <div class="mypage-card-header">
+      <h2 class="mypage-card-title">🗓 구글 캘린더 가져오기</h2>
+      <p class="mypage-card-desc">구글 계정으로 로그인 시 캘린더 일정을 강의로 바로 등록할 수 있습니다.
+        오늘 기준 과거 1개월 ~ 향후 3개월 범위를 가져옵니다.</p>
+    </div>
+    <div class="mypage-card-body" style="display:flex;flex-direction:column;gap:12px;">
+      <button id="btn-gcal-fetch" type="button" class="btn btn-secondary"
+              style="width:fit-content;padding:8px 18px;">
+        📥 구글 캘린더 불러오기
+      </button>
+      <p id="gcal-fetch-status"
+         style="font-size:0.85rem;color:var(--color-text-muted,#6b7280);min-height:1.2em;"></p>
+    </div>`;
+  anchor.insertAdjacentElement('afterend', card);
+
+  /* ── 2. 가져오기 모달 (body 에 주입) ── */
+  const backdrop = document.createElement('div');
+  backdrop.id = 'gcal-backdrop';
+  Object.assign(backdrop.style, {
+    display:    'none',
+    position:   'fixed',
+    inset:      '0',
+    background: 'rgba(0,0,0,0.45)',
+    zIndex:     '1200',
+    overflowY:  'auto',
+    padding:    '40px 16px',
+  });
+  backdrop.innerHTML = `
+    <div id="gcal-modal" role="dialog" aria-modal="true"
+         style="background:#fff;border-radius:16px;max-width:640px;
+                margin:0 auto;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden;">
+      <div style="display:flex;align-items:center;justify-content:space-between;
+                  padding:18px 24px;border-bottom:1px solid #f3f4f6;">
+        <h3 id="gcal-modal-title"
+            style="font-size:1.05rem;font-weight:700;margin:0;color:#111827;">
+          🗓 구글 캘린더 일정
+        </h3>
+        <button id="gcal-modal-close" type="button" aria-label="닫기"
+                style="background:none;border:none;font-size:1.1rem;cursor:pointer;
+                       color:#6b7280;padding:4px 8px;border-radius:6px;line-height:1;">✕</button>
+      </div>
+      <ul id="gcal-event-list" role="list"
+          style="list-style:none;margin:0;padding:16px 20px;
+                 display:flex;flex-direction:column;gap:10px;
+                 max-height:62vh;overflow-y:auto;">
+      </ul>
+    </div>`;
+  document.body.appendChild(backdrop);
+
+  function closeModal() {
+    backdrop.style.display       = 'none';
+    document.body.style.overflow = '';
+  }
+  document.getElementById('gcal-modal-close')?.addEventListener('click', closeModal);
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  /* ── 3. 불러오기 버튼 ── */
+  document.getElementById('btn-gcal-fetch')?.addEventListener('click', async () => {
+    const statusEl = document.getElementById('gcal-fetch-status');
+    const fetchBtn = document.getElementById('btn-gcal-fetch');
+    fetchBtn.disabled = true;
+    if (statusEl) statusEl.textContent = '불러오는 중...';
+
+    try {
+      const rawEvents = await fetchGoogleCalendarEvents();
+
+      if (rawEvents === null) {
+        if (statusEl) statusEl.textContent = '⚠️ 구글 계정으로 재로그인 후 다시 시도해 주세요.';
+        showToast('gcal_token이 없습니다. 구글 재로그인이 필요합니다.', 'warn');
+        return;
+      }
+      if (rawEvents.length === 0) {
+        if (statusEl) statusEl.textContent = '해당 기간에 가져올 일정이 없습니다.';
+        showToast('가져올 캘린더 일정이 없습니다.', 'info');
+        return;
+      }
+
+      /* 변환 */
+      const mapped = rawEvents.map(mapGcalToLecture);
+
+      /* 이미 등록된 googleEventId 목록 조회 (중복 방지용) */
+      const snap = await getDocs(
+        query(collection(db, 'lectures'), where('uid', '==', currentUser.uid))
+      );
+      const registeredIds = new Set(
+        snap.docs.map(d => d.data().googleEventId).filter(Boolean)
+      );
+
+      if (statusEl) statusEl.textContent = `${mapped.length}건 가져옴 — 목록에서 선택해 등록하세요.`;
+      renderEventList(mapped, registeredIds);
+      document.getElementById('gcal-modal-title').textContent = `🗓 구글 캘린더 일정 (${mapped.length}건)`;
+      backdrop.style.display       = 'block';
+      document.body.style.overflow = 'hidden';
+
+    } catch (err) {
+      console.error('[강비서] 캘린더 불러오기 실패:', err);
+      if (statusEl) statusEl.textContent = `❌ 오류: ${err.message}`;
+      showToast('캘린더 데이터를 불러오지 못했습니다.', 'error');
+    } finally {
+      fetchBtn.disabled = false;
+    }
+  });
+
+  /* ── 4. 이벤트 목록 렌더링 ── */
+  function renderEventList(events, registeredIds) {
+    const listEl = document.getElementById('gcal-event-list');
+    if (!listEl) return;
+
+    listEl.innerHTML = events.map((ev, idx) => {
+      const isReg   = registeredIds.has(ev.googleEventId);
+      const meta    = STATUS_META[ev._status] || { label: ev._status, cls: '' };
+      const timeStr = ev.date
+        ? `${ev.date.replace(/-/g, '.')}  ${ev.timeStart}${ev.timeEnd ? ' ~ ' + ev.timeEnd : ''}`
+        : '날짜 미정';
+
+      return `
+        <li style="display:flex;align-items:flex-start;gap:12px;padding:12px 14px;
+                   border:1px solid ${isReg ? '#f3f4f6' : '#e5e7eb'};border-radius:10px;
+                   background:${isReg ? '#fafafa' : '#fff'};">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span class="lec-badge ${escapeHtml(meta.cls)}"
+                    style="font-size:0.72rem;padding:2px 8px;">${escapeHtml(meta.label)}</span>
+              <span style="font-size:0.78rem;color:#6b7280;">${escapeHtml(timeStr)}</span>
+            </div>
+            <div style="font-weight:600;font-size:0.92rem;
+                        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+              ${escapeHtml(ev.title)}
+            </div>
+            ${ev.place
+              ? `<div style="font-size:0.8rem;color:#6b7280;">📍 ${escapeHtml(ev.place)}</div>`
+              : ''}
+          </div>
+          <button class="btn-gcal-register" data-idx="${idx}" type="button"
+                  style="flex-shrink:0;padding:7px 14px;border-radius:8px;font-size:0.82rem;
+                         font-weight:600;cursor:pointer;border:none;white-space:nowrap;
+                         background:${isReg ? '#f3f4f6' : '#2563c4'};
+                         color:${isReg ? '#9ca3af' : '#fff'};"
+                  ${isReg ? 'disabled' : ''}>
+            ${isReg ? '등록 완료' : '강의로 등록'}
+          </button>
+        </li>`;
+    }).join('');
+
+    listEl.querySelectorAll('.btn-gcal-register:not([disabled])').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await saveGcalEvent(events[Number(btn.dataset.idx)], btn, registeredIds);
+      });
+    });
+  }
+
+  /* ── 5. Firestore 저장 ── */
+  async function saveGcalEvent(mapped, btn, registeredIds) {
+    if (!currentUser) return;
+
+    /* 낙관적 중복 재확인 */
+    if (registeredIds.has(mapped.googleEventId)) {
+      btn.textContent      = '등록 완료';
+      btn.disabled         = true;
+      btn.style.background = '#f3f4f6';
+      btn.style.color      = '#9ca3af';
+      return;
+    }
+
+    btn.disabled    = true;
+    btn.textContent = '저장 중...';
+
+    try {
+      const { _status, ...payload } = mapped; // _status 는 런타임 계산값 — Firestore 에 저장 안 함
+      await addDoc(collection(db, 'lectures'), {
+        uid:       currentUser.uid,
+        ...payload,
+        createdAt: serverTimestamp(),
+      });
+
+      registeredIds.add(mapped.googleEventId);
+      btn.textContent      = '등록 완료';
+      btn.style.background = '#f3f4f6';
+      btn.style.color      = '#9ca3af';
+      showToast(`"${mapped.title}" 강의로 등록했습니다.`, 'success');
+    } catch (err) {
+      console.error('[강비서] 강의 등록 실패:', err);
+      btn.disabled    = false;
+      btn.textContent = '강의로 등록';
+      showToast('등록에 실패했습니다.', 'error');
+    }
+  }
 }
 
 /* ════════════════════════════════════════
@@ -434,48 +689,21 @@ function collectDeviceValues() {
 }
 
 /* ════════════════════════════════════════
-   유틸
-════════════════════════════════════════ */
-function showToast(msg, type = 'info') {
-  const map = { success: 'success', error: 'error', warn: 'default', info: 'default' };
-  window.showToast?.(msg, map[type] || 'default');
-}
-
-function setVal(id, val) { const el = document.getElementById(id); if (el) el.value = val ?? ''; }
-function getVal(id)       { return document.getElementById(id)?.value ?? ''; }
-
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-/* ════════════════════════════════════════
    인증 상태 감지 — 진입점
 ════════════════════════════════════════ */
 initNavBadge();
 initSectionNav();
 
-onAuthStateChanged(auth, async user => {
-  if (!user) {
-    window.location.replace('../login.html');
-    return;
-  }
+authGuard(async user => {
   currentUser = user;
-  localStorage.setItem('userName',  user.displayName || '');
-  localStorage.setItem('userEmail', user.email       || '');
 
   initProfile(user);
   await loadFirebaseProfile(user.uid);
 
-  /* [10] Firestore 닉네임으로 사이드바 업데이트 */
   const nickname = getVal('profile-nickname').trim();
   if (nickname) {
     localStorage.setItem('userNickname', nickname);
-    const sbName   = document.getElementById('sidebar-user-name');
-    const sbAvatar = document.getElementById('sidebar-avatar');
-    if (sbName)   sbName.textContent   = nickname + ' 강사';
-    if (sbAvatar) sbAvatar.textContent = nickname.charAt(0);
+    updateSidebarProfile(nickname);
   }
 
   renderKeywordChips();
@@ -486,4 +714,5 @@ onAuthStateChanged(auth, async user => {
   initTopics();
   initSubscription();
   initFloatingSave();
+  initGcalImport();
 });
