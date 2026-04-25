@@ -7,7 +7,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
 import {
   escapeHtml, classifyStatus, STATUS_META,
-  showToast, setVal, getVal, updateSidebarProfile,
+  showToast, setVal, getVal, updateSidebarUI,
 } from '../utils.js';
 
 /* ════════════════════════════════════════
@@ -135,12 +135,6 @@ function initProfile(user) {
     Object.assign(emailEl.style, readonlyStyle);
   }
 
-  /* 사이드바 */
-  const displayName = user.displayName || '강사';
-  const sbName = document.getElementById('sidebar-user-name');
-  if (sbName) sbName.textContent = `${displayName} 강사`;
-  updateAvatarInitial(displayName);
-
   /* 프로필 사진 복원 */
   const photoUrl = localStorage.getItem('profilePhotoUrl');
   if (photoUrl) showProfilePhoto(photoUrl);
@@ -177,8 +171,6 @@ function showProfilePhoto(dataUrl) {
 }
 
 function updateAvatarInitial(name) {
-  const sbAvatar = document.getElementById('sidebar-avatar');
-  if (sbAvatar && name) sbAvatar.textContent = name[0];
   const photoInitial = document.getElementById('profile-photo-initial');
   if (photoInitial && name && !localStorage.getItem('profilePhotoUrl')) {
     photoInitial.textContent = name[0];
@@ -636,10 +628,10 @@ function initFloatingSave() {
     btn.innerHTML = '<span class="floating-save-icon">⏳</span> 저장 중...';
 
     try {
-      /* [10] 닉네임을 localStorage에도 반영 */
       const nickname = getVal('profile-nickname').trim();
       if (nickname) localStorage.setItem('userNickname', nickname);
       else          localStorage.removeItem('userNickname');
+      updateSidebarUI(nickname || currentUser?.displayName || '강사');
 
       await setDoc(doc(db, 'users', currentUser.uid), {
         slogan:    getVal('profile-slogan'),
@@ -703,7 +695,8 @@ authGuard(async user => {
   const nickname = getVal('profile-nickname').trim();
   if (nickname) {
     localStorage.setItem('userNickname', nickname);
-    updateSidebarProfile(nickname);
+  } else {
+    localStorage.removeItem('userNickname');
   }
 
   renderKeywordChips();

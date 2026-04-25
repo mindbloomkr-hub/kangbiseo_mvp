@@ -1,16 +1,12 @@
 // js/pages/home.js — 홈 대시보드 (Firestore 실시간 연동)
 
-import { auth, db, subscribeLectures, authGuard, setupLogout } from '../api.js';
+import { db, subscribeLectures, authGuard } from '../api.js';
 import {
-  collection, doc, getDoc, addDoc, updateDoc, deleteDoc,
+  collection, doc, addDoc, updateDoc, deleteDoc,
   query, where, onSnapshot, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
-import {
-  DAY_KO, TODAY, IN_7DAYS, TAX_LABEL, PROGRESS_LABEL, STATUS_META,
-  parseDate, escapeHtml, formatDateKo, calcDuration, classifyStatus,
-  buildTimeOptions, updateDurationDisplay, syncEndTimeOptions, initTimeSelects,
-  getTodayString, updateSidebarProfile,
-} from '../utils.js';
+import { DAY_KO, escapeHtml, getTodayString } from '../utils.js';
+import { initLectureModal, openModal } from '../components/lectureModal.js';
 
 /* ════════════════════════════════════════
    강의별 고유 색상 팔레트 (ID 해시 기반)
@@ -55,12 +51,7 @@ let allLectures          = [];
 let todayLectures        = [];
 let unsubscribeTodos     = null;
 let unsubscribeLectures  = null;
-let activeModalId        = null;
-let editingLecId         = null;
 
-/* ════════════════════════════════════════
-   닉네임 우선 표시명
-════════════════════════════════════════ */
 function getDisplayName() {
   return localStorage.getItem('userNickname')
       || localStorage.getItem('userName')
@@ -68,9 +59,8 @@ function getDisplayName() {
 }
 
 /* ════════════════════════════════════════
-   1. nav-badge + 사이드바
+   1. nav-badge
 ════════════════════════════════════════ */
-
 function updateNavBadge() {
   const todayStr = getTodayString();
   const count = allLectures.filter(l => l.date >= todayStr).length;
@@ -95,8 +85,7 @@ function renderGreeting() {
   else if (h < 18) { emoji = '🌤'; greet = '즐거운 오후예요';  }
   else             { emoji = '🌙'; greet = '수고하신 하루예요'; }
 
-  const name = getDisplayName();
-  greetEl.innerHTML = `${emoji} ${name} 강사님, ${greet}!`;
+  greetEl.innerHTML = `${emoji} ${getDisplayName()} 강사님, ${greet}!`;
 
   if (subtitleEl) {
     subtitleEl.textContent = todayLectures.length > 0
@@ -123,10 +112,10 @@ function renderStatBar() {
     .reduce((s, l) => s + (Number(l.fee) || 0), 0);
 
   const stats = [
-    { icon: '📅', iconCls: 'stat-icon--blue',   value: `${todayLectures.length}건`,                             label: '오늘 강의',      delta: '' },
+    { icon: '📅', iconCls: 'stat-icon--blue',   value: `${todayLectures.length}건`,                              label: '오늘 강의',      delta: '' },
     { icon: '💰', iconCls: 'stat-icon--green',  value: totalFee > 0 ? `${(totalFee/10000).toFixed(0)}만원` : '—', label: '오늘 예상 수익', delta: '' },
     { icon: '⏱',  iconCls: 'stat-icon--yellow', value: todayLectures.length > 1 ? '이동 확인' : '—',              label: '이동 버퍼 타임', delta: '' },
-    { icon: '💳', iconCls: 'stat-icon--red',    value: `${unpaidCnt}건`,                                         label: '미입금 정산',    delta: unpaidAmt > 0 ? `₩${unpaidAmt.toLocaleString()} 미수` : '' },
+    { icon: '💳', iconCls: 'stat-icon--red',    value: `${unpaidCnt}건`,                                          label: '미입금 정산',    delta: unpaidAmt > 0 ? `₩${unpaidAmt.toLocaleString()} 미수` : '' },
   ];
 
   container.innerHTML = stats.map(s => `
@@ -211,7 +200,7 @@ function renderTimeline() {
 
   const now    = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  const nowStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const nowStr = `${String(now.getHours()).padStart(2,'00')}:${String(now.getMinutes()).padStart(2,'00')}`;
 
   function timeToMin(t) {
     if (!t) return 0;
@@ -234,22 +223,16 @@ function renderTimeline() {
     const nextMin  = todayLectures[idx + 1] ? timeToMin(todayLectures[idx + 1].timeStart) : Infinity;
     const isDone   = timeToMin(lec.timeEnd) < nowMin;
 
-    const nodeStyle = isDone
-      ? 'background:#9ca3af;border-color:#9ca3af;'
-      : `background:${color};border-color:${color};`;
-    const cardBorderStyle = isDone
-      ? 'border-left:3px solid #9ca3af;opacity:0.7;'
-      : `border-left:3px solid ${color};`;
+    const nodeStyle       = isDone ? 'background:#9ca3af;border-color:#9ca3af;' : `background:${color};border-color:${color};`;
+    const cardBorderStyle = isDone ? 'border-left:3px solid #9ca3af;opacity:0.7;' : `border-left:3px solid ${color};`;
 
     let barBefore = '';
     let barAfter  = '';
 
     if (idx === 0 && nowMin < itemMin) {
-      nowInserted = true;
-      barBefore = nowBar();
+      nowInserted = true; barBefore = nowBar();
     } else if (!nowInserted && nowMin >= itemMin && nowMin < nextMin) {
-      nowInserted = true;
-      barAfter = nowBar();
+      nowInserted = true; barAfter = nowBar();
     }
 
     return `
@@ -278,17 +261,12 @@ function renderWeekly() {
   const summaryEl = document.getElementById('weekly-summary');
   if (!gridEl) return;
 
-  const today      = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayStr   = getTodayString();
-  const weekDates  = getWeekDateStrings();
-  const DAY_ORDER  = [0, 1, 2, 3, 4, 5, 6];
+  const today     = new Date(); today.setHours(0,0,0,0);
+  const todayStr  = getTodayString();
+  const weekDates = getWeekDateStrings();
 
   const dowToDateStr = {};
-  weekDates.forEach(dateStr => {
-    const d = new Date(dateStr);
-    dowToDateStr[d.getDay()] = dateStr;
-  });
+  weekDates.forEach(dateStr => { const d = new Date(dateStr); dowToDateStr[d.getDay()] = dateStr; });
 
   const dateToLectures = {};
   allLectures.forEach(lec => {
@@ -298,7 +276,7 @@ function renderWeekly() {
     }
   });
 
-  gridEl.innerHTML = DAY_ORDER.map(dow => {
+  gridEl.innerHTML = [0,1,2,3,4,5,6].map(dow => {
     const dateStr  = dowToDateStr[dow];
     const dateObj  = dateStr ? new Date(dateStr) : null;
     const isToday  = dateStr === todayStr;
@@ -374,283 +352,6 @@ function initLectures(uid) {
 }
 
 /* ════════════════════════════════════════
-   통합 강의 모달 — 뷰 패널 채우기
-════════════════════════════════════════ */
-function populateView(lec) {
-  if (!lec) return;
-  const status = classifyStatus(lec);
-  const meta   = STATUS_META[status] || { label: status, cls: '' };
-  const { full } = formatDateKo(lec.date);
-
-  document.getElementById('modal-title').textContent       = lec.title || '(제목 없음)';
-  document.getElementById('modal-badge').className         = `lec-badge ${meta.cls}`;
-  document.getElementById('modal-badge').textContent       = meta.label;
-  document.getElementById('modal-date-meta').textContent   = `${full} · ${lec.timeStart}~${lec.timeEnd}`;
-  document.getElementById('modal-client-meta').textContent = lec.client || '—';
-
-  document.getElementById('v-date').textContent           = full;
-  document.getElementById('v-time').textContent           = `${lec.timeStart} ~ ${lec.timeEnd}`;
-  document.getElementById('v-total-duration').textContent = calcDuration(lec.timeStart, lec.timeEnd);
-  document.getElementById('v-title').textContent          = lec.title  || '—';
-  document.getElementById('v-client').textContent         = lec.client || '—';
-  document.getElementById('v-fee').textContent            = `₩${(Number(lec.fee) || 0).toLocaleString()}`;
-
-  document.getElementById('v-session-current').textContent = lec.sessionCurrent ? `${lec.sessionCurrent}회` : '—';
-  document.getElementById('v-session-total').textContent   = lec.sessionTotal   ? `${lec.sessionTotal}회`   : '—';
-  document.getElementById('v-participants').textContent    = lec.participants    ? `${lec.participants}명`   : '—';
-  document.getElementById('v-group-info').textContent      = lec.groupInfo      || '—';
-  document.getElementById('v-topic').textContent           = lec.topic          || '—';
-  document.getElementById('v-supplies').textContent        = lec.supplies       || '—';
-  document.getElementById('v-place').textContent           = lec.place          || '—';
-  document.getElementById('v-parking').textContent         = lec.parkingInfo    || '—';
-
-  const mgrName  = lec.managerName  || '';
-  const mgrPhone = lec.managerPhone || '';
-  const mgrEmail = lec.managerEmail || '';
-
-  document.getElementById('v-mgr-avatar').textContent         = mgrName ? mgrName.charAt(0) : '담';
-  document.getElementById('v-mgr-name').textContent           = mgrName  || '담당자 미등록';
-  document.getElementById('v-mgr-sub').textContent            = mgrPhone || '연락처 미등록';
-  document.getElementById('v-mgr-email-text').textContent     = mgrEmail || '—';
-
-  const phoneLink = document.getElementById('v-mgr-phone');
-  if (mgrPhone) { phoneLink.href = `tel:${mgrPhone}`;     phoneLink.style.opacity = ''; phoneLink.style.pointerEvents = ''; }
-  else          { phoneLink.href = '#'; phoneLink.style.opacity = '0.35'; phoneLink.style.pointerEvents = 'none'; }
-
-  const emailLink = document.getElementById('v-mgr-email-link');
-  if (mgrEmail) { emailLink.href = `mailto:${mgrEmail}`; emailLink.style.opacity = ''; emailLink.style.pointerEvents = ''; }
-  else          { emailLink.href = '#'; emailLink.style.opacity = '0.35'; emailLink.style.pointerEvents = 'none'; }
-
-  document.getElementById('v-progress').textContent    = PROGRESS_LABEL[lec.progressStatus || 'scheduled'] || '—';
-  const paidEl = document.getElementById('v-paid-status');
-  paidEl.textContent = lec.isPaid ? '✅ 입금 완료' : '❌ 미입금';
-  paidEl.className   = `modal-info-value paid-badge${lec.isPaid ? ' paid-badge--paid' : ' paid-badge--unpaid'}`;
-  document.getElementById('v-payment-date').textContent = lec.paymentDate || '미정';
-  document.getElementById('v-tax').textContent          = TAX_LABEL[lec.taxType] || '—';
-
-  const memoEl = document.getElementById('v-memo');
-  if (lec.memo) { memoEl.textContent = lec.memo; memoEl.classList.remove('is-empty'); }
-  else          { memoEl.textContent = '메모 없음'; memoEl.classList.add('is-empty'); }
-}
-
-function populateForm(lec) {
-  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
-  set('af-date',            lec.date);
-  set('af-title',           lec.title);
-  set('af-client',          lec.client);
-  set('af-fee',             lec.fee);
-  set('af-session-current', lec.sessionCurrent);
-  set('af-session-total',   lec.sessionTotal);
-  set('af-participants',    lec.participants);
-  set('af-group-info',      lec.groupInfo);
-  set('af-topic',           lec.topic);
-  set('af-supplies',        lec.supplies);
-  set('af-place',           lec.place);
-  set('af-parking',         lec.parkingInfo);
-  set('af-manager-name',    lec.managerName);
-  set('af-manager-phone',   lec.managerPhone);
-  set('af-manager-email',   lec.managerEmail);
-  set('af-progress',        lec.progressStatus || 'scheduled');
-  set('af-payment-date',    lec.paymentDate);
-  set('af-memo',            lec.memo);
-
-  const startSel = document.getElementById('af-time-start');
-  if (startSel) {
-    startSel.innerHTML = buildTimeOptions();
-    startSel.value     = lec.timeStart || '';
-    syncEndTimeOptions(lec.timeEnd || '');
-  }
-  updateDurationDisplay();
-
-  const paidSel = document.getElementById('af-paid-status');
-  if (paidSel) paidSel.value = lec.isPaid ? 'true' : 'false';
-
-  const taxSel = document.getElementById('af-tax');
-  if (taxSel) taxSel.value = lec.taxType || 'income3_3';
-}
-
-/* ════════════════════════════════════════
-   모달 모드 전환
-════════════════════════════════════════ */
-function switchMode(mode) {
-  const viewPanel    = document.getElementById('view-panel');
-  const formPanel    = document.getElementById('form-panel');
-  const viewFooter   = document.getElementById('view-footer');
-  const formFooter   = document.getElementById('form-footer');
-  const metaRow      = document.getElementById('modal-meta-row');
-  const formSubtitle = document.getElementById('modal-form-subtitle');
-
-  const isView = (mode === 'view');
-  if (viewPanel)    viewPanel.style.display    = isView ? '' : 'none';
-  if (formPanel)    formPanel.style.display    = isView ? 'none' : '';
-  if (viewFooter)   viewFooter.style.display   = isView ? 'flex' : 'none';
-  if (formFooter)   formFooter.style.display   = isView ? 'none' : 'flex';
-  if (metaRow)      metaRow.style.display      = isView ? '' : 'none';
-  if (formSubtitle) formSubtitle.style.display = isView ? 'none' : '';
-}
-
-/* ════════════════════════════════════════
-   모달 열기 / 닫기
-════════════════════════════════════════ */
-const modalBackdrop   = document.getElementById('modal-backdrop');
-const confirmBackdrop = document.getElementById('confirm-backdrop');
-
-function openModal(id) {
-  const lec = allLectures.find(l => l.id === id);
-  if (!lec || !modalBackdrop) return;
-  activeModalId = id;
-  editingLecId  = null;
-
-  populateView(lec);
-  switchMode('view');
-
-  modalBackdrop.classList.add('open');
-  document.body.style.overflow = 'hidden';
-  document.getElementById('modal-close-btn')?.focus();
-}
-
-function closeModal() {
-  modalBackdrop?.classList.remove('open');
-  document.body.style.overflow = '';
-  activeModalId = null;
-  editingLecId  = null;
-}
-
-document.getElementById('modal-close-btn')?.addEventListener('click', closeModal);
-modalBackdrop?.addEventListener('click', e => {
-  if (e.target !== modalBackdrop) return;
-  closeModal();
-});
-
-document.getElementById('btn-modal-edit')?.addEventListener('click', () => {
-  if (!activeModalId) return;
-  const lec = allLectures.find(l => l.id === activeModalId);
-  if (!lec) return;
-  editingLecId = activeModalId;
-  document.getElementById('modal-title').textContent = '강의 수정';
-  const sub = document.getElementById('modal-form-subtitle');
-  if (sub) sub.textContent = '강의 정보를 수정하세요.';
-  initTimeSelects();
-  populateForm(lec);
-  switchMode('form');
-  document.getElementById('af-title')?.focus();
-});
-
-document.getElementById('btn-form-cancel')?.addEventListener('click', () => {
-  if (editingLecId) {
-    const id = activeModalId;
-    editingLecId = null;
-    const lec = allLectures.find(l => l.id === id);
-    if (lec) { populateView(lec); switchMode('view'); }
-    else closeModal();
-  } else {
-    closeModal();
-  }
-});
-
-document.getElementById('btn-form-submit')?.addEventListener('click', async () => {
-  const get = id => document.getElementById(id)?.value?.trim() ?? '';
-  const date      = get('af-date');
-  const timeStart = get('af-time-start');
-  const timeEnd   = get('af-time-end');
-  const title     = get('af-title');
-  const client    = get('af-client');
-  const feeRaw    = get('af-fee');
-
-  if (!date || !timeStart || !timeEnd || !title || !client || !feeRaw) {
-    window.showToast?.('날짜, 시간, 강의명, 고객사, 강사료는 필수 입력 항목이에요.', 'error');
-    return;
-  }
-  if (timeEnd <= timeStart) {
-    window.showToast?.('종료 시간은 시작 시간보다 이후여야 합니다.', 'error');
-    return;
-  }
-
-  const submitBtn = document.getElementById('btn-form-submit');
-  submitBtn.disabled    = true;
-  submitBtn.textContent = '저장 중...';
-
-  const isPaid  = document.getElementById('af-paid-status')?.value === 'true';
-  const taxType = document.getElementById('af-tax')?.value || 'income3_3';
-
-  const payload = {
-    date, timeStart, timeEnd, title, client,
-    fee:            Number(feeRaw),
-    sessionCurrent: Number(get('af-session-current')) || null,
-    sessionTotal:   Number(get('af-session-total'))   || null,
-    participants:   Number(get('af-participants'))     || null,
-    groupInfo:      get('af-group-info'),
-    topic:          get('af-topic'),
-    supplies:       get('af-supplies'),
-    place:          get('af-place'),
-    parkingInfo:    get('af-parking'),
-    managerName:    get('af-manager-name'),
-    managerPhone:   get('af-manager-phone'),
-    managerEmail:   get('af-manager-email'),
-    progressStatus: get('af-progress') || 'scheduled',
-    isPaid,
-    paymentDate:    get('af-payment-date'),
-    taxType,
-    memo:           get('af-memo'),
-  };
-
-  try {
-    if (editingLecId) {
-      await updateDoc(doc(db, 'lectures', editingLecId), payload);
-      window.showToast?.('강의가 수정되었습니다.', 'success');
-      const idx = allLectures.findIndex(l => l.id === editingLecId);
-      if (idx >= 0) {
-        allLectures[idx] = { ...allLectures[idx], ...payload };
-        activeModalId = editingLecId;
-        editingLecId  = null;
-        populateView(allLectures[idx]);
-        switchMode('view');
-      } else {
-        closeModal();
-      }
-    } else {
-      if (!currentUser) return;
-      await addDoc(collection(db, 'lectures'), {
-        uid: currentUser.uid, ...payload, isDocumented: false, createdAt: serverTimestamp(),
-      });
-      window.showToast?.('강의가 등록되었습니다.', 'success');
-      closeModal();
-    }
-  } catch (err) {
-    console.error('[강비서] 강의 저장 오류:', err);
-    window.showToast?.('저장에 실패했습니다.', 'error');
-  } finally {
-    submitBtn.disabled    = false;
-    submitBtn.textContent = '저장하기';
-  }
-});
-
-function closeConfirm() { confirmBackdrop?.classList.remove('open'); }
-
-document.getElementById('btn-modal-delete')?.addEventListener('click', () => {
-  confirmBackdrop?.classList.add('open');
-});
-document.getElementById('btn-confirm-cancel')?.addEventListener('click', closeConfirm);
-confirmBackdrop?.addEventListener('click', e => { if (e.target === confirmBackdrop) closeConfirm(); });
-
-document.getElementById('btn-confirm-delete')?.addEventListener('click', async () => {
-  if (!activeModalId) return;
-  const id = activeModalId;
-  closeConfirm(); closeModal();
-  try {
-    await deleteDoc(doc(db, 'lectures', id));
-    window.showToast?.('강의가 삭제되었습니다.', 'error');
-  } catch (err) {
-    console.error('[강비서] 강의 삭제 오류:', err);
-    window.showToast?.('삭제에 실패했습니다.', 'error');
-  }
-});
-
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModal(); closeConfirm(); }
-});
-
-/* ════════════════════════════════════════
    알림 벨 아이콘 — 드롭다운 피드백
 ════════════════════════════════════════ */
 (function initNotificationBell() {
@@ -660,26 +361,14 @@ document.addEventListener('keydown', e => {
   const dropdown = document.createElement('div');
   dropdown.id = 'notification-dropdown';
   Object.assign(dropdown.style, {
-    display:      'none',
-    position:     'absolute',
-    top:          'calc(100% + 8px)',
-    right:        '0',
-    width:        '280px',
-    background:   '#fff',
-    border:       '1px solid #e5e7eb',
-    borderRadius: '10px',
-    boxShadow:    '0 8px 24px rgba(0,0,0,.12)',
-    zIndex:       '9999',
-    padding:      '0',
-    overflow:     'hidden',
+    display: 'none', position: 'absolute', top: 'calc(100% + 8px)', right: '0',
+    width: '280px', background: '#fff', border: '1px solid #e5e7eb',
+    borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: '9999',
+    padding: '0', overflow: 'hidden',
   });
   dropdown.innerHTML = `
-    <div style="padding:12px 16px;font-weight:700;color:#111827;border-bottom:1px solid #f3f4f6;font-size:0.9rem;">
-      🔔 알림
-    </div>
-    <div style="padding:24px 16px;text-align:center;color:#9ca3af;font-size:0.85rem;">
-      새로운 알림이 없습니다.
-    </div>`;
+    <div style="padding:12px 16px;font-weight:700;color:#111827;border-bottom:1px solid #f3f4f6;font-size:0.9rem;">🔔 알림</div>
+    <div style="padding:24px 16px;text-align:center;color:#9ca3af;font-size:0.85rem;">새로운 알림이 없습니다.</div>`;
 
   bell.style.position = 'relative';
   bell.appendChild(dropdown);
@@ -691,16 +380,14 @@ document.addEventListener('keydown', e => {
     dropdown.style.display = isOpen ? 'block' : 'none';
     bell.setAttribute('aria-expanded', String(isOpen));
   });
-
   document.addEventListener('click', () => {
     if (!isOpen) return;
     isOpen = false;
     dropdown.style.display = 'none';
   });
-
   bell.addEventListener('keydown', e => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); bell.click(); }
-    if (e.key === 'Escape')                 { isOpen = false; dropdown.style.display = 'none'; }
+    if (e.key === 'Escape') { isOpen = false; dropdown.style.display = 'none'; }
   });
 })();
 
@@ -737,35 +424,23 @@ function renderTodoList() {
       if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); todoToggle(getId()); }
     });
   });
-
   list.querySelectorAll('.todo-text').forEach(txt => {
     txt.addEventListener('click', () => todoToggle(txt.closest('.todo-item').dataset.id));
   });
-
   list.querySelectorAll('.todo-delete-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      todoDelete(btn.closest('.todo-item').dataset.id);
-    });
+    btn.addEventListener('click', e => { e.stopPropagation(); todoDelete(btn.closest('.todo-item').dataset.id); });
   });
 }
 
 function initTodos(uid) {
   if (unsubscribeTodos) unsubscribeTodos();
-
   const q = query(collection(db, 'todos'), where('uid', '==', uid));
   unsubscribeTodos = onSnapshot(q, snapshot => {
     todos = snapshot.docs
       .map(d => ({ id: d.id, ...d.data() }))
-      .sort((a, b) => {
-        const aMs = a.createdAt?.toMillis?.() ?? 0;
-        const bMs = b.createdAt?.toMillis?.() ?? 0;
-        return aMs - bMs;
-      });
+      .sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0));
     renderTodoList();
-  }, err => {
-    console.error('[강비서] Todo 구독 오류:', err);
-  });
+  }, err => { console.error('[강비서] Todo 구독 오류:', err); });
 }
 
 async function todoAdd() {
@@ -773,56 +448,36 @@ async function todoAdd() {
   const text  = input?.value.trim();
   if (!text || !currentUser) return;
   try {
-    await addDoc(collection(db, 'todos'), {
-      uid: currentUser.uid, text, isDone: false, createdAt: serverTimestamp(),
-    });
+    await addDoc(collection(db, 'todos'), { uid: currentUser.uid, text, isDone: false, createdAt: serverTimestamp() });
     input.value = '';
-  } catch (err) {
-    console.error('[강비서] Todo 추가 오류:', err);
-  }
+  } catch (err) { console.error('[강비서] Todo 추가 오류:', err); }
 }
 
 async function todoToggle(id) {
   const todo = todos.find(t => t.id === id);
   if (!todo) return;
-  try {
-    await updateDoc(doc(db, 'todos', id), { isDone: !todo.isDone });
-  } catch (err) {
-    console.error('[강비서] Todo 토글 오류:', err);
-  }
+  try { await updateDoc(doc(db, 'todos', id), { isDone: !todo.isDone }); }
+  catch (err) { console.error('[강비서] Todo 토글 오류:', err); }
 }
 
 async function todoDelete(id) {
-  try {
-    await deleteDoc(doc(db, 'todos', id));
-  } catch (err) {
-    console.error('[강비서] Todo 삭제 오류:', err);
-  }
+  try { await deleteDoc(doc(db, 'todos', id)); }
+  catch (err) { console.error('[강비서] Todo 삭제 오류:', err); }
 }
 
 async function todoClearDone() {
   const done = todos.filter(t => t.isDone);
   if (done.length === 0) return;
-  try {
-    await Promise.all(done.map(t => deleteDoc(doc(db, 'todos', t.id))));
-  } catch (err) {
-    console.error('[강비서] 완료 항목 삭제 오류:', err);
-  }
+  try { await Promise.all(done.map(t => deleteDoc(doc(db, 'todos', t.id)))); }
+  catch (err) { console.error('[강비서] 완료 항목 삭제 오류:', err); }
 }
 
 /* ════════════════════════════════════════
    이벤트 바인딩
 ════════════════════════════════════════ */
 document.getElementById('todo-add-btn')?.addEventListener('click', todoAdd);
-document.getElementById('todo-input')?.addEventListener('keydown', e => {
-  if (e.key === 'Enter') todoAdd();
-});
+document.getElementById('todo-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') todoAdd(); });
 document.getElementById('todo-clear-done')?.addEventListener('click', todoClearDone);
-
-setupLogout(() => {
-  if (unsubscribeTodos)    unsubscribeTodos();
-  if (unsubscribeLectures) unsubscribeLectures();
-});
 
 /* ════════════════════════════════════════
    초기 렌더 (빈 상태 — 데이터 로딩 전)
@@ -839,21 +494,11 @@ renderTodoList();
 ════════════════════════════════════════ */
 authGuard(async user => {
   currentUser = user;
-
-  try {
-    const snap = await getDoc(doc(db, 'users', user.uid));
-    if (snap.exists()) {
-      const nickname = snap.data().nickname || '';
-      if (nickname) localStorage.setItem('userNickname', nickname);
-      else          localStorage.removeItem('userNickname');
-    }
-  } catch (err) {
-    console.error('[강비서] 닉네임 로드 오류:', err);
-  }
-
-  updateSidebarProfile(getDisplayName());
+  initLectureModal(() => ({ allLectures, currentUser }));
   renderGreeting();
-
   initLectures(user.uid);
   initTodos(user.uid);
+}, {
+  withModal: true,
+  cleanupFn: () => { unsubscribeTodos?.(); unsubscribeLectures?.(); },
 });

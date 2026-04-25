@@ -1,6 +1,4 @@
 // js/utils.js — 공통 상수 & 유틸리티 (ES Module)
-// 모든 페이지 JS에서 이 파일을 import해서 사용한다.
-// 새 기능을 만들 때도 공통 로직은 반드시 여기에 먼저 정의할 것.
 
 /* ════════════════════════════════════════
    상수
@@ -143,18 +141,6 @@ export function initTimeSelects() {
 }
 
 /* ════════════════════════════════════════
-   사이드바 유저 정보 공통 업데이트
-   id 또는 class 선택자 중 존재하는 요소를 사용한다.
-════════════════════════════════════════ */
-export function updateSidebarProfile(name) {
-  const nameEl   = document.getElementById('sidebar-user-name')  || document.querySelector('.sidebar-user-name');
-  const avatarEl = document.getElementById('sidebar-avatar')      || document.querySelector('.sidebar-avatar');
-  if (!nameEl || !avatarEl) return;
-  nameEl.textContent   = name + ' 강사';
-  avatarEl.textContent = name.charAt(0);
-}
-
-/* ════════════════════════════════════════
    Toast 알림 공통 래퍼
    'warn'·'info' 타입을 'default'로 정규화한다.
 ════════════════════════════════════════ */
@@ -166,3 +152,95 @@ export function showToast(msg, type = 'default') {
 /* DOM 값 읽기/쓰기 헬퍼 */
 export function setVal(id, val) { const el = document.getElementById(id); if (el) el.value = val ?? ''; }
 export function getVal(id)       { return document.getElementById(id)?.value ?? ''; }
+
+/* ════════════════════════════════════════
+   사이드바 UI 업데이트
+════════════════════════════════════════ */
+export function updateSidebarUI(nickname) {
+  const nameEl   = document.getElementById('sidebar-user-name');
+  const avatarEl = document.getElementById('sidebar-avatar');
+  if (!nameEl) return;
+  nameEl.textContent = nickname + ' 강사';
+  if (avatarEl) avatarEl.textContent = nickname.charAt(0);
+}
+
+/* ════════════════════════════════════════
+   사이드바 동적 로드 — components/sidebar.html fetch 후 주입
+   common.js의 initSidebar IIFE 실행 시점에는 sidebar가 없으므로
+   inject 후 동작을 여기서 재초기화한다.
+════════════════════════════════════════ */
+export async function loadSidebar() {
+  try {
+    const res  = await fetch('../components/sidebar.html');
+    const html = await res.text();
+    const tmp  = document.createElement('div');
+    tmp.innerHTML = html;
+
+    const appMain = document.getElementById('app-main');
+    if (!appMain) return;
+    const parent = appMain.parentNode;
+    while (tmp.firstElementChild) {
+      parent.insertBefore(tmp.firstElementChild, appMain);
+    }
+
+    _initSidebarBehavior();
+
+    const currentPath = window.location.pathname;
+    document.querySelectorAll('.sidebar-nav-item[data-page]').forEach(item => {
+      if (currentPath.endsWith(item.dataset.page)) {
+        item.classList.add('active');
+        item.setAttribute('aria-current', 'page');
+      }
+    });
+
+    const count  = parseInt(localStorage.getItem('navBadgeCount') || '0', 10);
+    const badge  = document.getElementById('nav-badge-lectures');
+    if (badge) { badge.textContent = count; badge.style.display = count > 0 ? '' : 'none'; }
+  } catch (err) {
+    console.error('[강비서] 사이드바 로드 오류:', err);
+  }
+}
+
+function _initSidebarBehavior() {
+  const sidebar    = document.getElementById('sidebar');
+  const appMain    = document.getElementById('app-main');
+  const toggleBtn  = document.getElementById('sidebar-toggle');
+  const overlay    = document.getElementById('sidebar-overlay');
+  const mobileBtn  = document.getElementById('mobile-menu-btn');
+  if (!sidebar) return;
+
+  if (localStorage.getItem('sidebar-collapsed') === 'true') {
+    sidebar.classList.add('collapsed');
+    appMain?.classList.add('sidebar-collapsed');
+  }
+
+  toggleBtn?.addEventListener('click', () => {
+    const collapsed = sidebar.classList.toggle('collapsed');
+    appMain?.classList.toggle('sidebar-collapsed', collapsed);
+    localStorage.setItem('sidebar-collapsed', collapsed);
+  });
+
+  function openMobile()  { sidebar.classList.add('mobile-open');    overlay?.classList.add('active');    document.body.style.overflow = 'hidden'; }
+  function closeMobile() { sidebar.classList.remove('mobile-open'); overlay?.classList.remove('active'); document.body.style.overflow = ''; }
+
+  mobileBtn?.addEventListener('click', openMobile);
+  overlay?.addEventListener('click',   closeMobile);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMobile(); });
+}
+
+/* ════════════════════════════════════════
+   강의 모달 HTML 동적 로드 — components/modal.html fetch 후 주입
+════════════════════════════════════════ */
+export async function loadModal() {
+  try {
+    const res  = await fetch('../components/modal.html');
+    const html = await res.text();
+    const tmp  = document.createElement('div');
+    tmp.innerHTML = html;
+    while (tmp.firstElementChild) {
+      document.body.appendChild(tmp.firstElementChild);
+    }
+  } catch (err) {
+    console.error('[강비서] 모달 로드 오류:', err);
+  }
+}

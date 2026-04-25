@@ -5,18 +5,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>강의 캘린더 | 강비서</title>
-
-  <!-- Styles -->
   <link rel="stylesheet" href="../css/reset.css" />
   <link rel="stylesheet" href="../css/variables.css" />
   <link rel="stylesheet" href="../css/common.css" />
   <link rel="stylesheet" href="../css/layout.css" />
   <link rel="stylesheet" href="../css/lectures.css" />
   <link rel="stylesheet" href="../css/calendar.css" />
-
-  <!-- FullCalendar 테마 오버라이드 -->
   <style>
-    /* ─── FullCalendar 테마 변수 ─── */
     :root {
       --fc-border-color: #e5e7eb;
       --fc-today-bg-color: rgba(14, 165, 233, 0.07);
@@ -24,309 +19,68 @@
       --fc-small-font-size: 0.78em;
       --fc-page-bg-color: transparent;
     }
-
-    /* ─── 래퍼 카드 ─── */
     .fc-wrapper {
       background: var(--color-bg-card, #fff);
       border-radius: var(--radius-lg, 12px);
       box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,.06));
-      padding: 20px;
-      margin-top: 16px;
-      overflow: hidden;
+      padding: 20px; margin-top: 16px; overflow: hidden;
     }
-
-    /* ─── 툴바 ─── */
-    .fc .fc-toolbar-title {
-      font-size: 1.2rem;
-      font-weight: 700;
-      color: var(--color-text-primary, #111827);
-    }
-
+    .fc .fc-toolbar-title { font-size: 1.2rem; font-weight: 700; color: var(--color-text-primary, #111827); }
     .fc .fc-button-primary {
-      background: var(--color-bg-elevated, #f3f4f6);
-      border: 1px solid var(--color-border, #e5e7eb);
-      color: var(--color-text-secondary, #6b7280);
-      border-radius: 8px;
-      font-size: 0.82rem;
-      font-weight: 600;
-      box-shadow: none;
-      transition: all 150ms;
+      background: var(--color-bg-elevated, #f3f4f6); border: 1px solid var(--color-border, #e5e7eb);
+      color: var(--color-text-secondary, #6b7280); border-radius: 8px; font-size: 0.82rem;
+      font-weight: 600; box-shadow: none; transition: all 150ms;
     }
-    .fc .fc-button-primary:hover:not(:disabled) {
-      background: var(--color-bg-hover, #e5e7eb);
-      border-color: var(--color-border-focus, #9ca3af);
-      color: var(--color-text-primary, #111827);
-    }
+    .fc .fc-button-primary:hover:not(:disabled) { background: var(--color-bg-hover, #e5e7eb); border-color: var(--color-border-focus, #9ca3af); color: var(--color-text-primary, #111827); }
     .fc .fc-button-primary:not(:disabled).fc-button-active,
-    .fc .fc-button-primary:not(:disabled):active {
-      background: #0ea5e9;
-      border-color: #0284c7;
-      color: #fff;
-      box-shadow: none;
-    }
-    .fc .fc-button-primary:focus {
-      box-shadow: 0 0 0 2px rgba(14, 165, 233, .3);
-    }
-
-    /* ─── 요일 헤더 ─── */
-    .fc .fc-col-header-cell-cushion {
-      color: var(--color-text-secondary, #6b7280);
-      font-weight: 600;
-      font-size: 0.8rem;
-      padding: 8px 4px;
-    }
+    .fc .fc-button-primary:not(:disabled):active { background: #0ea5e9; border-color: #0284c7; color: #fff; box-shadow: none; }
+    .fc .fc-button-primary:focus { box-shadow: 0 0 0 2px rgba(14,165,233,.3); }
+    .fc .fc-col-header-cell-cushion { color: var(--color-text-secondary, #6b7280); font-weight: 600; font-size: 0.8rem; padding: 8px 4px; }
     .fc-day-sun .fc-col-header-cell-cushion { color: #ef4444; }
     .fc-day-sat .fc-col-header-cell-cushion { color: #3b82f6; }
-
-    /* ─── 날짜 번호 ─── */
-    .fc .fc-daygrid-day-number {
-      color: var(--color-text-secondary, #6b7280);
-      font-size: 0.82rem;
-      font-weight: 500;
-      padding: 6px 8px;
-    }
-    /* [4] 오늘 날짜: 동그라미 제거 → 셀 전체 굵은 테두리 강조 */
-    .fc .fc-day-today .fc-daygrid-day-number {
-      color: #0284c7;
-      font-weight: 800;
-      font-size: 0.88rem;
-    }
-    .fc td.fc-day-today {
-      box-shadow: inset 0 0 0 2px #0ea5e9;
-    }
+    .fc .fc-daygrid-day-number { color: var(--color-text-secondary, #6b7280); font-size: 0.82rem; font-weight: 500; padding: 6px 8px; }
+    .fc .fc-day-today .fc-daygrid-day-number { color: #0284c7; font-weight: 800; font-size: 0.88rem; }
+    .fc td.fc-day-today { box-shadow: inset 0 0 0 2px #0ea5e9; }
     .fc .fc-day-sun .fc-daygrid-day-number { color: #ef4444; }
     .fc .fc-day-sat .fc-daygrid-day-number { color: #3b82f6; }
-
-    /* ─── 이벤트 ─── */
-    .fc .fc-event {
-      border-radius: 5px;
-      font-size: 0.75rem;
-      font-weight: 500;
-      padding: 2px 6px;
-      cursor: pointer;
-      border: none !important;
-      transition: opacity 150ms, transform 100ms;
-    }
-    .fc .fc-event:hover {
-      opacity: .88;
-      transform: translateY(-1px);
-    }
-    .fc .fc-event.unpaid-event {
-      opacity: .8;
-    }
-    .fc .fc-event .fc-event-time {
-      font-weight: 600;
-      margin-right: 3px;
-    }
-
-    /* ─── 주간 뷰 ─── */
-    .fc .fc-timegrid-slot      { height: 2.8em; border-color: #f3f4f6; }
+    .fc .fc-event { border-radius: 5px; font-size: 0.75rem; font-weight: 500; padding: 2px 6px; cursor: pointer; border: none !important; transition: opacity 150ms, transform 100ms; }
+    .fc .fc-event:hover { opacity: .88; transform: translateY(-1px); }
+    .fc .fc-event .fc-event-time { font-weight: 600; margin-right: 3px; }
+    .fc .fc-timegrid-slot { height: 2.8em; border-color: #f3f4f6; }
     .fc .fc-timegrid-slot-label { font-size: 0.72rem; color: #9ca3af; }
     .fc .fc-timegrid-now-indicator-line { border-color: #ef4444; }
     .fc .fc-timegrid-now-indicator-arrow { border-top-color: #ef4444; border-bottom-color: #ef4444; }
-
-    /* ─── 뷰 전환 버튼 ─── */
-    .cal-view-controls {
-      display: flex;
-      gap: 6px;
-    }
-    .cal-view-btn {
-      padding: 7px 18px;
-      border: 1px solid var(--color-border, #e5e7eb);
-      border-radius: 8px;
-      background: var(--color-bg-elevated, #f3f4f6);
-      color: var(--color-text-secondary, #6b7280);
-      font-size: 0.82rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 150ms;
-      line-height: 1;
-    }
-    .cal-view-btn.active {
-      background: #0a1628;
-      border-color: #0a1628;
-      color: #fff;
-    }
-    .cal-view-btn:hover:not(.active) {
-      background: var(--color-bg-hover, #e5e7eb);
-      border-color: #9ca3af;
-      color: var(--color-text-primary, #111827);
-    }
-
-    /* ─── 페이지 헤더 우측 ─── */
-    .calendar-page-header-right {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-shrink: 0;
-      flex-wrap: wrap;
-    }
-
-    /* ─── [3] 범례 바 (고도화) ─── */
-    .cal-legend-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 12px;
-      padding: 12px 16px;
-      background: var(--color-bg-card, #fff);
-      border-radius: 10px;
-      border: 1px solid var(--color-border, #e5e7eb);
-    }
-    .cal-legend-label {
-      font-size: 0.72rem;
-      font-weight: 600;
-      color: var(--color-text-muted, #9ca3af);
-      margin-right: 4px;
-      white-space: nowrap;
-    }
-    .cal-legend-item-fc {
-      display: flex;
-      align-items: center;
-    }
-    .cal-legend-dot-fc {
-      width: 10px;
-      height: 10px;
-      border-radius: 3px;
-      flex-shrink: 0;
-    }
-
-    /* ─── 로딩 오버레이 ─── */
-    #cal-loading {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      padding: 40px;
-      color: var(--color-text-muted, #9ca3af);
-      font-size: 0.9rem;
-    }
-    #cal-loading.hidden { display: none; }
-    .cal-spinner {
-      width: 18px; height: 18px;
-      border: 2px solid #e5e7eb;
-      border-top-color: #0ea5e9;
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ─── 취소 이벤트: 점선 테두리 + 취소선 ─── */
-    .fc .fc-event.fc-cancelled-lec {
-      opacity: 0.6;
-      border-style: dashed !important;
-    }
-    .fc .fc-event.fc-cancelled-lec .fc-event-title,
-    .fc .fc-event.fc-cancelled-lec .fc-list-event-title {
-      text-decoration: line-through;
-    }
-
-    /* ─── 행정 대기 / 미입금완료: 밝은 배경 이벤트 글씨 강조 ─── */
-    .fc .fc-daygrid-event .fc-event-title {
-      font-weight: 600;
-    }
-
-    /* ─── 범례 배지 (pill 스타일) ─── */
-    .cal-legend-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 0.73rem;
-      font-weight: 600;
-      padding: 4px 10px;
-      border-radius: 100px;
-      white-space: nowrap;
-      box-shadow: 0 1px 2px rgba(0,0,0,.06);
-      transition: opacity 120ms;
-    }
+    .cal-view-controls { display: flex; gap: 6px; }
+    .cal-view-btn { padding: 7px 18px; border: 1px solid var(--color-border, #e5e7eb); border-radius: 8px; background: var(--color-bg-elevated, #f3f4f6); color: var(--color-text-secondary, #6b7280); font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 150ms; line-height: 1; }
+    .cal-view-btn.active { background: #0a1628; border-color: #0a1628; color: #fff; }
+    .cal-view-btn:hover:not(.active) { background: var(--color-bg-hover, #e5e7eb); border-color: #9ca3af; color: var(--color-text-primary, #111827); }
+    .calendar-page-header-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; flex-wrap: wrap; }
+    .cal-legend-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding: 12px 16px; background: var(--color-bg-card, #fff); border-radius: 10px; border: 1px solid var(--color-border, #e5e7eb); }
+    .cal-legend-label { font-size: 0.72rem; font-weight: 600; color: var(--color-text-muted, #9ca3af); margin-right: 4px; white-space: nowrap; }
+    .cal-legend-item-fc { display: flex; align-items: center; }
+    .cal-legend-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 0.73rem; font-weight: 600; padding: 4px 10px; border-radius: 100px; white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,.06); transition: opacity 120ms; }
     .cal-legend-badge:hover { opacity: .8; }
+    #cal-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 40px; color: var(--color-text-muted, #9ca3af); font-size: 0.9rem; }
+    #cal-loading.hidden { display: none; }
+    .cal-spinner { width: 18px; height: 18px; border: 2px solid #e5e7eb; border-top-color: #0ea5e9; border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .fc .fc-event.fc-cancelled-lec { opacity: 0.6; border-style: dashed !important; }
+    .fc .fc-event.fc-cancelled-lec .fc-event-title,
+    .fc .fc-event.fc-cancelled-lec .fc-list-event-title { text-decoration: line-through; }
+    .fc .fc-daygrid-event .fc-event-title { font-weight: 600; }
   </style>
 </head>
 <body>
 
-  <!-- ══════════════════════════════════════
-       APP SHELL
-  ══════════════════════════════════════ -->
   <div class="app-shell">
+    <!-- 사이드바: authGuard → loadSidebar() 에서 동적 주입 -->
 
-    <!-- ════════════════════════════
-         SIDEBAR (GNB)
-    ════════════════════════════ -->
-    <aside class="sidebar" id="sidebar" aria-label="사이드바 네비게이션">
-
-      <div class="sidebar-header">
-        <a href="../index.html" class="sidebar-logo">강<span>비서</span></a>
-        <button class="sidebar-toggle" id="sidebar-toggle" aria-label="사이드바 접기/펼치기">◀</button>
-      </div>
-
-      <div class="sidebar-user">
-        <div class="sidebar-avatar" id="sidebar-avatar" aria-hidden="true">강</div>
-        <div class="sidebar-user-info">
-          <div class="sidebar-user-name" id="sidebar-user-name">로딩 중…</div>
-          <div class="sidebar-user-role">프리랜서 강사</div>
-        </div>
-      </div>
-
-      <nav class="sidebar-nav" aria-label="주요 메뉴">
-        <div class="sidebar-nav-section">
-          <div class="sidebar-nav-label">메인</div>
-
-          <a href="home.html" class="sidebar-nav-item" data-page="home.html">
-            <span class="nav-icon">🏠</span>
-            <span class="nav-label">홈</span>
-          </a>
-
-          <a href="lectures.html" class="sidebar-nav-item" data-page="lectures.html">
-            <span class="nav-icon">📋</span>
-            <span class="nav-label">나의 강의 리스트</span>
-            <span class="nav-badge" id="nav-badge-lectures">0</span>
-          </a>
-
-          <a href="calendar.html"
-             class="sidebar-nav-item active"
-             data-page="calendar.html"
-             aria-current="page">
-            <span class="nav-icon">📅</span>
-            <span class="nav-label">강의 캘린더</span>
-          </a>
-        </div>
-
-        <div class="sidebar-nav-section">
-          <div class="sidebar-nav-label">계정</div>
-          <a href="mypage.html" class="sidebar-nav-item" data-page="mypage.html">
-            <span class="nav-icon">👤</span>
-            <span class="nav-label">마이 페이지</span>
-          </a>
-        </div>
-      </nav>
-
-      <div class="sidebar-footer">
-        <button class="sidebar-nav-item" id="logout-btn"
-                style="width:100%;text-align:left;background:none;border:none;cursor:pointer;font:inherit;">
-          <span class="nav-icon">🚪</span>
-          <span class="nav-label">로그아웃</span>
-        </button>
-      </div>
-
-    </aside>
-
-    <!-- 모바일 오버레이 -->
-    <div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true"></div>
-
-
-    <!-- ════════════════════════════
-         MAIN CONTENT
-    ════════════════════════════ -->
     <div class="app-main" id="app-main">
 
-      <!-- 탑바 -->
       <header class="topbar">
         <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="메뉴 열기">☰</button>
         <nav class="topbar-breadcrumb" aria-label="현재 위치">
-          <span>강비서</span>
-          <span>›</span>
-          <span class="current">강의 캘린더</span>
+          <span>강비서</span><span>›</span><span class="current">강의 캘린더</span>
         </nav>
         <div class="topbar-right">
           <span class="topbar-date" id="topbar-date"></span>
@@ -336,450 +90,44 @@
         </div>
       </header>
 
-
-      <!-- 페이지 콘텐츠 -->
       <main class="page-content">
 
-        <!-- ── 페이지 헤더 ── -->
         <div class="calendar-page-header">
           <div>
             <h1 class="page-title">강의 캘린더</h1>
             <p class="page-subtitle">월별·주별 강의 일정을 한눈에 확인하고 관리하세요.</p>
           </div>
           <div class="calendar-page-header-right">
-            <!-- 뷰 전환 버튼 -->
             <div class="cal-view-controls" role="group" aria-label="캘린더 보기 전환">
               <button class="cal-view-btn active" id="btn-month-view" aria-pressed="true">월간</button>
               <button class="cal-view-btn"         id="btn-week-view"  aria-pressed="false">주간</button>
             </div>
-            <!-- 강의 추가 모달 열기 -->
             <button class="btn btn--primary" id="btn-add-lecture">+ 강의 추가</button>
           </div>
         </div>
 
-        <!-- ── [3] 색상 범례 (고도화 배지) ── -->
         <div class="cal-legend-row" role="list" aria-label="색상 범례">
           <span class="cal-legend-label">범례</span>
-          <div class="cal-legend-item-fc" role="listitem">
-            <span class="cal-legend-badge"
-                  style="background:#ede9fe;color:#5b21b6;border:1.5px solid #c4b5fd;">
-              💬 논의 중
-            </span>
-          </div>
-          <div class="cal-legend-item-fc" role="listitem">
-            <span class="cal-legend-badge"
-                  style="background:#0ea5e9;color:#fff;">
-              📅 강의 예정
-            </span>
-          </div>
-          <div class="cal-legend-item-fc" role="listitem">
-            <span class="cal-legend-badge"
-                  style="background:#f59e0b;color:#fff;">
-              ⏳ 준비 임박 <small style="opacity:.8;font-size:.68rem;">7일↓</small>
-            </span>
-          </div>
-          <div class="cal-legend-item-fc" role="listitem">
-            <span class="cal-legend-badge"
-                  style="background:#d1fae5;color:#065f46;border:1.5px solid #6ee7b7;">
-              🏃 행정 대기
-            </span>
-          </div>
-          <div class="cal-legend-item-fc" role="listitem">
-            <span class="cal-legend-badge"
-                  style="background:#059669;color:#fff;">
-              ✅ 진행 완료
-            </span>
-          </div>
-          <div class="cal-legend-item-fc" role="listitem">
-            <span class="cal-legend-badge"
-                  style="background:#fee2e2;color:#ef4444;border:1.5px solid #fca5a5;">
-              💰 미입금
-            </span>
-          </div>
-          <div class="cal-legend-item-fc" role="listitem">
-            <span class="cal-legend-badge"
-                  style="background:#f3f4f6;color:#9ca3af;border:1.5px dashed #d1d5db;text-decoration:line-through;">
-              ❌ 취소
-            </span>
-          </div>
+          <div class="cal-legend-item-fc" role="listitem"><span class="cal-legend-badge" style="background:#ede9fe;color:#5b21b6;border:1.5px solid #c4b5fd;">💬 논의 중</span></div>
+          <div class="cal-legend-item-fc" role="listitem"><span class="cal-legend-badge" style="background:#0ea5e9;color:#fff;">📅 강의 예정</span></div>
+          <div class="cal-legend-item-fc" role="listitem"><span class="cal-legend-badge" style="background:#f59e0b;color:#fff;">⏳ 준비 임박 <small style="opacity:.8;font-size:.68rem;">7일↓</small></span></div>
+          <div class="cal-legend-item-fc" role="listitem"><span class="cal-legend-badge" style="background:#d1fae5;color:#065f46;border:1.5px solid #6ee7b7;">🏃 행정 대기</span></div>
+          <div class="cal-legend-item-fc" role="listitem"><span class="cal-legend-badge" style="background:#059669;color:#fff;">✅ 진행 완료</span></div>
+          <div class="cal-legend-item-fc" role="listitem"><span class="cal-legend-badge" style="background:#fee2e2;color:#ef4444;border:1.5px solid #fca5a5;">💰 미입금</span></div>
+          <div class="cal-legend-item-fc" role="listitem"><span class="cal-legend-badge" style="background:#f3f4f6;color:#9ca3af;border:1.5px dashed #d1d5db;text-decoration:line-through;">❌ 취소</span></div>
         </div>
 
-        <!-- ── FullCalendar 컨테이너 ── -->
         <div class="fc-wrapper">
-          <!-- 로딩 상태 -->
-          <div id="cal-loading">
-            <div class="cal-spinner"></div>
-            <span>강의 데이터를 불러오는 중…</span>
-          </div>
-          <!-- 캘린더 마운트 포인트 -->
+          <div id="cal-loading"><div class="cal-spinner"></div><span>강의 데이터를 불러오는 중…</span></div>
           <div id="calendar"></div>
         </div>
 
       </main>
-    </div><!-- /.app-main -->
-
-  </div><!-- /.app-shell -->
-
-
-  <!-- ══════════════════════════════════════
-       통합 강의 모달 (상세 보기 + 입력 폼)
-  ══════════════════════════════════════ -->
-  <div class="modal-backdrop" id="modal-backdrop"
-       role="dialog" aria-modal="true" aria-labelledby="modal-title">
-    <div class="modal modal--unified">
-
-      <!-- ── 모달 헤더 ── -->
-      <div class="modal-header">
-        <div class="modal-title-block">
-          <h2 class="modal-title" id="modal-title">강의 상세</h2>
-          <div class="modal-meta-row" id="modal-meta-row">
-            <span class="lec-badge" id="modal-badge"></span>
-            <span class="modal-meta-item">📅 <span id="modal-date-meta"></span></span>
-            <span class="modal-meta-item">🏢 <span id="modal-client-meta"></span></span>
-          </div>
-          <p id="modal-form-subtitle" style="display:none;font-size:var(--font-size-sm);color:var(--color-text-muted);margin-top:4px;"></p>
-        </div>
-        <button class="modal-close" id="modal-close-btn" aria-label="닫기">✕</button>
-      </div>
-
-      <!-- ── 모달 바디 ── -->
-      <div class="modal-body">
-
-        <!-- ◆ 상세 보기 패널 ◆ -->
-        <div id="view-panel">
-
-          <!-- 섹션 1: 기본 정보 -->
-          <div class="modal-section">
-            <div class="modal-section-title">기본 정보</div>
-            <div class="modal-info-grid modal-info-grid--3">
-              <div class="modal-info-item">
-                <div class="modal-info-label">날짜</div>
-                <div class="modal-info-value" id="v-date"></div>
-              </div>
-              <div class="modal-info-item">
-                <div class="modal-info-label">강의 시간</div>
-                <div class="modal-info-value" id="v-time"></div>
-              </div>
-              <div class="modal-info-item">
-                <div class="modal-info-label">총 강의 시간</div>
-                <div class="modal-info-value" id="v-total-duration"></div>
-              </div>
-            </div>
-            <div class="modal-info-grid modal-info-grid--3" style="margin-top:var(--space-3)">
-              <div class="modal-info-item" style="grid-column:1/3">
-                <div class="modal-info-label">강의명</div>
-                <div class="modal-info-value modal-info-value--title" id="v-title"></div>
-              </div>
-              <div class="modal-info-item">
-                <div class="modal-info-label">강사료</div>
-                <div class="modal-info-value fee" id="v-fee"></div>
-              </div>
-            </div>
-            <div class="modal-info-grid" style="margin-top:var(--space-3)">
-              <div class="modal-info-item">
-                <div class="modal-info-label">고객사</div>
-                <div class="modal-info-value" id="v-client"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 섹션 2: 상세 정보 -->
-          <div class="modal-section">
-            <div class="modal-section-title">상세 정보</div>
-            <div class="modal-info-grid modal-info-grid--4">
-              <div class="modal-info-item">
-                <div class="modal-info-label">현재 회차</div>
-                <div class="modal-info-value" id="v-session-current"></div>
-              </div>
-              <div class="modal-info-item">
-                <div class="modal-info-label">총 회차</div>
-                <div class="modal-info-value" id="v-session-total"></div>
-              </div>
-              <div class="modal-info-item">
-                <div class="modal-info-label">수강 인원</div>
-                <div class="modal-info-value" id="v-participants"></div>
-              </div>
-              <div class="modal-info-item">
-                <div class="modal-info-label">조 편성</div>
-                <div class="modal-info-value" id="v-group-info"></div>
-              </div>
-            </div>
-            <div class="modal-info-grid" style="margin-top:var(--space-3)">
-              <div class="modal-info-item" style="grid-column:1/-1">
-                <div class="modal-info-label">강의 주제</div>
-                <div class="modal-info-value" id="v-topic"></div>
-              </div>
-            </div>
-            <div class="modal-info-grid" style="margin-top:var(--space-3)">
-              <div class="modal-info-item" style="grid-column:1/-1">
-                <div class="modal-info-label">준비물</div>
-                <div class="modal-info-value" id="v-supplies"></div>
-              </div>
-            </div>
-            <div class="modal-info-grid" style="margin-top:var(--space-3)">
-              <div class="modal-info-item">
-                <div class="modal-info-label">강의 장소</div>
-                <div class="modal-info-value" id="v-place"></div>
-              </div>
-              <div class="modal-info-item">
-                <div class="modal-info-label">주차 정보</div>
-                <div class="modal-info-value" id="v-parking"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 섹션 3: 담당자 정보 -->
-          <div class="modal-section">
-            <div class="modal-section-title">담당자 정보</div>
-            <div class="modal-manager-card">
-              <div class="modal-manager-avatar" id="v-mgr-avatar">담</div>
-              <div class="modal-manager-info">
-                <div class="modal-manager-name" id="v-mgr-name"></div>
-                <div class="modal-manager-sub" id="v-mgr-sub"></div>
-              </div>
-              <div class="modal-manager-actions">
-                <a class="modal-contact-btn" id="v-mgr-phone" href="tel:">📞 전화</a>
-                <a class="modal-contact-btn" id="v-mgr-email-link" href="mailto:">✉️ 이메일</a>
-              </div>
-            </div>
-            <div class="modal-manager-email-row">
-              <div class="modal-info-label">담당자 이메일</div>
-              <div class="modal-info-value" id="v-mgr-email-text"></div>
-            </div>
-          </div>
-
-          <!-- 섹션 4: 정산 & 행정 -->
-          <div class="modal-section">
-            <div class="modal-section-title">정산 &amp; 행정</div>
-            <div class="modal-info-grid modal-info-grid--4">
-              <div class="modal-info-item">
-                <div class="modal-info-label">진행 상태</div>
-                <div class="modal-info-value" id="v-progress"></div>
-              </div>
-              <div class="modal-info-item">
-                <div class="modal-info-label">정산 상태</div>
-                <div class="modal-info-value" id="v-paid-status"></div>
-              </div>
-              <div class="modal-info-item">
-                <div class="modal-info-label">예상 지급일</div>
-                <div class="modal-info-value" id="v-payment-date"></div>
-              </div>
-              <div class="modal-info-item">
-                <div class="modal-info-label">세금 정보</div>
-                <div class="modal-info-value" id="v-tax"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 섹션 5: 메모 -->
-          <div class="modal-section">
-            <div class="modal-section-title">메모 · 특이사항</div>
-            <div class="view-memo" id="v-memo"></div>
-          </div>
-
-        </div><!-- /#view-panel -->
-
-
-        <!-- ◆ 입력 폼 패널 ◆ -->
-        <div id="form-panel" style="display:none">
-          <form id="lec-form" novalidate>
-            <div class="add-form-sections">
-
-              <!-- ① 기본 정보 -->
-              <div>
-                <div class="add-form-section-title">기본 정보</div>
-                <div class="add-form-grid add-form-grid--4">
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-date">날짜 <span class="required">*</span></label>
-                    <input class="add-form-input" type="date" id="af-date" required />
-                  </div>
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-time-start">시작 시간 <span class="required">*</span></label>
-                    <select class="add-form-input" id="af-time-start" required></select>
-                  </div>
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-time-end">종료 시간 <span class="required">*</span></label>
-                    <select class="add-form-input" id="af-time-end" required></select>
-                  </div>
-                  <div class="add-form-field">
-                    <label class="add-form-label">총 강의 시간</label>
-                    <input class="add-form-input add-form-input--readonly" type="text" id="af-duration-computed" readonly placeholder="자동 계산" />
-                  </div>
-                </div>
-                <div class="add-form-field" style="margin-top:var(--space-3)">
-                  <label class="add-form-label" for="af-title">강의명 <span class="required">*</span></label>
-                  <input class="add-form-input" type="text" id="af-title" placeholder="예) AI 비즈니스 활용 특강" required />
-                </div>
-                <div class="add-form-grid" style="margin-top:var(--space-3)">
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-client">고객사 <span class="required">*</span></label>
-                    <input class="add-form-input" type="text" id="af-client" placeholder="예) 삼성SDS" required />
-                  </div>
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-fee">강사료 (원) <span class="required">*</span></label>
-                    <input class="add-form-input" type="number" id="af-fee" placeholder="예) 500000" min="0" required />
-                  </div>
-                </div>
-              </div>
-
-              <!-- ② 상세 정보 -->
-              <div>
-                <div class="add-form-section-title">상세 정보</div>
-                <div class="add-form-grid" style="grid-template-columns:repeat(2,1fr);gap:var(--space-3);">
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-session-current">현재 회차</label>
-                    <input class="add-form-input" type="number" id="af-session-current" placeholder="1" min="1" />
-                  </div>
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-session-total">총 회차</label>
-                    <input class="add-form-input" type="number" id="af-session-total" placeholder="4" min="1" />
-                  </div>
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-participants">수강 인원</label>
-                    <input class="add-form-input" type="number" id="af-participants" placeholder="20" min="1" />
-                  </div>
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-group-info">조 편성</label>
-                    <input class="add-form-input" type="text" id="af-group-info" placeholder="예) 5조 4명씩" />
-                  </div>
-                </div>
-                <div class="add-form-field" style="margin-top:var(--space-3)">
-                  <label class="add-form-label" for="af-topic">강의 주제</label>
-                  <input class="add-form-input" type="text" id="af-topic" placeholder="예) 리더십, 조직문화" />
-                </div>
-                <div class="add-form-field" style="margin-top:var(--space-3)">
-                  <label class="add-form-label" for="af-supplies">준비물</label>
-                  <input class="add-form-input" type="text" id="af-supplies" placeholder="예) 마커, A4용지, 스티커" />
-                </div>
-                <div class="add-form-grid" style="margin-top:var(--space-3)">
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-place">강의 장소</label>
-                    <input class="add-form-input" type="text" id="af-place" placeholder="예) 서울 강남구 SSDC 4F" />
-                  </div>
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-parking">주차 정보</label>
-                    <input class="add-form-input" type="text" id="af-parking" placeholder="예) 지하 2시간 무료" />
-                  </div>
-                </div>
-              </div>
-
-              <!-- ③ 담당자 정보 -->
-              <div>
-                <div class="add-form-section-title">담당자 정보</div>
-                <div class="add-form-grid add-form-grid--3">
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-manager-name">담당자 이름</label>
-                    <input class="add-form-input" type="text" id="af-manager-name" placeholder="예) 홍길동" />
-                  </div>
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-manager-phone">연락처</label>
-                    <input class="add-form-input" type="tel" id="af-manager-phone" placeholder="예) 010-1234-5678" />
-                  </div>
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-manager-email">담당자 이메일</label>
-                    <input class="add-form-input" type="email" id="af-manager-email" placeholder="예) hong@company.com" />
-                  </div>
-                </div>
-              </div>
-
-              <!-- ④ 정산 & 행정 -->
-              <div>
-                <div class="add-form-section-title">정산 &amp; 행정</div>
-                <div class="add-form-field">
-                  <label class="add-form-label" for="af-progress">진행 상태</label>
-                  <select class="add-form-input" id="af-progress">
-                    <option value="discussing">논의 중 — 일정·견적 조율 중</option>
-                    <option value="scheduled" selected>강의 예정 — 출강 확정</option>
-                    <option value="admin">행정 대기 — 강의 완료, 서류·정산 처리 중</option>
-                    <option value="done">진행 완료 — 서류·정산 100% 완료</option>
-                    <option value="cancelled">취소 / 드롭</option>
-                  </select>
-                </div>
-                <div class="add-form-grid add-form-grid--3" style="margin-top:var(--space-3)">
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-paid-status">정산 상태</label>
-                    <select class="add-form-input" id="af-paid-status">
-                      <option value="false">미입금</option>
-                      <option value="true">입금 완료</option>
-                    </select>
-                  </div>
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-payment-date">예상 지급일</label>
-                    <input class="add-form-input" type="date" id="af-payment-date" />
-                  </div>
-                  <div class="add-form-field">
-                    <label class="add-form-label" for="af-tax">세금 정보</label>
-                    <select class="add-form-input" id="af-tax">
-                      <option value="income3_3">사업소득 3.3%</option>
-                      <option value="income8_8">기타소득 8.8%</option>
-                      <option value="exempt">면세</option>
-                      <option value="other">기타</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <!-- ⑤ 기타 (메모) -->
-              <div>
-                <div class="add-form-section-title">기타</div>
-                <div class="add-form-field">
-                  <label class="add-form-label" for="af-memo">메모</label>
-                  <textarea class="add-form-input add-form-textarea" id="af-memo"
-                    placeholder="특이사항, 요청사항 등을 자유롭게 기록하세요." rows="3"></textarea>
-                </div>
-              </div>
-
-            </div>
-          </form>
-        </div><!-- /#form-panel -->
-
-      </div><!-- /.modal-body -->
-
-      <!-- ── 뷰 모드 푸터 ── -->
-      <div class="modal-footer" id="view-footer">
-        <div class="modal-footer-left">
-          <button class="btn--modal-delete" id="btn-modal-delete">🗑 삭제</button>
-        </div>
-        <div class="modal-footer-right">
-          <button class="btn--modal-edit" id="btn-modal-edit">✏️ 수정하기</button>
-        </div>
-      </div>
-
-      <!-- ── 폼 모드 푸터 ── -->
-      <div class="modal-footer" id="form-footer" style="display:none">
-        <div class="modal-footer-left">
-          <button class="btn--form-cancel" id="btn-form-cancel">취소</button>
-        </div>
-        <div class="modal-footer-right">
-          <button class="btn--form-submit" id="btn-form-submit">저장하기</button>
-        </div>
-      </div>
-
-    </div><!-- /.modal -->
-  </div><!-- /#modal-backdrop -->
-
-
-  <!-- ══════════════════════════════════════
-       삭제 확인 다이얼로그
-  ══════════════════════════════════════ -->
-  <div class="confirm-backdrop" id="confirm-backdrop"
-       role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
-    <div class="confirm-box">
-      <div class="confirm-icon">🗑️</div>
-      <h3 class="confirm-title" id="confirm-title">강의를 삭제하시겠어요?</h3>
-      <p class="confirm-desc">
-        삭제된 강의 데이터는 복구할 수 없습니다.<br />
-        관련 정산 내역도 함께 삭제됩니다.
-      </p>
-      <div class="confirm-actions">
-        <button class="btn--confirm-cancel" id="btn-confirm-cancel">취소</button>
-        <button class="btn--confirm-delete" id="btn-confirm-delete">삭제하기</button>
-      </div>
     </div>
-  </div><!-- /.confirm-backdrop -->
+  </div>
 
+  <!-- 모달: authGuard(withModal:true) → loadModal() 에서 동적 주입 -->
 
-  <!-- Scripts (순서 중요: common → FullCalendar → calendar module) -->
   <script src="../js/common.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
   <script type="module" src="../js/pages/calendar.js"></script>
