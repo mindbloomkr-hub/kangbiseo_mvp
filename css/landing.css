@@ -56,6 +56,7 @@
 }
 
 .header-nav .btn--primary {
+  color: #ffffff;
   padding: var(--space-2) var(--space-5);
   font-size: var(--font-size-sm);
 }
@@ -1041,6 +1042,12 @@
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-bold);
   color: var(--color-white);
+}
+
+.footer-logo img {
+  height: 40px; /* 💡 이 숫자를 변경해서 원하는 크기로 맞추세요 (예: 30px, 50px) */
+  width: auto;  /* 가로 길이는 원본 비율에 맞춰 자동으로 조절됩니다 */
+  max-width: 100%; /* 화면이 좁아졌을 때 이미지가 삐져나가는 것을 방지합니다 */
 }
 
 .footer-links {
