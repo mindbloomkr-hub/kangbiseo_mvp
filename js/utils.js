@@ -229,6 +229,56 @@ function _initSidebarBehavior() {
 }
 
 /* ════════════════════════════════════════
+   일정 충돌 검사
+════════════════════════════════════════ */
+
+// "HH:MM" 문자열을 분(minute) 단위 정수로 변환
+function timeToMin(t) {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+// 두 장소 간 이동 소요 시간(분) — 현재는 고정값 60분
+function getTravelTime(locA, locB) {
+  return 60;
+}
+
+export function checkScheduleConflict(newLec, existingLecs, settings) {
+  const newStart = timeToMin(newLec.startTime);
+  const newEnd   = timeToMin(newLec.endTime);
+
+  for (const ext of existingLecs) {
+    // 날짜가 다른 강의는 건너뜀
+    if (ext.date !== newLec.date) continue;
+
+    const extStart = timeToMin(ext.startTime);
+    const extEnd   = timeToMin(ext.endTime);
+
+    // 1. 시간 겹침: 두 구간이 실제로 겹치는 경우
+    if (newStart < extEnd && extStart < newEnd) {
+      return { status: 'danger', msg: 'overlap' };
+    }
+
+    // 새 강의가 앞이면 ext.start - new.end, 뒤이면 new.start - ext.end
+    const gap = newEnd <= extStart ? extStart - newEnd : newStart - extEnd;
+
+    // 2. 이동+세팅 시간 부족: 이동 시간과 준비 시간의 합보다 간격이 좁은 경우
+    const required = getTravelTime(newLec.place, ext.place) + (settings.setupTime || 0);
+    if (gap < required) {
+      return { status: 'danger', msg: 'transition' };
+    }
+
+    // 3. 버퍼 시간 부족: 최소 여유 시간보다 간격이 좁은 경우
+    if (gap < (settings.bufferTime || 0)) {
+      return { status: 'danger', msg: 'buffer' };
+    }
+  }
+
+  // 4. 모든 검사 통과
+  return { status: 'safe' };
+}
+
+/* ════════════════════════════════════════
    강의 모달 HTML 동적 로드 — components/modal.html fetch 후 주입
 ════════════════════════════════════════ */
 export async function loadModal() {

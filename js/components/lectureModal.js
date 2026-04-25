@@ -8,6 +8,7 @@ import {
   TAX_LABEL, PROGRESS_LABEL, STATUS_META,
   escapeHtml, formatDateKo, calcDuration, classifyStatus,
   buildTimeOptions, updateDurationDisplay, syncEndTimeOptions, initTimeSelects,
+  checkScheduleConflict,
 } from '../utils.js';
 
 /* ════════════════════════════════════════
@@ -264,6 +265,23 @@ function _bindEvents() {
       return;
     }
 
+    // 일정 충돌 검사 — 저장 전 차단
+    const { allLectures, currentUser } = _getCtx();
+    const newLec = { date, startTime: timeStart, endTime: timeEnd, place: get('af-place') };
+    const rawSettings = JSON.parse(localStorage.getItem('kangbiseo_device') ?? 'null')?.scheduler;
+    const settings    = rawSettings ?? { bufferTime: 30, setupTime: 20 };
+    const existingLecs = allLectures
+      .filter(l => l.date === date && l.id !== _editingLecId)
+      .map(l => ({ date: l.date, startTime: l.timeStart, endTime: l.timeEnd, place: l.place }));
+    const check = checkScheduleConflict(newLec, existingLecs, settings);
+    if (check.status === 'danger') {
+      window.showToast?.(check.msg, 'error');
+      return;
+    }
+    if (check.status === 'warning') {
+      if (!window.confirm(check.msg + ' 그래도 저장하시겠습니까?')) return;
+    }
+
     const submitBtn = document.getElementById('btn-form-submit');
     submitBtn.disabled    = true;
     submitBtn.textContent = '저장 중...';
@@ -291,7 +309,6 @@ function _bindEvents() {
     };
 
     try {
-      const { allLectures, currentUser } = _getCtx();
       if (_editingLecId) {
         await updateDoc(doc(db, 'lectures', _editingLecId), payload);
         window.showToast?.('강의가 수정되었습니다.', 'success');
