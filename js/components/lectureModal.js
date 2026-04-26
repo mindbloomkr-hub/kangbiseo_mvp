@@ -76,6 +76,13 @@ export function openAddModal() {
   const taxSel = document.getElementById('af-tax');
   if (taxSel) taxSel.value = 'income3_3';
 
+  // 마이페이지 기본값 적용
+  const sched = JSON.parse(localStorage.getItem('kangbiseo_device') ?? 'null')?.scheduler ?? {};
+  const setupEl  = document.getElementById('af-setup-time');
+  const wrapupEl = document.getElementById('af-wrapup-time');
+  if (setupEl)  setupEl.value  = sched.setupTime  ?? 20;
+  if (wrapupEl) wrapupEl.value = sched.wrapupTime ?? 15;
+
   _switchMode('form');
   _backdrop().classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -140,6 +147,8 @@ function _populateView(lec) {
   document.getElementById('v-participants').textContent    = lec.participants    ? `${lec.participants}명`   : '—';
   document.getElementById('v-group-info').textContent      = lec.groupInfo      || '—';
   document.getElementById('v-topic').textContent           = lec.topic          || '—';
+  document.getElementById('v-setup-time').textContent      = lec.setupTime  != null ? `${lec.setupTime}분`  : '—';
+  document.getElementById('v-wrapup-time').textContent     = lec.wrapupTime != null ? `${lec.wrapupTime}분` : '—';
   document.getElementById('v-supplies').textContent        = lec.supplies       || '—';
   document.getElementById('v-place').textContent           = lec.place          || '—';
   document.getElementById('v-parking').textContent         = lec.parkingInfo    || '—';
@@ -184,6 +193,8 @@ function _populateForm(lec) {
   set('af-participants',    lec.participants);
   set('af-group-info',      lec.groupInfo);
   set('af-topic',           lec.topic);
+  set('af-setup-time',      lec.setupTime  ?? '');
+  set('af-wrapup-time',     lec.wrapupTime ?? '');
   set('af-supplies',        lec.supplies);
   set('af-place',           lec.place);
   set('af-parking',         lec.parkingInfo);
@@ -265,21 +276,58 @@ function _bindEvents() {
       return;
     }
 
-    // 일정 충돌 검사 — 저장 전 차단
+    // 일정 충돌 검사 — 3단계 엔진
     const { allLectures, currentUser } = _getCtx();
-    const newLec = { date, startTime: timeStart, endTime: timeEnd, place: get('af-place') };
+    const newLec = {
+      date,
+      startTime:  timeStart,
+      endTime:    timeEnd,
+      place:      get('af-place'),
+      setupTime:  Number(get('af-setup-time'))  || 0,
+      wrapupTime: Number(get('af-wrapup-time')) || 0,
+    };
     const rawSettings = JSON.parse(localStorage.getItem('kangbiseo_device') ?? 'null')?.scheduler;
-    const settings    = rawSettings ?? { bufferTime: 30, setupTime: 20 };
+    const settings    = rawSettings ?? { bufferTime: 30, setupTime: 20, wrapupTime: 15 };
     const existingLecs = allLectures
       .filter(l => l.date === date && l.id !== _editingLecId)
-      .map(l => ({ date: l.date, startTime: l.timeStart, endTime: l.timeEnd, place: l.place }));
-    const check = checkScheduleConflict(newLec, existingLecs, settings);
-    if (check.status === 'danger') {
-      window.showToast?.(check.msg, 'error');
-      return;
-    }
-    if (check.status === 'warning') {
-      if (!window.confirm(check.msg + ' 그래도 저장하시겠습니까?')) return;
+      .map(l => ({
+        date:       l.date,
+        startTime:  l.timeStart,
+        endTime:    l.timeEnd,
+        place:      l.place      ?? '',
+        setupTime:  l.setupTime  ?? 0,
+        wrapupTime: l.wrapupTime ?? 0,
+      }));
+
+    const check = await checkScheduleConflict(newLec, existingLecs, settings, allLectures);
+    if (check.status === 'risk') {
+      const intro = check.step === 1
+        ? '⚠️ 기존 강의와 시간이 겹칩니다.'
+        : check.step === 2
+          ? `⚠️ 전후 강의 간격(${check.pureGap}분)이 최소 버퍼(${check.bMin}분)보다 짧습니다.`
+          : `⚠️ 이동 시간(${check.travelMin}분) 포함 시 강의 간 간격이 부족합니다.`;
+
+      const { alternatives: alt } = check;
+      let msg = intro + '\n\n📅 추천 대안 일정:';
+      let hasAlt = false;
+
+      if (alt?.optionA?.length) {
+        hasAlt = true;
+        msg += '\n\n【같은 날 빈 슬롯】';
+        alt.optionA.slice(0, 3).forEach(s => { msg += `\n  • ${s.startTime} ~ ${s.endTime}`; });
+      }
+      if (alt?.optionB?.length) {
+        hasAlt = true;
+        msg += '\n\n【전날 / 다음날】';
+        alt.optionB.forEach(s => { msg += `\n  • ${s.date}  ${s.startTime} ~ ${s.endTime}`; });
+      }
+      if (alt?.optionC) {
+        hasAlt = true;
+        msg += `\n\n【다음 주 같은 시간】\n  • ${alt.optionC.date}  ${alt.optionC.startTime} ~ ${alt.optionC.endTime}`;
+      }
+      if (!hasAlt) msg += '\n  (대안 슬롯 없음)';
+
+      if (!window.confirm(msg + '\n\n그래도 저장하시겠습니까?')) return;
     }
 
     const submitBtn = document.getElementById('btn-form-submit');
@@ -297,6 +345,8 @@ function _bindEvents() {
       participants:   Number(get('af-participants'))     || null,
       groupInfo:      get('af-group-info'),
       topic:          get('af-topic'),
+      setupTime:      Number(get('af-setup-time'))  || 0,
+      wrapupTime:     Number(get('af-wrapup-time')) || 0,
       supplies:       get('af-supplies'),
       place:          get('af-place'),
       parkingInfo:    get('af-parking'),

@@ -46,6 +46,10 @@
             <div class="modal-info-item" style="grid-column:1/-1"><div class="modal-info-label">강의 주제</div><div class="modal-info-value" id="v-topic"></div></div>
           </div>
           <div class="modal-info-grid" style="margin-top:var(--space-3)">
+            <div class="modal-info-item"><div class="modal-info-label">현장 준비 시간</div><div class="modal-info-value" id="v-setup-time"></div></div>
+            <div class="modal-info-item"><div class="modal-info-label">현장 정리 시간</div><div class="modal-info-value" id="v-wrapup-time"></div></div>
+          </div>
+          <div class="modal-info-grid" style="margin-top:var(--space-3)">
             <div class="modal-info-item" style="grid-column:1/-1"><div class="modal-info-label">준비물</div><div class="modal-info-value" id="v-supplies"></div></div>
           </div>
           <div class="modal-info-grid" style="margin-top:var(--space-3)">
@@ -113,6 +117,10 @@
                 <div class="add-form-field"><label class="add-form-label" for="af-group-info">조 편성</label><input class="add-form-input" type="text" id="af-group-info" placeholder="예) 5조 4명씩" /></div>
               </div>
               <div class="add-form-field" style="margin-top:var(--space-3)"><label class="add-form-label" for="af-topic">강의 주제</label><input class="add-form-input" type="text" id="af-topic" placeholder="예) 리더십, 조직문화" /></div>
+              <div class="add-form-grid" style="grid-template-columns:repeat(2,1fr);gap:var(--space-3);margin-top:var(--space-3);">
+                <div class="add-form-field"><label class="add-form-label" for="af-setup-time">현장 준비 시간 (분)</label><input class="add-form-input" type="number" id="af-setup-time" placeholder="20" min="0" max="120" /></div>
+                <div class="add-form-field"><label class="add-form-label" for="af-wrapup-time">현장 정리 시간 (분)</label><input class="add-form-input" type="number" id="af-wrapup-time" placeholder="15" min="0" max="120" /></div>
+              </div>
               <div class="add-form-field" style="margin-top:var(--space-3)"><label class="add-form-label" for="af-supplies">준비물</label><input class="add-form-input" type="text" id="af-supplies" placeholder="예) 마커, A4용지, 스티커" /></div>
               <div class="add-form-grid" style="margin-top:var(--space-3)">
                 <div class="add-form-field"><label class="add-form-label" for="af-place">강의 장소</label><input class="add-form-input" type="text" id="af-place" placeholder="예) 서울 강남구 SSDC 4F" /></div>

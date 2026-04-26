@@ -229,52 +229,206 @@ function _initSidebarBehavior() {
 }
 
 /* ════════════════════════════════════════
-   일정 충돌 검사
+   일정 충돌 검사 — 3단계 엔진 + 대안 제안
 ════════════════════════════════════════ */
 
-// "HH:MM" 문자열을 분(minute) 단위 정수로 변환
+const KAKAO_REST_KEY  = '3a6251b3b44aa4f72388859b4771cf4a';
+const _geocodeCache   = new Map();
+const _travelCache    = new Map();
+
+// "HH:MM" → 분(number)
 function timeToMin(t) {
-  const [h, m] = t.split(':').map(Number);
+  const [h, m] = (t || '00:00').split(':').map(Number);
   return h * 60 + m;
 }
 
-// 두 장소 간 이동 소요 시간(분) — 현재는 고정값 60분
-function getTravelTime(locA, locB) {
-  return 60;
+// 분(number) → "HH:MM"
+function _minToTime(min) {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-export function checkScheduleConflict(newLec, existingLecs, settings) {
-  const newStart = timeToMin(newLec.startTime);
-  const newEnd   = timeToMin(newLec.endTime);
+// YYYY-MM-DD + days → YYYY-MM-DD
+function _offsetDate(dateStr, days) {
+  const [y, mo, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, mo - 1, d + days);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
 
-  for (const ext of existingLecs) {
-    // 날짜가 다른 강의는 건너뜀
-    if (ext.date !== newLec.date) continue;
+// Kakao Local API: 주소 → { x(lng), y(lat) }
+async function _geocode(addr) {
+  if (!addr?.trim()) return null;
+  const key = addr.trim();
+  if (_geocodeCache.has(key)) return _geocodeCache.get(key);
+  try {
+    const r = await fetch(
+      `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(key)}`,
+      { headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` } }
+    );
+    const j   = await r.json();
+    const doc = j.documents?.[0];
+    const val = doc ? { x: parseFloat(doc.x), y: parseFloat(doc.y) } : null;
+    _geocodeCache.set(key, val);
+    return val;
+  } catch { _geocodeCache.set(key, null); return null; }
+}
 
-    const extStart = timeToMin(ext.startTime);
-    const extEnd   = timeToMin(ext.endTime);
+// Kakao Navi API: 두 장소 간 이동 소요 시간(분), 실패 시 null
+async function _fetchTravelMin(placeA, placeB) {
+  const a = placeA?.trim() || '';
+  const b = placeB?.trim() || '';
+  if (!a || !b || a === b) return 0;
+  const cacheKey = a < b ? `${a}|||${b}` : `${b}|||${a}`;
+  if (_travelCache.has(cacheKey)) return _travelCache.get(cacheKey);
+  try {
+    const [orig, dest] = await Promise.all([_geocode(a), _geocode(b)]);
+    if (!orig || !dest) { _travelCache.set(cacheKey, null); return null; }
+    const r = await fetch(
+      `https://apis-navi.kakaomobility.com/v1/directions?origin=${orig.x},${orig.y}&destination=${dest.x},${dest.y}`,
+      { headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` } }
+    );
+    const j    = await r.json();
+    const secs = j.routes?.[0]?.summary?.duration;
+    const val  = secs != null ? Math.ceil(secs / 60) : null;
+    _travelCache.set(cacheKey, val);
+    return val;
+  } catch { _travelCache.set(cacheKey, null); return null; }
+}
 
-    // 1. 시간 겹침: 두 구간이 실제로 겹치는 경우
-    if (newStart < extEnd && extStart < newEnd) {
-      return { status: 'danger', msg: 'overlap' };
-    }
+// Firestore 형식(timeStart/timeEnd) 또는 정규화 형식(startTime/endTime) 통일
+function _normLec(l) {
+  return {
+    date:       l.date       ?? '',
+    startTime:  l.startTime  ?? l.timeStart  ?? '',
+    endTime:    l.endTime    ?? l.timeEnd    ?? '',
+    place:      l.place      ?? '',
+    setupTime:  l.setupTime  ?? 0,
+    wrapupTime: l.wrapupTime ?? 0,
+  };
+}
 
-    // 새 강의가 앞이면 ext.start - new.end, 뒤이면 new.start - ext.end
-    const gap = newEnd <= extStart ? extStart - newEnd : newStart - extEnd;
+// 해당 날 강의 목록에서 startTime~endTime 슬롯이 빈 지 확인
+function _isSlotFree(lecs, startTime, endTime) {
+  const s = timeToMin(startTime), e = timeToMin(endTime);
+  return !lecs.some(l => {
+    const n = _normLec(l);
+    return Math.max(s, timeToMin(n.startTime)) < Math.min(e, timeToMin(n.endTime));
+  });
+}
 
-    // 2. 이동+세팅 시간 부족: 이동 시간과 준비 시간의 합보다 간격이 좁은 경우
-    const required = getTravelTime(newLec.place, ext.place) + (settings.setupTime || 0);
-    if (gap < required) {
-      return { status: 'danger', msg: 'transition' };
-    }
+// 같은 날 빈 슬롯 탐색 — Available Gap >= bMin + D + newDur
+function _findSameDaySlots(date, sameDayLecs, newDur, bMin, D) {
+  const overhead  = bMin + D;
+  const required  = overhead + newDur;
+  const DAY_START = timeToMin('07:00');
+  const DAY_END   = timeToMin('22:00');
 
-    // 3. 버퍼 시간 부족: 최소 여유 시간보다 간격이 좁은 경우
-    if (gap < (settings.bufferTime || 0)) {
-      return { status: 'danger', msg: 'buffer' };
+  const sorted = [...sameDayLecs]
+    .map(_normLec)
+    .filter(l => l.startTime && l.endTime)
+    .sort((a, b) => timeToMin(a.startTime) - timeToMin(b.startTime));
+
+  const gaps = [];
+  let cursor = DAY_START;
+  for (const l of sorted) {
+    const ls = timeToMin(l.startTime), le = timeToMin(l.endTime);
+    if (ls > cursor) gaps.push({ start: cursor, end: ls });
+    cursor = Math.max(cursor, le);
+  }
+  if (cursor < DAY_END) gaps.push({ start: cursor, end: DAY_END });
+
+  return gaps
+    .filter(g => (g.end - g.start) >= required)
+    .map(g => ({
+      date,
+      startTime: _minToTime(g.start + overhead),
+      endTime:   _minToTime(g.start + overhead + newDur),
+    }));
+}
+
+// 충돌 발생 시 대안 일정 3가지 생성
+async function _buildAlternatives(newLec, sameDayLecs, settings, allLectures, D) {
+  const globalBuffer  = settings.bufferTime  || 30;
+  const defaultSetup  = settings.setupTime   || 0;
+  const defaultWrapup = settings.wrapupTime  || 0;
+  const newDur        = timeToMin(newLec.endTime) - timeToMin(newLec.startTime);
+  const bMin          = defaultWrapup + globalBuffer + (newLec.setupTime ?? defaultSetup);
+
+  // Option A: 같은 날 빈 슬롯
+  const optionA = _findSameDaySlots(newLec.date, sameDayLecs, newDur, bMin, D);
+
+  // Option B: 전날 / 다음날 — 동일 시간대가 비어 있는지 확인
+  const optionB = [];
+  for (const delta of [-1, 1]) {
+    const d    = _offsetDate(newLec.date, delta);
+    const lecs = allLectures.filter(l => (l.date ?? '') === d);
+    if (_isSlotFree(lecs, newLec.startTime, newLec.endTime)) {
+      optionB.push({ date: d, startTime: newLec.startTime, endTime: newLec.endTime });
     }
   }
 
-  // 4. 모든 검사 통과
+  // Option C: 다음 주 같은 시간대
+  const nextWeek = _offsetDate(newLec.date, 7);
+  const nwLecs   = allLectures.filter(l => (l.date ?? '') === nextWeek);
+  const optionC  = _isSlotFree(nwLecs, newLec.startTime, newLec.endTime)
+    ? { date: nextWeek, startTime: newLec.startTime, endTime: newLec.endTime }
+    : null;
+
+  return { alternatives: { optionA, optionB, optionC } };
+}
+
+/* ─── 공개 API ─────────────────────────────────────────── */
+export async function checkScheduleConflict(newLec, sameDayLecs, settings, allLectures = []) {
+  const newStart      = timeToMin(newLec.startTime);
+  const newEnd        = timeToMin(newLec.endTime);
+  const globalBuffer  = settings.bufferTime  || 30;
+  const defaultSetup  = settings.setupTime   || 0;
+  const defaultWrapup = settings.wrapupTime  || 0;
+
+  const sorted = [...sameDayLecs]
+    .map(l => ({ ...l, _s: timeToMin(l.startTime), _e: timeToMin(l.endTime) }))
+    .sort((a, b) => a._s - b._s);
+
+  for (const ext of sorted) {
+    // ── Step 1: 직접 겹침 ──────────────────────────────
+    if (Math.max(newStart, ext._s) < Math.min(newEnd, ext._e)) {
+      const D    = (await _fetchTravelMin(newLec.place, ext.place)) ?? 60;
+      const alts = await _buildAlternatives(newLec, sameDayLecs, settings, allLectures, D);
+      return { status: 'risk', step: 1, msg: 'overlap', travelMin: D, ...alts };
+    }
+
+    // prev / next 판별
+    const isPrevNew     = newEnd <= ext._s;
+    const prevEnd       = isPrevNew ? newEnd   : ext._e;
+    const nextStart     = isPrevNew ? ext._s   : newStart;
+    const prevPlace     = isPrevNew ? newLec.place : ext.place;
+    const nextPlace     = isPrevNew ? ext.place    : newLec.place;
+    const prevWrapup    = isPrevNew ? (newLec.wrapupTime ?? defaultWrapup) : (ext.wrapupTime ?? defaultWrapup);
+    const nextSetup     = isPrevNew ? (ext.setupTime  ?? defaultSetup)     : (newLec.setupTime ?? defaultSetup);
+    const pureGap       = nextStart - prevEnd;
+
+    const samePlace = prevPlace?.trim() !== '' && prevPlace?.trim() === nextPlace?.trim();
+    const bMin      = samePlace
+      ? prevWrapup + nextSetup
+      : prevWrapup + globalBuffer + nextSetup;
+
+    // ── Step 2: Pure Gap < B_min (API 없이 판단) ───────
+    if (pureGap < bMin) {
+      const D    = (await _fetchTravelMin(prevPlace, nextPlace)) ?? 60;
+      const alts = await _buildAlternatives(newLec, sameDayLecs, settings, allLectures, D);
+      return { status: 'risk', step: 2, msg: 'buffer', bMin, pureGap, travelMin: D, ...alts };
+    }
+
+    // ── Step 3: API 이동시간 포함 재판단 ───────────────
+    const travelMin = await _fetchTravelMin(prevPlace, nextPlace);
+    const D         = travelMin ?? 60;
+    if (pureGap < D + bMin) {
+      const alts = await _buildAlternatives(newLec, sameDayLecs, settings, allLectures, D);
+      return { status: 'risk', step: 3, msg: 'travel', bMin, pureGap, travelMin: D, ...alts };
+    }
+  }
+
   return { status: 'safe' };
 }
 

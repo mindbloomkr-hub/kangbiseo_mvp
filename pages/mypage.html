@@ -255,27 +255,34 @@
                   </div>
                 </div>
 
-                <!-- 강의 준비 시간 -->
+                <!-- 현장 준비 시간 -->
                 <div class="scheduler-setting-row">
                   <div class="scheduler-row-header">
-                    <span class="scheduler-row-title">강의 준비 시간</span>
+                    <span class="scheduler-row-title">현장 준비 시간 (기본값)</span>
                   </div>
-                  <p class="scheduler-row-sub">현장 도착 후 세팅에 필요한 시간입니다.</p>
-
-                  <div class="radio-chip-group" role="radiogroup" aria-label="강의 준비 시간 선택">
-                    <input class="radio-chip" type="radio" name="setup-time"
-                           id="setup-10" value="10" />
-                    <label class="radio-chip-label" for="setup-10">10분</label>
-
-                    <input class="radio-chip" type="radio" name="setup-time"
-                           id="setup-20" value="20" checked />
-                    <label class="radio-chip-label" for="setup-20">20분</label>
-
-                    <input class="radio-chip" type="radio" name="setup-time"
-                           id="setup-30" value="30" />
-                    <label class="radio-chip-label" for="setup-30">30분</label>
+                  <p class="scheduler-row-sub">강의 시작 전 현장 도착 후 세팅에 필요한 시간입니다.</p>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <input class="mp-input" type="number" id="setup-time-input"
+                           min="0" max="120" step="5" value="20"
+                           style="width:90px;" aria-label="현장 준비 시간 (분)" />
+                    <span style="font-size:var(--font-size-sm);color:var(--color-text-muted);">분</span>
                   </div>
                 </div>
+
+                <!-- 현장 정리 시간 -->
+                <div class="scheduler-setting-row">
+                  <div class="scheduler-row-header">
+                    <span class="scheduler-row-title">현장 정리 시간 (기본값)</span>
+                  </div>
+                  <p class="scheduler-row-sub">강의 종료 후 현장 정리에 필요한 시간입니다.</p>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <input class="mp-input" type="number" id="wrapup-time-input"
+                           min="0" max="120" step="5" value="15"
+                           style="width:90px;" aria-label="현장 정리 시간 (분)" />
+                    <span style="font-size:var(--font-size-sm);color:var(--color-text-muted);">분</span>
+                  </div>
+                </div>
+
 
                 <!-- 주차 알림 토글 (자차 선택 시 활성화) -->
                 <div class="scheduler-setting-row" id="parking-toggle-row">

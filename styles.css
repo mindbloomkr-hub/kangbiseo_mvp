@@ -516,3 +516,28 @@ body {
   .hero-gradient { padding: 5rem 1rem 4rem; }
   .modal-box     { margin: 1rem; border-radius: 16px; }
 }
+
+/* 배경(Overlay)과 상자(Box) 모두에게 적용될 수 있는 설정 */
+.modal-overlay, .modal-backdrop, .modal-container {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background-color: rgba(0, 0, 0, 0.7) !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    z-index: 99999 !important;
+}
+
+/* 실제 하얀 상자 부분 */
+.modal-box, .modal-content, .modal-inner {
+    background: white !important;
+    padding: 30px !important;
+    border-radius: 12px !important;
+    width: 90% !important;
+    max-width: 450px !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3) !important;
+    color: #333 !important; /* 글자색이 안 보일 때를 대비 */
+}

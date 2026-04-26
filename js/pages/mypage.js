@@ -19,6 +19,7 @@ const DEFAULT_DEVICE = {
     bufferTime:   30,
     bufferCustom: 45,
     setupTime:    20,
+    wrapupTime:   15,
     parkingAlert: true,
   },
   settlement: {
@@ -105,8 +106,10 @@ async function loadFirebaseProfile(uid) {
         ? Math.max(...fbTopics.map(t => t.id)) + 1 : 1;
       setVal('profile-slogan',    d.slogan   || '');
       setVal('profile-bio',       d.bio      || '');
-      /* [10] 닉네임 로드 */
       setVal('profile-nickname',  d.nickname || '');
+      // Firestore 저장값이 있으면 기기 설정보다 우선 적용
+      if (d.setupTime  != null) device.scheduler.setupTime  = Number(d.setupTime);
+      if (d.wrapupTime != null) device.scheduler.wrapupTime = Number(d.wrapupTime);
     } else {
       fbKeywords = []; fbTopics = [];
     }
@@ -222,8 +225,10 @@ function initScheduler() {
   });
   const customInput = document.getElementById('buffer-custom-value');
   if (customInput) customInput.value = s.bufferCustom;
-  const setupRadio = document.querySelector(`input[name="setup-time"][value="${s.setupTime}"]`);
-  if (setupRadio) setupRadio.checked = true;
+  const setupInput = document.getElementById('setup-time-input');
+  if (setupInput) setupInput.value = s.setupTime ?? 20;
+  const wrapupInput = document.getElementById('wrapup-time-input');
+  if (wrapupInput) wrapupInput.value = s.wrapupTime ?? 15;
   const parkingCb = document.getElementById('parking-alert');
   if (parkingCb) parkingCb.checked = s.parkingAlert;
   updateParkingRow(s.transport);
@@ -634,12 +639,14 @@ function initFloatingSave() {
       updateSidebarUI(nickname || currentUser?.displayName || '강사');
 
       await setDoc(doc(db, 'users', currentUser.uid), {
-        slogan:    getVal('profile-slogan'),
-        bio:       getVal('profile-bio'),
+        slogan:     getVal('profile-slogan'),
+        bio:        getVal('profile-bio'),
         nickname,
-        keywords:  fbKeywords,
-        topics:    fbTopics,
-        updatedAt: serverTimestamp(),
+        keywords:   fbKeywords,
+        topics:     fbTopics,
+        setupTime:  device.scheduler.setupTime,
+        wrapupTime: device.scheduler.wrapupTime,
+        updatedAt:  serverTimestamp(),
       }, { merge: true });
 
       btn.classList.add('saved');
@@ -669,8 +676,10 @@ function collectDeviceValues() {
       device.scheduler.bufferTime = Number(bufRadio.value);
     }
   }
-  const setupRadio = document.querySelector('input[name="setup-time"]:checked');
-  if (setupRadio) device.scheduler.setupTime = Number(setupRadio.value);
+  const setupInput = document.getElementById('setup-time-input');
+  if (setupInput) device.scheduler.setupTime = Number(setupInput.value) || 0;
+  const wrapupInput = document.getElementById('wrapup-time-input');
+  if (wrapupInput) device.scheduler.wrapupTime = Number(wrapupInput.value) || 0;
   const parkingCb = document.getElementById('parking-alert');
   if (parkingCb)  device.scheduler.parkingAlert = parkingCb.checked;
 

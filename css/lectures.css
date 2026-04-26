@@ -368,33 +368,39 @@
    MODAL (상세 팝업)
 ════════════════════════════════ */
 .modal-backdrop {
-  position: fixed;
-  inset: 0;
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
   background: rgba(0, 0, 0, 0.45);
-  z-index: var(--z-overlay);
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--space-6);
   opacity: 0;
   visibility: hidden;
+  pointer-events: none;
   transition: opacity var(--transition-base), visibility var(--transition-base);
 }
 
 .modal-backdrop.open {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
 }
 
 .modal {
   background: var(--color-white);
   border-radius: var(--radius-2xl);
-  width: 100%;
-  max-width: 680px;
-  max-height: 90vh;
+  width: 95%;
+  max-width: 500px;
+  max-height: 85vh;
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-xl);
+  box-sizing: border-box;
   transform: translateY(16px) scale(0.98);
   transition: transform var(--transition-base);
   overflow: hidden;
@@ -778,12 +784,14 @@
   padding: var(--space-6);
   opacity: 0;
   visibility: hidden;
+  pointer-events: none;
   transition: opacity var(--transition-fast), visibility var(--transition-fast);
 }
 
 .confirm-backdrop.open {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
 }
 
 .confirm-box {
@@ -1083,8 +1091,8 @@
    RESPONSIVE
 ════════════════════════════════ */
 @media (max-width: 768px) {
-  .modal { max-width: 100%; border-radius: var(--radius-xl) var(--radius-xl) 0 0; }
-  .modal-backdrop { align-items: flex-end; padding: 0; }
+  .modal { max-width: 95%; border-radius: var(--radius-xl); }
+  .modal-backdrop { align-items: center; padding: var(--space-4); }
   .modal-info-grid { grid-template-columns: 1fr; }
   .modal-info-grid--3 { grid-template-columns: 1fr 1fr; }
   .modal-info-grid--4 { grid-template-columns: 1fr 1fr; }
@@ -1092,4 +1100,13 @@
   .doc-status-grid { grid-template-columns: repeat(3, 1fr); }
   .modal-header, .modal-body, .modal-footer { padding-inline: var(--space-5); }
   .lectures-header { flex-direction: column; }
+}
+
+@media (max-width: 480px) {
+  .modal { max-height: 85vh; }
+  .modal-header, .modal-body, .modal-footer { padding-inline: var(--space-4); }
+  .modal-header { padding-block: var(--space-4); }
+  .modal-footer { padding-block: var(--space-4); }
+  .modal-title { font-size: var(--font-size-base); }
+  .modal-body { gap: var(--space-4); }
 }

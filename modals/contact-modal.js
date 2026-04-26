@@ -4,6 +4,10 @@
 // props: onClose
 // ============================================================
 
+// 1. 없는 아이콘을 간단한 텍스트나 SVG로 대체 정의 (임시방편)
+const XIcon = () => React.createElement('span', { style: { fontSize: '20px', fontWeight: 'bold' } }, '×');
+const SendIcon = () => React.createElement('span', null, '✈️'); // 혹시 전송 아이콘도 없다면 대비
+
 window.ContactModal = function ContactModal({ onClose }) {
   var [name,    setName]    = React.useState('');
   var [email,   setEmail]   = React.useState('');
@@ -15,14 +19,40 @@ window.ContactModal = function ContactModal({ onClose }) {
     if (e.target === e.currentTarget) onClose();
   }
 
-  function handleSubmit(e) {
-    e.preventDefault();
-    setLoading(true);
-    setTimeout(function() {
-      setLoading(false);
-      setSent(true);
-    }, 1200);
-  }
+  async function handleSubmit(e) {
+      e.preventDefault();
+      setLoading(true);
+
+      try {
+        // 1. Firebase Firestore에 저장
+        await window.addDoc(window.collection(window.db, "contacts"), {
+          name: name,
+          email: email,
+          message: message,
+          timestamp: window.serverTimestamp()
+        });
+
+        // 2. EmailJS로 메일 발송  
+        await emailjs.send(
+          "service_pwwd65q",
+          "template_mz7qmvc",
+          {
+            from_name: name,
+            from_email: email,
+            message: message
+          },
+          "xuhCaxPrcaS7xO6we"
+        );
+
+        setLoading(false);
+        setSent(true); // 성공 화면으로 전환
+
+      } catch (error) {
+        console.error("전송 에러:", error);
+        alert("전송 중 오류가 발생했습니다: " + error.message);
+        setLoading(false);
+      }
+    }
 
   return (
     <div className="modal-overlay" onClick={handleOverlayClick}>
@@ -47,12 +77,15 @@ window.ContactModal = function ContactModal({ onClose }) {
             <p className="text-slate-500 text-sm mb-6">
               영업일 1~2일 내에 이메일로 답변 드리겠습니다.
             </p>
-            <button
-              onClick={onClose}
-              className="btn-primary px-6 py-2.5 rounded-xl text-sm font-semibold text-white"
-            >
-              확인
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1.5rem' }}>
+              <button 
+                onClick={onClose} 
+                className="btn btn--primary"
+                style={{ minWidth: '100px' }}
+              >
+                확인
+              </button>
+            </div>
           </div>
         ) : (
           <>
@@ -101,16 +134,16 @@ window.ContactModal = function ContactModal({ onClose }) {
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn-primary w-full py-3.5 rounded-xl font-bold text-white
-                  flex items-center justify-center gap-2 disabled:opacity-60"
-              >
-                {loading
-                  ? <><SpinnerIcon size={18} /> 전송 중...</>
-                  : '문의 보내기'}
-              </button>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+                <button 
+                  type="submit" 
+                  className="btn btn--primary" 
+                  disabled={loading}
+                  style={{ minWidth: '120px' }} // 버튼이 너무 작아 보이면 최소 너비를 살짝 줍니다
+                >
+                  {loading ? '전송 중...' : '문의 보내기'}
+                </button>
+              </div>
             </form>
           </>
         )}
