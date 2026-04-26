@@ -32,7 +32,20 @@ window.ContactModal = function ContactModal({ onClose }) {
           timestamp: window.serverTimestamp()
         });
 
-        // 2. EmailJS로 메일 발송  
+
+        // 1. 대표님(관리자)에게 알림 메일 쏘기
+        await emailjs.send(
+          "service_pwwd65q", 
+          "template_rp8powo", 
+          {
+            from_name: name,
+            from_email: email,
+            message: message
+          },
+          "xuhCaxPrcaS7xO6we"
+        );
+
+        // 2. 문의한 사람에게 자동 답장 쏘기
         await emailjs.send(
           "service_pwwd65q",
           "template_mz7qmvc",
