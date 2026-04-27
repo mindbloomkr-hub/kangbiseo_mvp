@@ -342,6 +342,12 @@ function _injectReviewStyles() {
 .lm-rv-btn--back:hover:not(:disabled){background:#0f172a}
 .lm-rv-btn--pending{background:#fff7ed;color:#c2410c;border:1.5px solid #fed7aa}
 .lm-rv-btn--pending:hover:not(:disabled){background:#ffedd5}
+.lm-rv-head--ok{background:#16a34a}
+.lm-rv-delay--ok{background:#f0fdf4;border-color:#86efac}
+.lm-rv-delay-label--ok{color:#166534}
+.lm-rv-delay-value--ok{color:#16a34a}
+.lm-rv-btn--confirm{background:#16a34a;color:#fff}
+.lm-rv-btn--confirm:hover:not(:disabled){background:#15803d}
   `;
   document.head.appendChild(s);
 }
@@ -397,10 +403,10 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
   bd.setAttribute('aria-modal', 'true');
   bd.innerHTML = `
     <div class="lm-rv-modal">
-      <div class="lm-rv-head">
+      <div class="lm-rv-head${delay <= 0 ? ' lm-rv-head--ok' : ''}">
         <div>
-          <h2>⚠️ 일정 충돌 검토</h2>
-          <p class="lm-rv-head-sub">${escapeHtml(stepLabel)}</p>
+          <h2>${delay <= 0 ? '✅ finish2' : '⚠️ 일정 충돌 검토'}</h2>
+          <p class="lm-rv-head-sub">${delay <= 0 ? 'okok' : escapeHtml(stepLabel)}</p>
         </div>
         <button class="lm-rv-x" id="lm-rv-x" aria-label="닫기">✕</button>
       </div>
@@ -438,16 +444,19 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
             <span>⏳ 실제 확보된 여유</span>
             <span class="v">${actGap}분 확보</span>
           </div>
-          <div class="lm-rv-delay">
-            <span class="lm-rv-delay-label">🚩 최종 지연 예상</span>
-            <span class="lm-rv-delay-value">${delay > 0 ? `${delay}분 부족` : '여유 충족'}</span>
+          <div class="lm-rv-delay${delay <= 0 ? ' lm-rv-delay--ok' : ''}">
+            <span class="lm-rv-delay-label${delay <= 0 ? ' lm-rv-delay-label--ok' : ''}">${delay <= 0 ? 'finish' : '🚩 최종 지연 예상'}</span>
+            <span class="lm-rv-delay-value${delay <= 0 ? ' lm-rv-delay-value--ok' : ''}">${delay > 0 ? `${delay}분 부족` : 'OK'}</span>
           </div>
         </div>
       </div>
 
       <div class="lm-rv-foot">
-        <button class="lm-rv-btn lm-rv-btn--back"    id="lm-rv-back">← 수정하기</button>
-        <button class="lm-rv-btn lm-rv-btn--pending" id="lm-rv-pending">보류로 저장</button>
+        ${delay > 0
+          ? `<button class="lm-rv-btn lm-rv-btn--back" id="lm-rv-back">← 수정하기</button>
+             <button class="lm-rv-btn lm-rv-btn--pending" id="lm-rv-pending">보류로 저장</button>`
+          : `<button class="lm-rv-btn lm-rv-btn--confirm" id="lm-rv-confirm">확인 후 등록</button>`
+        }
       </div>
     </div>`;
 
@@ -456,17 +465,28 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
   document.body.style.overflow = 'hidden';
 
   document.getElementById('lm-rv-x').addEventListener('click', _closeReviewModal);
-  document.getElementById('lm-rv-back').addEventListener('click', _closeReviewModal);
   bd.addEventListener('click', e => { if (e.target === bd) _closeReviewModal(); });
 
-  document.getElementById('lm-rv-pending').addEventListener('click', async () => {
-    const btn = document.getElementById('lm-rv-pending');
-    btn.disabled    = true;
-    btn.textContent = '저장 중...';
-    await _doSave({ ...payload, progressStatus: 'discussing' }, currentUser, null);
-    _closeReviewModal();
-    _closeModal();
-  });
+  if (delay > 0) {
+    document.getElementById('lm-rv-back').addEventListener('click', _closeReviewModal);
+    document.getElementById('lm-rv-pending').addEventListener('click', async () => {
+      const btn = document.getElementById('lm-rv-pending');
+      btn.disabled    = true;
+      btn.textContent = '저장 중...';
+      await _doSave({ ...payload, progressStatus: 'discussing' }, currentUser, null);
+      _closeReviewModal();
+      _closeModal();
+    });
+  } else {
+    document.getElementById('lm-rv-confirm').addEventListener('click', async () => {
+      const btn = document.getElementById('lm-rv-confirm');
+      btn.disabled    = true;
+      btn.textContent = '저장 중...';
+      await _doSave(payload, currentUser, null);
+      _closeReviewModal();
+      _closeModal();
+    });
+  }
 }
 
 function _closeReviewModal() {
