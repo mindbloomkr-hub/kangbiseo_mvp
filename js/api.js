@@ -21,7 +21,8 @@ export const auth           = getAuth(app);
 export const db             = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
-googleProvider.addScope('https://www.googleapis.com/auth/calendar.readonly');
+googleProvider.addScope('email profile openid');
+//googleProvider.addScope('https://www.googleapis.com/auth/calendar.readonly');
 
 /* ════════════════════════════════════════
    구글 캘린더 API

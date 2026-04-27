@@ -104,7 +104,7 @@ pwInput?.addEventListener('input', () => {
    유효성 검사
 ════════════════════════════════════════ */
 const VALIDATORS = {
-  userId:   v => /^[a-zA-Z0-9_]{4,20}$/.test(v) ? null : '영문·숫자·_만 사용, 4~20자 이내로 입력해 주세요.',
+  userId:   v => /^[a-zA-Z0-9_]{4,20}$/.test(v) ? null : '영문·숫자만 사용, 4~20자 이내로 입력해 주세요.',
   email:    v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? null : '올바른 이메일 형식을 입력해 주세요.',
   tel:      v => /^01[0-9]{8,9}$/.test(v.replace(/-/g, '')) ? null : '올바른 휴대폰 번호를 입력해 주세요.',
   name:     v => v.trim().length >= 2 ? null : '이름은 2자 이상 입력해 주세요.',
