@@ -35,6 +35,13 @@
   color: var(--color-primary-500);
 }
 
+.header-logo img {
+  width: 10px;      /* 👈 로고 가로 크기 (원하는 대로 조절) */
+  height: auto;     /* 비율 유지 */
+  display: block;   /* 하단 미세 공백 제거 */
+  object-fit: contain; /* 이미지 찌그러짐 방지 */
+}
+
 .header-nav {
   display: flex;
   align-items: center;

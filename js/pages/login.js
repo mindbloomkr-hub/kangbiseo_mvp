@@ -26,6 +26,7 @@ onAuthStateChanged(auth, user => {
 const tabBtns    = document.querySelectorAll('.auth-tab-btn');
 const loginForm  = document.getElementById('form-login');
 const signupForm = document.getElementById('form-signup');
+console.log('폼 요소 확인:', signupForm);
 const formHeader = document.getElementById('form-header');
 
 /* ════════════════════════════════════════
@@ -148,7 +149,7 @@ fieldMap.forEach(({ id, type }) => {
 ════════════════════════════════════════ */
 loginForm?.addEventListener('submit', async e => {
   e.preventDefault();
-
+console.log('🚀 가입 버튼 클릭됨!');
   const email = document.getElementById('login-id').value.trim();
   const pw    = document.getElementById('login-pw').value;
 
@@ -198,6 +199,7 @@ signupForm?.addEventListener('submit', async e => {
   }
 
   const name  = document.getElementById('signup-name').value.trim();
+  const tel   = document.getElementById('signup-tel').value.trim();
   const email = document.getElementById('signup-email').value.trim();
   const pw    = document.getElementById('signup-pw').value;
 
@@ -206,16 +208,21 @@ signupForm?.addEventListener('submit', async e => {
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, pw);
     await updateProfile(cred.user, { displayName: name });
-    /* [6] Firestore에 사용자 프로필 문서 초기 생성 */
+
     await setDoc(doc(db, 'users', cred.user.uid), {
-      displayName: name,
+      name,
+      tel,
       email,
-      nickname:   '',
-      keywords:   [],
-      topics:     [],
-      createdAt:  serverTimestamp(),
+      displayName: name,
+      nickname: '',
+      keywords: [],
+      topics: [],
+      createdAt: serverTimestamp(),
     }, { merge: true });
+
+    alert('회원가입이 완료되었습니다!');
     window.location.href = 'pages/home.html';
+
   } catch (err) {
     console.error('[강비서] 회원가입 오류:', err.code);
     const MESSAGES = {
