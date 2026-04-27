@@ -331,7 +331,7 @@
   overflow: hidden;
 }
 
-.pain-card::before {
+/*.pain-card::before {
   content: '';
   position: absolute;
   top: 0;
@@ -340,7 +340,7 @@
   height: 3px;
   background: linear-gradient(90deg, var(--color-danger-600), var(--color-warning-600));
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-}
+}*/
 
 .pain-icon {
   width: 52px;
@@ -370,7 +370,7 @@
 
 .pain-quote {
   background: var(--color-gray-50);
-  border-left: 3px solid var(--color-danger-600);
+  border-left: 3px solid var(--color-gray-900);
   padding: var(--space-3) var(--space-4);
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
   font-size: var(--font-size-sm);

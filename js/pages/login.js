@@ -8,6 +8,7 @@ import {
   signInWithPopup,
   updateProfile,
   GoogleAuthProvider,
+  getAdditionalUserInfo,
 } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-auth.js";
 import {
   doc, setDoc, serverTimestamp,
@@ -16,8 +17,9 @@ import {
 /* ════════════════════════════════════════
    이미 로그인된 사용자 → 홈으로 리다이렉트
 ════════════════════════════════════════ */
+let isSigningUp = false;
 onAuthStateChanged(auth, user => {
-  if (user) window.location.replace('pages/home.html');
+  if (user && !isSigningUp) window.location.replace('pages/home.html');
 });
 
 /* ════════════════════════════════════════
@@ -26,7 +28,6 @@ onAuthStateChanged(auth, user => {
 const tabBtns    = document.querySelectorAll('.auth-tab-btn');
 const loginForm  = document.getElementById('form-login');
 const signupForm = document.getElementById('form-signup');
-console.log('폼 요소 확인:', signupForm);
 const formHeader = document.getElementById('form-header');
 
 /* ════════════════════════════════════════
@@ -149,7 +150,6 @@ fieldMap.forEach(({ id, type }) => {
 ════════════════════════════════════════ */
 loginForm?.addEventListener('submit', async e => {
   e.preventDefault();
-console.log('🚀 가입 버튼 클릭됨!');
   const email = document.getElementById('login-id').value.trim();
   const pw    = document.getElementById('login-pw').value;
 
@@ -205,25 +205,22 @@ signupForm?.addEventListener('submit', async e => {
 
   showToast('가입을 처리 중입니다...', 'default');
 
+  isSigningUp = true;
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, pw);
     await updateProfile(cred.user, { displayName: name });
-
     await setDoc(doc(db, 'users', cred.user.uid), {
       name,
       tel,
       email,
-      displayName: name,
-      nickname: '',
-      keywords: [],
-      topics: [],
       createdAt: serverTimestamp(),
     }, { merge: true });
 
-    alert('회원가입이 완료되었습니다!');
+    showToast('회원가입이 완료되었습니다!', 'success');
     window.location.href = 'pages/home.html';
 
   } catch (err) {
+    isSigningUp = false;
     console.error('[강비서] 회원가입 오류:', err.code);
     const MESSAGES = {
       'auth/email-already-in-use': '이미 사용 중인 이메일입니다.',
@@ -239,16 +236,43 @@ signupForm?.addEventListener('submit', async e => {
 ════════════════════════════════════════ */
 document.getElementById('btn-google-login')?.addEventListener('click', async () => {
   try {
-    const result     = await signInWithPopup(auth, googleProvider);
+    console.log('🔵 1. 구글 로그인 시작');
+    const result = await signInWithPopup(auth, googleProvider);
+    const user = result.user;
+    
+    console.log('✅ 2. 구글 인증 성공:', user.uid);
+
+    // 캘린더 토큰 저장 (안전하게 처리)
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (credential?.accessToken) {
       sessionStorage.setItem('gcal_token', credential.accessToken);
     }
+
+    // 신규 유저 여부 확인 (함수가 없으면 에러 날 수 있으니 체크)
+    let isNew = false;
+    try {
+      isNew = getAdditionalUserInfo(result)?.isNewUser;
+      console.log('🆕 3. 신규 유저 여부:', isNew);
+    } catch (e) {
+      console.warn('getAdditionalUserInfo 사용 불가 (임포트 확인 필요)');
+    }
+
+    // 🔥 Firestore 저장 (가장 확실하게!)
+    console.log('📦 4. Firestore 저장 시도...');
+    await setDoc(doc(db, 'users', user.uid), {
+      name: user.displayName || '이름 없음',
+      email: user.email || '',
+      lastLogin: serverTimestamp(), // 언제 로그인했는지 기록 (기존 유저도 업데이트되게)
+      ...(isNew && { tel: '', createdAt: serverTimestamp() }), 
+    }, { merge: true });
+
+    console.log('🎉 5. 저장 완료! 이동합니다.');
     window.location.href = 'pages/home.html';
+
   } catch (err) {
+    console.error('❌ [구글 로그인 에러]:', err); // 👈 여기서 정확히 어떤 에러인지 뜹니다.
     if (err.code !== 'auth/popup-closed-by-user') {
-      console.error('[강비서] 구글 로그인 오류:', err.code);
-      showToast('구글 로그인에 실패했습니다.', 'error');
+      alert('로그인 처리 중 에러가 발생했습니다: ' + err.message);
     }
   }
 });
