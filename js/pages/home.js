@@ -113,7 +113,7 @@ function renderStatBar() {
 
   const stats = [
     { icon: '📅', iconCls: 'stat-icon--blue',   value: `${todayLectures.length}건`,                              label: '오늘 강의',      delta: '' },
-    { icon: '💰', iconCls: 'stat-icon--green',  value: totalFee > 0 ? `${(totalFee/10000).toFixed(0)}만원` : '—', label: '오늘 예상 수익', delta: '' },
+    { icon: '💰', iconCls: 'stat-icon--green',  value: totalFee > 0 ? `${(totalFee).toFixed(0)}만원` : '—', label: '오늘 예상 수익', delta: '' },
     { icon: '⏱',  iconCls: 'stat-icon--yellow', value: todayLectures.length > 1 ? '이동 확인' : '—',              label: '이동 버퍼 타임', delta: '' },
     { icon: '💳', iconCls: 'stat-icon--red',    value: `${unpaidCnt}건`,                                          label: '미입금 정산',    delta: unpaidAmt > 0 ? `₩${unpaidAmt.toLocaleString()} 미수` : '' },
   ];
@@ -322,7 +322,7 @@ function renderWeekly() {
   if (summaryEl) {
     summaryEl.innerHTML = `
       <div class="weekly-summary-item"><span>📋</span><span>이번 주 강의</span><span class="weekly-summary-value">${weekTotal}건</span></div>
-      <div class="weekly-summary-item"><span>💰</span><span>예상 수익</span><span class="weekly-summary-value">₩${(weekTotalFee/10000).toFixed(0)}만원</span></div>
+      <div class="weekly-summary-item"><span>💰</span><span>예상 수익</span><span class="weekly-summary-value">₩${(weekTotalFee).toFixed(0)}만원</span></div>
       <div class="weekly-summary-item"><span>🚗</span><span>강의 있는 날</span><span class="weekly-summary-value">${daysWithLec}일</span></div>`;
   }
 }

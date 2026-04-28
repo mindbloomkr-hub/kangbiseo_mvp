@@ -23,7 +23,7 @@ const DEFAULT_DEVICE = {
     parkingAlert: true,
   },
   settlement: {
-    hourlyRate:    300000,
+    hourlyRate:    30,
     bankName:      '',
     accountNumber: '',
     accountHolder: '',
@@ -256,7 +256,7 @@ function toggleCustomBuffer(show) {
 /* ════════════════════════════════════════
    SECTION 3: 정산 & 행정
 ════════════════════════════════════════ */
-function initSettlement() {
+
   const s = device.settlement;
   setVal('hourly-rate',    s.hourlyRate);
   setVal('bank-name',      s.bankName);
@@ -285,11 +285,11 @@ function initSettlement() {
       unmarkDocUploaded(key);
     });
   });
-}
+}function initSettlement() {
 
 function updateFeeDisplay(val) {
   const el = document.getElementById('fee-display');
-  if (el) el.textContent = `= 시간당 ${(Number(val) || 0).toLocaleString('ko-KR')}원`;
+  if (el) el.textContent = `= 시간당 ${(Number(val) || 0).toLocaleString('ko-KR')}만원`;
 }
 
 function markDocUploaded(key, filename) {
@@ -425,7 +425,7 @@ function initGcalImport() {
   const card = document.createElement('section');
   card.className = 'mypage-card';
   card.id        = 'section-gcal-import';
-  card.innerHTML = `
+  /* card.innerHTML = `
     <div class="mypage-card-header">
       <h2 class="mypage-card-title">🗓 구글 캘린더 가져오기</h2>
       <p class="mypage-card-desc">구글 계정으로 로그인 시 캘린더 일정을 강의로 바로 등록할 수 있습니다.
@@ -438,7 +438,7 @@ function initGcalImport() {
       </button>
       <p id="gcal-fetch-status"
          style="font-size:0.85rem;color:var(--color-text-muted,#6b7280);min-height:1.2em;"></p>
-    </div>`;
+    </div>`;*/
   anchor.insertAdjacentElement('afterend', card);
 
   /* ── 2. 가져오기 모달 (body 에 주입) ── */

@@ -73,7 +73,7 @@ function updateSummaryChips() {
 
   const $ = id => document.getElementById(id);
   if ($('chip-total'))    $('chip-total').textContent    = `총 ${allLectures.length}건`;
-  if ($('chip-fee'))      $('chip-fee').textContent      = `이번 달 총 강사료 ₩${(thisMonthFee / 10000).toFixed(0)}만원`;
+  if ($('chip-fee'))      $('chip-fee').textContent      = `이번 달 총 강사료 ₩${(thisMonthFee).toFixed(0)}만원`;
   if ($('chip-unpaid'))   $('chip-unpaid').textContent   = `미입금 ${unpaid.length}건`;
   if ($('chip-upcoming')) $('chip-upcoming').textContent = `예정 ${upcoming.length}건`;
 }

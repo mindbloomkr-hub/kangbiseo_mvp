@@ -318,17 +318,17 @@
                 <!-- 표준 강사료 -->
                 <div class="mp-field" style="margin-bottom: var(--space-5);">
                   <label class="mp-label" for="hourly-rate">
-                    표준 강사료 (시급)
+                    표준 강사료 (시급) [단위: 만원]
                     <span class="mp-label-hint">· 강의 등록 시 예상 수익 자동 계산에 사용됩니다</span>
                   </label>
                   <div class="fee-input-wrap">
                     <div class="mp-input-prefix" style="flex: 0 0 200px;">
                       <span class="mp-prefix-label">₩</span>
                       <input class="mp-input" type="number" id="hourly-rate"
-                             placeholder="300000" value="300000"
-                             min="0" step="10000" aria-label="시급 입력" />
+                             placeholder="30" value="30"
+                             min="0" step="10" aria-label="시급 입력" />
                     </div>
-                    <span class="fee-display" id="fee-display">= 시간당 300,000원</span>
+                    <span class="fee-display" id="fee-display">= 시간당 30만원</span>
                   </div>
                 </div>
 
@@ -340,8 +340,8 @@
                   <div class="mp-field">
                     <label class="mp-label" for="bank-name">은행명</label>
                     <select class="mp-input" id="bank-name" aria-label="은행 선택">
-                      <option value="">은행 선택</option>
-                      <option value="국민은행" selected>국민은행</option>
+                      <option value=""selected>은행 선택</option>
+                      <option value="국민은행">국민은행</option>
                       <option value="신한은행">신한은행</option>
                       <option value="우리은행">우리은행</option>
                       <option value="하나은행">하나은행</option>
@@ -503,25 +503,25 @@
                 <div class="billing-info-grid">
                   <div class="billing-info-item">
                     <span class="billing-info-label">다음 결제 예정일</span>
-                    <span class="billing-info-value" id="billing-next-date">2026년 5월 22일</span>
+                    <span class="billing-info-value" id="billing-next-date">2026년 00월 00일</span>
                     <button type="button" class="billing-info-action" id="billing-cancel-btn">
                       구독 취소
                     </button>
                   </div>
                   <div class="billing-info-item">
                     <span class="billing-info-label">결제 수단</span>
-                    <span class="billing-info-value" id="billing-method">카카오페이 (체험 기간 중 없음)</span>
+                    <span class="billing-info-value" id="billing-method">(체험 기간 중)</span>
                     <button type="button" class="billing-info-action" id="billing-method-btn">
                       결제 수단 변경
                     </button>
                   </div>
                   <div class="billing-info-item">
                     <span class="billing-info-label">현재 플랜 요금</span>
-                    <span class="billing-info-value">₩ 29,000 / 월</span>
+                    <span class="billing-info-value">₩ 00,000 / 월</span>
                   </div>
                   <div class="billing-info-item">
                     <span class="billing-info-label">가입일</span>
-                    <span class="billing-info-value">2026년 4월 22일</span>
+                    <span class="billing-info-value">2026년 00월 00일</span>
                   </div>
                 </div>
 
