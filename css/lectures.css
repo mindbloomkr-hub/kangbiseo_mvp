@@ -113,11 +113,11 @@
 }
 
 /* 탭별 accent 색상 (비활성 상태) */
-.filter-tab[data-filter="urgent"]:not(.active)   .filter-tab-count { background: var(--color-warning-100); color: var(--color-warning-600); }
-.filter-tab[data-filter="upcoming"]:not(.active) .filter-tab-count { background: var(--color-info-100); color: var(--color-info-600); }
-.filter-tab[data-filter="doc"]:not(.active)      .filter-tab-count { background: #ede9fe; color: #7c3aed; }
-.filter-tab[data-filter="unpaid"]:not(.active)   .filter-tab-count { background: var(--color-danger-100); color: var(--color-danger-600); }
-.filter-tab[data-filter="done"]:not(.active)     .filter-tab-count { background: var(--color-success-100); color: var(--color-success-600); }
+.filter-tab[data-filter="urgent"]:not(.active)    .filter-tab-count { background: #fff7ed;                   color: #c2410c; }
+.filter-tab[data-filter="scheduled"]:not(.active) .filter-tab-count { background: var(--color-info-100);    color: var(--color-info-700); }
+.filter-tab[data-filter="onhold"]:not(.active)    .filter-tab-count { background: #f3f4f6;                   color: #6b7280; }
+.filter-tab[data-filter="unpaid"]:not(.active)    .filter-tab-count { background: #fef2f2;                   color: #b91c1c; font-weight: var(--font-weight-bold); }
+.filter-tab[data-filter="done"]:not(.active)      .filter-tab-count { background: var(--color-success-100); color: var(--color-success-700); }
 
 /* ════════════════════════════════
    TABLE PANEL
@@ -245,7 +245,6 @@
 
 /* 날짜 셀 */
 .td-date {
-  font-family: var(--font-family-mono);
   font-size: var(--font-size-xs) !important;
   color: var(--color-text-secondary) !important;
 }
@@ -255,7 +254,6 @@
 
 /* 시간 셀 */
 .td-time {
-  font-family: var(--font-family-mono);
   font-size: var(--font-size-xs) !important;
   color: var(--color-text-secondary) !important;
   white-space: nowrap;
@@ -286,7 +284,6 @@
 /* 강사료 */
 .td-fee {
   font-weight: var(--font-weight-bold) !important;
-  font-family: var(--font-family-mono);
   color: var(--color-gray-900) !important;
 }
 
@@ -326,15 +323,27 @@
   opacity: 0.7;
 }
 
-.lec-badge--scheduled { background: var(--color-info-100);    color: var(--color-info-600); }
-.lec-badge--urgent    { background: var(--color-warning-100); color: var(--color-warning-600); }
-.lec-badge--doc       { background: #ede9fe;                  color: #7c3aed; }
-.lec-badge--unpaid    { background: var(--color-danger-100);  color: var(--color-danger-600); }
-.lec-badge--done      { background: var(--color-success-100); color: var(--color-success-600); }
-.lec-badge--inprogress  { background: var(--color-warning-100); color: var(--color-warning-600); }
-.lec-badge--discussing  { background: #ede9fe; color: #4338ca; }
-.lec-badge--admin       { background: #fef3c7; color: #92400e; }
-.lec-badge--cancelled   { background: #f3f4f6; color: #9ca3af; }
+/* Progress statuses */
+.lec-badge--scheduled  { background: var(--color-info-100);    color: var(--color-info-700); }
+.lec-badge--discussing { background: #ede9fe;                  color: #4338ca; }
+.lec-badge--onhold     { background: #f3f4f6;                  color: #6b7280; font-style: italic; }
+.lec-badge--done       { background: var(--color-success-100); color: var(--color-success-700); }
+.lec-badge--cancelled  { background: #f3f4f6;                  color: #9ca3af; }
+.lec-badge--doc        { background: #ede9fe;                  color: #7c3aed; }
+
+/* Alert statuses — high-contrast, always draw attention */
+.lec-badge--urgent {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1.5px solid #fed7aa;
+  font-weight: var(--font-weight-extrabold);
+}
+.lec-badge--unpaid {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1.5px solid #fca5a5;
+  font-weight: var(--font-weight-extrabold);
+}
 
 /* ────────────────────────────────
    라디오 행 (폼·모달 내 인라인 선택)
@@ -485,12 +494,24 @@
 /* 모달 섹션 */
 .modal-section {}
 
-.modal-section-title {
-  font-size: var(--font-size-xs);
+.modal-section-title-first {
+  font-size: var(--font-size-s);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-muted);
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal-section-title {
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: var(--space-6);
   margin-bottom: var(--space-3);
   padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--color-border);
@@ -527,7 +548,6 @@
 .modal-info-value.fee {
   color: var(--color-gray-900);
   font-weight: var(--font-weight-extrabold);
-  font-family: var(--font-family-mono);
   font-size: var(--font-size-base);
 }
 
@@ -858,12 +878,25 @@
 /* ════════════════════════════════
    ADD LECTURE FORM MODAL
 ════════════════════════════════ */
-.add-form-section-title {
-  font-size: var(--font-size-xs);
+
+.add-form-section-title-first {
+  font-size: var(--font-size-s);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-muted);
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.add-form-section-title {
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: var(--space-6);
   margin-bottom: var(--space-3);
   padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--color-border);

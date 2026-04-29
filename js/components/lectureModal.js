@@ -138,7 +138,7 @@ function _populateView(lec) {
   document.getElementById('v-total-duration').textContent = calcDuration(lec.timeStart, lec.timeEnd);
   document.getElementById('v-title').textContent          = lec.title  || '—';
   document.getElementById('v-client').textContent         = lec.client || '—';
-  document.getElementById('v-fee').textContent            = `₩${(Number(lec.fee) || 0).toLocaleString()}`;
+  document.getElementById('v-fee').textContent            = `₩${(Number(lec.fee)*10000 || 0).toLocaleString()}`;
 
   document.getElementById('v-session-current').textContent = lec.sessionCurrent ? `${lec.sessionCurrent}회` : '—';
   document.getElementById('v-session-total').textContent   = lec.sessionTotal   ? `${lec.sessionTotal}회`   : '—';
@@ -551,10 +551,11 @@ function _bindEvents() {
     const timeEnd   = get('af-time-end');
     const title     = get('af-title');
     const client    = get('af-client');
+    const place     = get('af-place');
     const feeRaw    = get('af-fee');
 
-    if (!date || !timeStart || !timeEnd || !title || !client || !feeRaw) {
-      window.showToast?.('날짜, 시간, 강의명, 고객사, 강사료는 필수 입력 항목이에요.', 'error');
+    if (!date || !timeStart || !timeEnd || !title || !client || !place) {
+      window.showToast?.('날짜, 시간, 강의명, 고객사, 강의장소는 필수 입력 항목이에요.', 'error');
       return;
     }
     if (timeEnd <= timeStart) {

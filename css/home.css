@@ -189,7 +189,6 @@
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
   color: var(--color-primary-600);
-  font-family: var(--font-family-mono);
   white-space: nowrap;
 }
 
@@ -555,7 +554,6 @@
   font-size: 10px;
   font-weight: var(--font-weight-bold);
   color: var(--color-primary-600);
-  font-family: var(--font-family-mono);
   margin-bottom: 2px;
 }
 

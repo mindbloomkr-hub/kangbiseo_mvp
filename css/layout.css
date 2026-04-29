@@ -15,6 +15,7 @@
   background: var(--color-gray-50);
 }
 
+
 /* ════════════════════════════════
    SIDEBAR
 ════════════════════════════════ */
@@ -368,6 +369,7 @@
 .page-content {
   flex: 1;
   padding: var(--space-8);
+  box-sizing: border-box;
 }
 
 /* ── 페이지 헤더 ── */
@@ -426,7 +428,7 @@
   background: var(--color-gray-200);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .sidebar {
     transform: translateX(-100%);
     width: var(--sidebar-width) !important;
@@ -450,7 +452,8 @@
   }
 
   .page-content {
-    padding: var(--space-5);
+    padding: var(--space-3) var(--space-2); 
+    overflow-x: hidden;
   }
 
   .topbar {

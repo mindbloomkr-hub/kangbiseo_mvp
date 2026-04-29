@@ -285,11 +285,12 @@ function toggleCustomBuffer(show) {
       unmarkDocUploaded(key);
     });
   });
-}function initSettlement() {
+
+function initSettlement() {}
 
 function updateFeeDisplay(val) {
   const el = document.getElementById('fee-display');
-  if (el) el.textContent = `= 시간당 ${(Number(val) || 0).toLocaleString('ko-KR')}만원`;
+  if (el) el.textContent = `= 시간당 ${(Number(val)/10000 || 0).toLocaleString('ko-KR')}만원`;
 }
 
 function markDocUploaded(key, filename) {

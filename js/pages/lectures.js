@@ -19,9 +19,9 @@ let unsubLectures = null;
 const FILTER_FN = {
   all:        ()  => true,
   urgent:     l   => l._status === 'urgent',
-  upcoming:   l   => l._status === 'upcoming',
-  admin:      l   => l._status === 'admin',
-  done:       l   => l._status === 'done',
+  scheduled:  l   => l._status === 'scheduled',
+  onhold:     l   => l._status === 'onhold',
+  done:       l   => l._status === 'done' || l._status === 'unpaid',
   discussing: l   => l._status === 'discussing',
   cancelled:  l   => l._status === 'cancelled',
   unpaid:     l   => l._status === 'unpaid',
@@ -69,7 +69,7 @@ function updateSummaryChips() {
     .filter(l => l.date?.startsWith(monthStr))
     .reduce((s, l) => s + (Number(l.fee) || 0), 0);
   const unpaid   = allLectures.filter(l => l._status === 'unpaid');
-  const upcoming = allLectures.filter(l => ['upcoming', 'urgent', 'discussing'].includes(l._status));
+  const upcoming = allLectures.filter(l => ['scheduled', 'urgent', 'discussing'].includes(l._status));
 
   const $ = id => document.getElementById(id);
   if ($('chip-total'))    $('chip-total').textContent    = `총 ${allLectures.length}건`;
@@ -131,7 +131,7 @@ function renderTable() {
         </td>
         <td class="td-client">${escapeHtml(lec.client)}</td>
         <td class="td-place col-place">${escapeHtml(lec.place || '')}</td>
-        <td class="td-fee col-fee">₩${(Number(lec.fee) || 0).toLocaleString()}</td>
+        <td class="td-fee col-fee">₩${(Number(lec.fee)*10000 || 0).toLocaleString()}</td>
         <td class="col-status"><span class="lec-badge ${meta.cls}">${meta.label}</span></td>
       </tr>`;
   }).join('');

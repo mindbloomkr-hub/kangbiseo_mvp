@@ -55,10 +55,36 @@
     .cal-view-btn.active { background: #0a1628; border-color: #0a1628; color: #fff; }
     .cal-view-btn:hover:not(.active) { background: var(--color-bg-hover, #e5e7eb); border-color: #9ca3af; color: var(--color-text-primary, #111827); }
     .calendar-page-header-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; flex-wrap: wrap; }
-    .cal-legend-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding: 12px 16px; background: var(--color-bg-card, #fff); border-radius: 10px; border: 1px solid var(--color-border, #e5e7eb); }
-    .cal-legend-label { font-size: 0.72rem; font-weight: 600; color: var(--color-text-muted, #9ca3af); margin-right: 4px; white-space: nowrap; }
-    .cal-legend-item-fc { display: flex; align-items: center; }
-    .cal-legend-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 0.73rem; font-weight: 600; padding: 4px 10px; border-radius: 100px; white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,.06); transition: opacity 120ms; }
+    .cal-legend-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: clamp(8px, 2vw, 24px); 
+      margin-top: 24px;
+      padding: clamp(12px, 3vw, 20px) clamp(16px, 5vw, 40px);
+      background: var(--color-bg-card, #fff);
+      border-radius: 12px;
+      border: 1px solid var(--color-border, #e5e7eb);
+    }
+    .cal-legend-label { 
+      font-size: clamp(0.8rem, 1vw, 1rem);
+      font-weight: 600;
+      color: #374151;
+      white-space: nowrap;
+    }
+    .cal-legend-item-fc {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .cal-legend-badge {
+      width: clamp(12px, 1.5vw, 18px);
+      height: clamp(12px, 1.5vw, 18px);
+      border-radius: 4px;
+      flex-shrink: 0;
+      padding: 10px 16px;
+    }
     .cal-legend-badge:hover { opacity: .8; }
     #cal-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 40px; color: var(--color-text-muted, #9ca3af); font-size: 0.9rem; }
     #cal-loading.hidden { display: none; }
@@ -68,6 +94,16 @@
     .fc .fc-event.fc-cancelled-lec .fc-event-title,
     .fc .fc-event.fc-cancelled-lec .fc-list-event-title { text-decoration: line-through; }
     .fc .fc-daygrid-event .fc-event-title { font-weight: 600; }
+    @media (max-width: 768px) {
+    .cal-legend-row {
+      justify-content: flex-start; /* 모바일은 왼쪽부터 채우는 게 자연스러움 */
+      gap: 12px 16px;            /* 세로 간격 12px, 가로 간격 16px */
+      padding: 12px;
+    }
+    .cal-legend-label {
+      font-size: 0.85rem;        /* 모바일에선 너무 작지도 크지도 않게 */
+    }
+  }
   </style>
 </head>
 <body>
@@ -100,22 +136,52 @@
           <div class="calendar-page-header-right">
             <div class="cal-view-controls" role="group" aria-label="캘린더 보기 전환">
               <button class="cal-view-btn active" id="btn-month-view" aria-pressed="true">월간</button>
-              <button class="cal-view-btn"         id="btn-week-view"  aria-pressed="false">주간</button>
+              <button class="cal-view-btn"        id="btn-week-view"  aria-pressed="false">주간</button>
             </div>
             <button class="btn btn--primary" id="btn-add-lecture">+ 강의 추가</button>
           </div>
         </div>
 
-        <div class="cal-legend-row" role="list" aria-label="색상 범례">
-          <span class="cal-legend-label">범례</span>
-          <div class="cal-legend-item-fc" role="listitem"><span class="cal-legend-badge" style="background:#ede9fe;color:#5b21b6;border:1.5px solid #c4b5fd;">💬 논의 중</span></div>
-          <div class="cal-legend-item-fc" role="listitem"><span class="cal-legend-badge" style="background:#0ea5e9;color:#fff;">📅 강의 예정</span></div>
-          <div class="cal-legend-item-fc" role="listitem"><span class="cal-legend-badge" style="background:#f59e0b;color:#fff;">⏳ 준비 임박 <small style="opacity:.8;font-size:.68rem;">7일↓</small></span></div>
-          <div class="cal-legend-item-fc" role="listitem"><span class="cal-legend-badge" style="background:#d1fae5;color:#065f46;border:1.5px solid #6ee7b7;">🏃 행정 대기</span></div>
-          <div class="cal-legend-item-fc" role="listitem"><span class="cal-legend-badge" style="background:#059669;color:#fff;">✅ 진행 완료</span></div>
-          <div class="cal-legend-item-fc" role="listitem"><span class="cal-legend-badge" style="background:#fee2e2;color:#ef4444;border:1.5px solid #fca5a5;">💰 미입금</span></div>
-          <div class="cal-legend-item-fc" role="listitem"><span class="cal-legend-badge" style="background:#f3f4f6;color:#9ca3af;border:1.5px dashed #d1d5db;text-decoration:line-through;">❌ 취소</span></div>
+        <div class="cal-legend-row">
+          <div class="cal-legend-item-fc">
+            <span class="cal-legend-badge badge-discussing" style="background-color: #ede9fe; border: 1px solid #a78bfa;"></span>
+            <span class="cal-legend-label" style="color: #4338ca;">논의 중</span>
+          </div>
+          <div class="cal-legend-item-fc">
+            <span class="cal-legend-badge badge-scheduled" style="background-color: #0ea5e9; border: 1px solid #0284c7;"></span>
+            <span class="cal-legend-label">강의 예정</span>
+          </div>
+          <div class="cal-legend-item-fc">
+            <span class="cal-legend-badge badge-done" style="background-color: #059669; border: 1px solid #047857;"></span>
+            <span class="cal-legend-label" style="color: #000000">진행 완료</span>
+          </div>
+          <div class="cal-legend-item-fc">
+            <span class="cal-legend-badge badge-onhold" style="background-color: #f3f4f6; border: 1px solid #9ca3af;"></span>
+            <span class="cal-legend-label">보류 중</span>
+          </div>
+          <div class="cal-legend-item-fc">
+            <span class="cal-legend-badge badge-cancelled" style="opacity: 0.6; 
+              border: 1.5px dashed #9ca3af; 
+              background-color: #f9fafb; 
+              padding: 10px 20px; 
+              border-radius: 4px; 
+              display: flex; 
+              align-items: center;
+              gap: 12px;">
+            </span>
+            <span class="cal-legend-label">취소/드롭</span>
+          </div>
+          <div class="cal-legend-divider"></div> <div class="cal-legend-item">
+            <span class="cal-legend-badge badge-urgent" style="background-color: #f59e0b; border: 1px solid #d97706;"></span>
+            <span class="cal-legend-label">준비 임박</span>
+          </div>
+          <div class="cal-legend-item">
+            <span class="cal-legend-badge badge-unpaid" style="background-color: #96efc1; border: 1px solid #047857;"></span>
+            <span class="cal-legend-label" style="color: #b91c1c">미입금</span>
+          </div>
         </div>
+
+        
 
         <div class="fc-wrapper">
           <div id="cal-loading"><div class="cal-spinner"></div><span>강의 데이터를 불러오는 중…</span></div>

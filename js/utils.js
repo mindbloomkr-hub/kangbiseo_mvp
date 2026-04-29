@@ -19,19 +19,19 @@ export const TAX_LABEL = {
 export const PROGRESS_LABEL = {
   discussing: '논의 중',
   scheduled:  '강의 예정',
-  admin:      '행정 대기',
   done:       '진행 완료',
+  onhold:     '보류 중',
   cancelled:  '취소/드롭',
 };
 
 export const STATUS_META = {
-  discussing: { label: '논의 중',   cls: 'lec-badge--discussing' },
-  urgent:     { label: '준비 임박', cls: 'lec-badge--urgent'     },
-  upcoming:   { label: '강의 예정', cls: 'lec-badge--scheduled'  },
-  admin:      { label: '행정 대기', cls: 'lec-badge--admin'      },
-  done:       { label: '진행 완료', cls: 'lec-badge--done'       },
-  unpaid:     { label: '미입금',    cls: 'lec-badge--unpaid'     },
-  cancelled:  { label: '취소',      cls: 'lec-badge--cancelled'  },
+  discussing: { label: '💬 논의 중',      cls: 'lec-badge--discussing' },
+  scheduled:  { label: '📅 강의 예정',    cls: 'lec-badge--scheduled'  },
+  done:       { label: '✅ 진행 완료',    cls: 'lec-badge--done'       },
+  onhold:     { label: '⏸️ 보류 중',      cls: 'lec-badge--onhold'     },
+  cancelled:  { label: '❌ 취소/드롭',         cls: 'lec-badge--cancelled'  },
+  urgent:     { label: '⚠️ 준비 임박', cls: 'lec-badge--urgent'     },
+  unpaid:     { label: '💰 미입금',    cls: 'lec-badge--unpaid'     },
 };
 
 /* ════════════════════════════════════════
@@ -87,15 +87,20 @@ export function calcDuration(start, end) {
 ════════════════════════════════════════ */
 export function classifyStatus(lec) {
   const prog = lec.progressStatus || 'scheduled';
-  if (prog === 'cancelled')  return 'cancelled';
-  if (prog === 'done')       return 'done';
-  if (prog === 'admin')      return 'admin';
-  if (prog === 'discussing') return 'discussing';
+
+  // Priority 1: cancelled always wins
+  if (prog === 'cancelled') return 'cancelled';
 
   const d = parseDate(lec.date);
-  if (d < TODAY) return lec.isPaid ? 'done' : 'unpaid';
-  if (d <= IN_7DAYS) return 'urgent';
-  return 'upcoming';
+
+  // Priority 2: unpaid alert — past date OR done status, AND not yet paid
+  if (!lec.isPaid && (d < TODAY || prog === 'done')) return 'unpaid';
+
+  // Priority 3: urgent alert — confirmed scheduled lecture within 7 days
+  if (prog === 'scheduled' && d >= TODAY && d <= IN_7DAYS) return 'urgent';
+
+  // Remaining: return actual progress status (discussing | scheduled | done | onhold)
+  return prog;
 }
 
 /* ════════════════════════════════════════

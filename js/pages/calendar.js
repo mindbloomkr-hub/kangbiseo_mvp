@@ -14,19 +14,24 @@ import { initLectureModal, openModal } from '../components/lectureModal.js';
 ════════════════════════════════════════ */
 function classifyStatus(lec) {
   const prog = lec.progressStatus || 'scheduled';
-  if (prog === 'cancelled')  return 'cancelled';
-  if (prog === 'done')       return 'done';
-  if (prog === 'admin')      return 'admin';
-  if (prog === 'discussing') return 'discussing';
+
+  // Priority 1: cancelled always wins
+  if (prog === 'cancelled') return 'cancelled';
 
   const d = parseDate(lec.date);
-  if (d < TODAY) {
-    if (!lec.isPaid)       return 'unpaid';
-    if (!lec.isDocumented) return 'doc';
-    return 'done';
+
+  // Priority 2: unpaid alert
+  if (!lec.isPaid && (d < TODAY || prog === 'done')) return 'unpaid';
+
+  // Priority 3: urgent alert — scheduled lecture within 7 days
+  if (prog === 'scheduled' && d >= TODAY && d <= IN_7DAYS) return 'urgent';
+
+  // Calendar-specific: past scheduled lectures — check documentation status
+  if (prog === 'scheduled' && d < TODAY) {
+    return lec.isDocumented ? 'done' : 'doc';
   }
-  if (d <= IN_7DAYS) return 'urgent';
-  return 'upcoming';
+
+  return prog; // discussing | scheduled | done | onhold
 }
 
 const STATUS_META = {
@@ -49,17 +54,18 @@ function getEventColor(lec) {
   const prog = lec.progressStatus || 'scheduled';
   const d    = parseDate(lec.date);
 
-  if (prog === 'cancelled') return { bg: '#f9fafb', border: '#d1d5db', text: '#9ca3af' };
-  if (prog === 'done')      return lec.isPaid
-    ? { bg: '#059669', border: '#047857', text: '#fff' }
-    : { bg: '#e5e7eb', border: '#9ca3af', text: '#ef4444' };
-  if (prog === 'admin')     return { bg: '#d1fae5', border: '#6ee7b7', text: '#b91c1c' };
+  if (prog === 'cancelled')  return { bg: '#f9fafb', border: '#d1d5db', text: '#9ca3af' };
+  if (prog === 'onhold')     return { bg: '#f3f4f6', border: '#9ca3af', text: '#6b7280' };
   if (prog === 'discussing') return { bg: '#ede9fe', border: '#a78bfa', text: '#5b21b6' };
+  if (prog === 'done')       return lec.isPaid
+    ? { bg: '#059669', border: '#047857', text: '#fff' }
+    : { bg: '#96efc1', border: '#9ca3af', text: '#ef4444' };
 
+  // scheduled (past or future)
   if (d < TODAY) {
     return lec.isPaid
       ? { bg: '#9ca3af', border: '#6b7280', text: '#fff' }
-      : { bg: '#e5e7eb', border: '#9ca3af', text: '#ef4444' };
+      : { bg: '#fee2e2', border: '#fca5a5', text: '#b91c1c' };
   }
   if (d <= IN_7DAYS) return { bg: '#f59e0b', border: '#d97706', text: '#fff' };
   return { bg: '#0ea5e9', border: '#0284c7', text: '#fff' };
@@ -142,7 +148,7 @@ function initCalendar() {
       const prog = lec.progressStatus || 'scheduled';
 
       const paidMark   = lec.isPaid ? '' : '[미입금] ';
-      const statusHint = prog === 'cancelled' ? '[취소] ' : '';
+      const statusHint = prog === 'cancelled' ? '[취소/드롭] ' : '';
       evEl.setAttribute('title',
         `${statusHint}${paidMark}${lec.title || ''}\n${lec.timeStart}~${lec.timeEnd}  ${lec.client || ''}`
       );
@@ -153,10 +159,10 @@ function initCalendar() {
         const titleEl = evEl.querySelector('.fc-event-title, .fc-list-event-title');
         if (titleEl) titleEl.style.textDecoration = 'line-through';
       }
-      if (prog === 'admin') {
-        evEl.style.borderLeft = '3px solid #b91c1c';
+      if (prog === 'onhold') {
+        evEl.style.opacity = '0.7';
       }
-      if ((prog === 'done' || (parseDate(lec.date) < TODAY && prog === 'scheduled')) && !lec.isPaid) {
+      if (!lec.isPaid && (parseDate(lec.date) < TODAY || prog === 'done')) {
         evEl.style.borderLeft = '3px solid #ef4444';
       }
     },
