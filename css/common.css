@@ -458,7 +458,7 @@ body {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   box-shadow: var(--shadow-lg);
-  z-index: var(--z-toast, 500);
+  z-index: 999999 !important;
   opacity: 0;
   transform: translateY(12px);
   transition: opacity 0.25s ease, transform 0.25s ease;

@@ -17,14 +17,15 @@ let unsubLectures = null;
    필터 함수
 ════════════════════════════════════════ */
 const FILTER_FN = {
-  all:        ()  => true,
-  urgent:     l   => l._status === 'urgent',
-  scheduled:  l   => l._status === 'scheduled',
-  onhold:     l   => l._status === 'onhold',
-  done:       l   => l._status === 'done' || l._status === 'unpaid',
-  discussing: l   => l._status === 'discussing',
-  cancelled:  l   => l._status === 'cancelled',
-  unpaid:     l   => l._status === 'unpaid',
+  all:          ()  => true,
+  urgent:       l   => l._status === 'urgent',
+  scheduled:    l   => l._status === 'scheduled',
+  onhold:       l   => l._status === 'onhold',
+  done:         l   => l._status === 'done' || l._status === 'unpaid',
+  discussing:   l   => l._status === 'discussing',
+  cancelled:    l   => l._status === 'cancelled',
+  unpaid:       l   => l._status === 'unpaid',
+  needs_review: l   => l._status === 'needs_review',
 };
 
 function getFilteredLectures() {
@@ -65,18 +66,26 @@ function updateTabCounts() {
 function updateSummaryChips() {
   const now      = new Date();
   const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const thisMonthFee = allLectures
+  
+  // 제외할 상태 목록 정의 (여기서 _status 이름을 사용하세요)
+  const excludedStatuses = ['discussing', 'onhold', 'cancelled'];
+
+  const activeLectures = allLectures.filter(l => !excludedStatuses.includes(l._status));
+
+  const thisMonthFee = activeLectures
     .filter(l => l.date?.startsWith(monthStr))
     .reduce((s, l) => s + (Number(l.fee) || 0), 0);
+
   const unpaid   = allLectures.filter(l => l._status === 'unpaid');
   const upcoming = allLectures.filter(l => ['scheduled', 'urgent', 'discussing'].includes(l._status));
 
   const $ = id => document.getElementById(id);
-  if ($('chip-total'))    $('chip-total').textContent    = `총 ${allLectures.length}건`;
+  if ($('chip-total'))    $('chip-total').textContent    = `총 ${activeLectures.length}건`;
   if ($('chip-fee'))      $('chip-fee').textContent      = `이번 달 총 강사료 ₩${(thisMonthFee).toFixed(0)}만원`;
   if ($('chip-unpaid'))   $('chip-unpaid').textContent   = `미입금 ${unpaid.length}건`;
   if ($('chip-upcoming')) $('chip-upcoming').textContent = `예정 ${upcoming.length}건`;
 }
+
 
 function updateNavBadge() {
   const todayStr = `${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,'0')}-${String(TODAY.getDate()).padStart(2,'0')}`;

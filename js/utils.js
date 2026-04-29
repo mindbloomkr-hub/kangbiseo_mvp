@@ -22,16 +22,18 @@ export const PROGRESS_LABEL = {
   done:       '진행 완료',
   onhold:     '보류 중',
   cancelled:  '취소/드롭',
+  needs_review: '확인 필요',
 };
 
 export const STATUS_META = {
-  discussing: { label: '💬 논의 중',      cls: 'lec-badge--discussing' },
-  scheduled:  { label: '📅 강의 예정',    cls: 'lec-badge--scheduled'  },
-  done:       { label: '✅ 진행 완료',    cls: 'lec-badge--done'       },
-  onhold:     { label: '⏸️ 보류 중',      cls: 'lec-badge--onhold'     },
-  cancelled:  { label: '❌ 취소/드롭',         cls: 'lec-badge--cancelled'  },
-  urgent:     { label: '⚠️ 준비 임박', cls: 'lec-badge--urgent'     },
-  unpaid:     { label: '💰 미입금',    cls: 'lec-badge--unpaid'     },
+  discussing:   { label: '💬 논의 중',    cls: 'lec-badge--discussing'  },
+  scheduled:    { label: '📅 강의 예정',  cls: 'lec-badge--scheduled'   },
+  done:         { label: '✅ 진행 완료',  cls: 'lec-badge--done'        },
+  onhold:       { label: '⏸️ 보류 중',    cls: 'lec-badge--onhold'      },
+  cancelled:    { label: '❌ 취소/드롭',  cls: 'lec-badge--cancelled'   },
+  urgent:       { label: '⚠️ 준비 임박',  cls: 'lec-badge--urgent'      },
+  unpaid:       { label: '💰 미입금',     cls: 'lec-badge--unpaid'      },
+  needs_review: { label: '🔍 확인필요',   cls: 'lec-badge--review'      },
 };
 
 /* ════════════════════════════════════════

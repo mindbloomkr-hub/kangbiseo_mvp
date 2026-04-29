@@ -1,5 +1,4 @@
 // js/pages/home.js — 홈 대시보드 (Firestore 실시간 연동)
-
 import { db, subscribeLectures, authGuard } from '../api.js';
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,

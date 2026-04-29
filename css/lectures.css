@@ -118,6 +118,9 @@
 .filter-tab[data-filter="onhold"]:not(.active)    .filter-tab-count { background: #f3f4f6;                   color: #6b7280; }
 .filter-tab[data-filter="unpaid"]:not(.active)    .filter-tab-count { background: #fef2f2;                   color: #b91c1c; font-weight: var(--font-weight-bold); }
 .filter-tab[data-filter="done"]:not(.active)      .filter-tab-count { background: var(--color-success-100); color: var(--color-success-700); }
+.filter-tab[data-filter="needs_review"]:not(.active)      .filter-tab-count { background: #fbee03; color: var(--color-success-700); }
+
+
 
 /* ════════════════════════════════
    TABLE PANEL
@@ -737,6 +740,7 @@
 }
 
 .btn--modal-delete {
+  z-index: 9999 !important;
   height: 40px;
   padding: 0 var(--space-5);
   border-radius: var(--radius-md);
@@ -797,7 +801,7 @@
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.5);
-  z-index: calc(var(--z-modal) + 1);
+  z-index: 9999 !important;
   display: flex;
   align-items: center;
   justify-content: center;

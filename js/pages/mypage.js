@@ -690,6 +690,65 @@ function collectDeviceValues() {
   device.settlement.accountHolder = getVal('account-holder');
 }
 
+// uid 필드가 현재 로그인한 사용자의 uid와 일치하는 문서만 찾아서 삭제
+async function deleteUserLectures() {
+  const user = window.auth?.currentUser;
+  if (!user) return window.showToast?.('로그인이 필요합니다.', 'error');
+
+  if (!confirm("⚠️ 정말로 본인이 등록한 모든 강의를 삭제하시겠습니까?")) return;
+  if (!confirm("🚨 삭제된 데이터는 절대로 복구할 수 없습니다. 진행할까요?")) return;
+
+  const getTools = () => {
+        return new Promise((resolve) => {
+            let attempts = 0;
+            const interval = setInterval(() => {
+                const tools = window.FirebaseFirestore;
+                attempts++;
+                if (tools || attempts > 30) { // 0.1초씩 30번 = 3초
+                    clearInterval(interval);
+                    resolve(tools);
+                }
+            }, 100);
+        });
+    };
+
+    const FStore = await getTools();
+
+    if (!FStore || !FStore.query) {
+        console.error('[강비서] 도구 상자 로드 실패:', window.FirebaseFirestore);
+        return window.showToast?.('시스템 로딩 중입니다. 잠시 후 다시 클릭해주세요.', 'error');
+    }
+
+    if (!confirm("⚠️ 정말로 본인이 등록한 모든 강의를 삭제하시겠습니까?")) return;
+    if (!confirm("🚨 삭제된 데이터는 절대로 복구할 수 없습니다. 진행할까요?")) return;
+
+    try {
+        const db = window._temp_db;
+        const col = window._temp_collection;
+
+        console.log("[강비서] 삭제 프로세스 시작...");
+        const q = FStore.query(col(db, 'lectures'), FStore.where('uid', '==', user.uid));
+        const querySnapshot = await FStore.getDocs(q);
+
+        if (querySnapshot.empty) {
+            return window.showToast?.('삭제할 데이터가 없습니다.', 'info');
+        }
+
+        const deletePromises = querySnapshot.docs.map(document => 
+            FStore.deleteDoc(FStore.doc(db, 'lectures', document.id))
+        );
+        
+        await Promise.all(deletePromises);
+        window.showToast?.(`${querySnapshot.size}건 삭제 완료!`, 'success');
+        setTimeout(() => location.reload(), 1000);
+    } catch (err) {
+        console.error('[강비서] 삭제 오류:', err);
+        window.showToast?.('삭제 중 오류가 발생했습니다.', 'error');
+    }
+}
+
+window.deleteUserLectures = deleteUserLectures;
+
 /* ════════════════════════════════════════
    인증 상태 감지 — 진입점
 ════════════════════════════════════════ */

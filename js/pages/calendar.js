@@ -8,6 +8,21 @@ import {
 } from '../utils.js';
 import { initLectureModal, openModal } from '../components/lectureModal.js';
 
+(function prepareBridge() {
+  const checkInterval = setInterval(() => {
+    // db와 addDoc 등 필수 변수가 파일 내에서 정의되었는지 확인
+    if (typeof db !== 'undefined' && typeof addDoc !== 'undefined') {
+      window._temp_db = db;
+      window._temp_collection = collection;
+      window._temp_addDoc = addDoc;
+      window._temp_serverTimestamp = serverTimestamp;
+      console.log('[강비서] Firebase 통로 연결 완료!');
+      clearInterval(checkInterval); // 연결 성공 시 감시 중단
+    }
+  }, 100); // 0.1초마다 확인
+})();
+
+
 /* ════════════════════════════════════════
    calendar.js 전용 확장
    — doc(서류 미비) 상태 추가 → classifyStatus + STATUS_META 로컬 오버라이드
@@ -57,6 +72,7 @@ function getEventColor(lec) {
   if (prog === 'cancelled')  return { bg: '#f9fafb', border: '#d1d5db', text: '#9ca3af' };
   if (prog === 'onhold')     return { bg: '#f3f4f6', border: '#9ca3af', text: '#6b7280' };
   if (prog === 'discussing') return { bg: '#ede9fe', border: '#a78bfa', text: '#5b21b6' };
+  if (prog === 'needs_review') return { bg: '#fbee03', border: '#fbee03', text: '#108500' };
   if (prog === 'done')       return lec.isPaid
     ? { bg: '#059669', border: '#047857', text: '#fff' }
     : { bg: '#96efc1', border: '#9ca3af', text: '#ef4444' };
@@ -244,3 +260,129 @@ authGuard(user => {
   withModal: true,
   cleanupFn: () => unsubLectures?.(),
 });
+
+/* ════════════════════════════════════════
+   ICS 임포트 수신기 (localStorage 브릿지)
+   ics-import.html 에서 저장된 temp_lectures 를
+   페이지 로드(F5) 시 Firebase 에 일괄 저장한다.
+
+   setTimeout 500ms: authGuard / allLectures 초기화가
+   완료된 이후 실행을 보장하기 위한 TDZ 방어막.
+════════════════════════════════════════ */
+
+// calendar.js 맨 하단
+(function persistentImport() {
+    const runImport = async () => {
+        const raw = localStorage.getItem('temp_lectures');
+        if (!raw) return;
+
+        console.log('[강비서] 📬 임시 데이터 발견! 모든 준비가 끝날 때까지 감시를 시작합니다.');
+
+        // 인증과 도구가 모두 준비될 때까지 무한 반복 (setInterval)
+        const masterInterval = setInterval(async () => {
+        // 1. 모든 수단과 방법을 동원해 유저 객체 탐색
+        const user = 
+            window.auth?.currentUser || 
+            (typeof auth !== 'undefined' ? auth.currentUser : null) ||
+            (window.firebase?.auth?.().currentUser) ||
+            (window._auth?.currentUser); // 혹시 다른 이름으로 저장했을 경우
+
+        const tools = window._temp_db && window._temp_addDoc;
+
+        if (user && tools) {
+            clearInterval(masterInterval);
+            console.log('[강비서] ✅ 드디어 유저와 도구를 모두 찾았습니다!');
+
+                try {
+                    const { _temp_db, _temp_collection, _temp_addDoc, _temp_serverTimestamp } = window;
+                    const importedData = JSON.parse(raw);
+
+                    for (const data of importedData) {
+                        await _temp_addDoc(_temp_collection(_temp_db, 'lectures'), {
+                            uid: user.uid,
+                            ...data,
+                            isDocumented: false,
+                            createdAt: _temp_serverTimestamp(),
+                        });
+                    }
+
+                    localStorage.removeItem('temp_lectures');
+                    console.log('[강비서] 🎉 DB 저장 대성공!');
+                    
+                    if (window.showToast) {
+                        window.showToast(`${importedData.length}건의 강의가 등록되었습니다.`, 'success');
+                    }
+                    
+                    // 캘린더 화면 갱신을 위해 새로고침
+                    setTimeout(() => location.reload(), 1200);
+                } catch (err) {
+                    console.error('[강비서] ❌ DB 저장 중 에러:', err);
+                }
+            } else {
+                // 아직 준비 안 됨 - 상태를 5초마다 한 번씩 콘솔에 찍어줌 (디버깅용)
+                if (Date.now() % 5000 < 100) {
+                    console.log(`[강비서] 대기 중... (User: ${!!user}, Tools: ${!!tools})`);
+                }
+            }
+        }, 300); // 0.3초 간격으로 체크
+    };
+
+    // 초기 로딩 지연을 고려해 2초 후 실행 시작
+    setTimeout(runImport, 2000);
+})();
+
+(function finalAttempt() {
+    const runImport = async (user) => {
+    const raw = localStorage.getItem('temp_lectures');
+    const tools = window._temp_db && window._temp_addDoc && window.updateDoc;
+    
+    if (!raw || !user || !tools) return;
+
+    try {
+        const { _temp_db, _temp_collection, _temp_addDoc, _temp_serverTimestamp, updateDoc, doc } = window;
+        const importedData = JSON.parse(raw);
+        
+        // 중복 실행 방지를 위해 즉시 로컬스토리지 비우기 (중요)
+        localStorage.removeItem('temp_lectures');
+
+        for (const data of importedData) {
+            const docRef = await _temp_addDoc(_temp_collection(_temp_db, 'lectures'), {
+                uid: user.uid,
+                ...data,
+                isDocumented: false,
+                createdAt: _temp_serverTimestamp(),
+                _status: 'needs_review'
+            });
+
+            await updateDoc(doc(_temp_db, 'lectures', docRef.id), {
+                id: docRef.id
+            });
+        }
+
+        // ✅ 저장이 끝난 후 "강제 새로고침"으로 데이터 반영
+        window.showToast?.(`${importedData.length}건 등록 완료!`, 'success');
+        setTimeout(() => {
+            location.replace(location.href); // 현재 페이지 강제 리로드
+        }, 1000);
+
+    } catch (e) {
+        console.error('[강비서] 연동 에러:', e);
+    }
+};
+
+    const targetAuth = window.auth || (typeof auth !== 'undefined' ? auth : null);
+
+    if (targetAuth) {
+        targetAuth.onAuthStateChanged((user) => {
+            if (user) {
+                const checkTools = setInterval(() => {
+                    // updateDoc까지 준비되었는지 확인
+                    if (window._temp_db && window.updateDoc) {
+                        clearInterval(checkTools);
+                        runImport(user);
+                    }
+                }, 500);
+            }
+        });
+    }
+})();

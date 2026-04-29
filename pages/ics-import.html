@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ICS Calendar Import</title>
+  <link rel="stylesheet" href="../css/ics-import.css">
+</head>
+<body>
+  <div class="container">
+
+    <header class="page-header">
+      <h1>Import Calendar Events</h1>
+      <p class="subtitle">Upload an <strong>.ics</strong> file to preview and import events into your schedule.</p>
+    </header>
+
+    <!-- ── Upload ──────────────────────────────────── -->
+    <section class="upload-section">
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-zone__icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="1.5"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <p class="drop-zone__text">Drag &amp; drop your <strong>.ics</strong> file here</p>
+        <p class="drop-zone__or">or</p>
+        <label class="btn btn--secondary" for="fileInput">Browse File</label>
+        <input type="file" id="fileInput" accept=".ics" hidden>
+        <p class="drop-zone__hint">Only iCalendar (.ics) files are supported</p>
+      </div>
+    </section>
+
+    <!-- ── Error banner ────────────────────────────── -->
+    <div class="error-banner" id="errorBanner" hidden>
+      <span id="errorMessage"></span>
+      <button class="error-banner__close"
+              onclick="this.parentElement.hidden=true" aria-label="Dismiss">✕</button>
+    </div>
+
+    <!-- ── Preview ─────────────────────────────────── -->
+    <section class="preview-section" id="previewSection" hidden>
+
+      <div class="preview-header">
+        <div class="preview-header__left">
+          <h2>Event Preview</h2>
+          <span class="badge-count" id="eventCount"></span>
+        </div>
+        <div class="preview-header__right">
+          <button class="btn btn--ghost btn--sm" id="selectAllBtn">Select All</button>
+          <button class="btn btn--ghost btn--sm" id="deselectAllBtn">Deselect All</button>
+          <button class="btn btn--primary" id="saveBtn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+              <polyline points="17 21 17 13 7 13 7 21"/>
+              <polyline points="7 3 7 8 15 8"/>
+            </svg>
+            Save Selected
+          </button>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table class="events-table">
+          <thead>
+            <tr>
+              <th class="col-check">
+                <input type="checkbox" id="masterCheck" checked title="Toggle all">
+              </th>
+              <th>Title</th>
+              <th>Date</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Location</th>
+              <th>Series</th>
+            </tr>
+          </thead>
+          <tbody id="eventsBody"></tbody>
+        </table>
+      </div>
+
+      <div class="preview-footer">
+        <button class="btn btn--outline btn--sm" id="resetBtn">↩ Upload Another File</button>
+      </div>
+    </section>
+
+    <!-- ── Save result ──────────────────────────────── -->
+    <div class="result-banner" id="resultBanner" hidden>
+      <span class="result-banner__icon">✓</span>
+      <span><strong id="savedCount"></strong> saved — open DevTools Console to view the array.</span>
+    </div>
+
+  </div>
+
+  <!-- CDNs: ical.js (parsing) + rrule.js (RRULE expansion) -->
+  <script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/rrule@2.8.1/dist/es5/rrule.min.js"></script>
+  <script src="../js/ics-import.js"></script>
+</body>
+</html>

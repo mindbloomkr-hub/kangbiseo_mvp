@@ -988,6 +988,35 @@
   transform: translateX(22px);
 }
 
+
+
+.btn--confirm-alldelete {
+  height: 40px;
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  background: var(--color-danger-600);
+  color: var(--color-white);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+/* 마우스를 올렸을 때 (Hover) */
+.btn--confirm-alldelete:hover {
+  background-color: #fa5252;
+  color: #ffffff;
+  border-color: #fa5252;
+}
+
+/* 버튼을 눌렀을 때 (Active) */
+.btn--confirm-alldelete:active {
+  transform: scale(0.98);
+}
+
+
+
 /* ════════════════════════════════
    RESPONSIVE
 ════════════════════════════════ */

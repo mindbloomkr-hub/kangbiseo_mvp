@@ -1,8 +1,17 @@
 // js/components/lectureModal.js — 강의 모달 공통 모듈 (상세보기 + CRUD)
 
+// 1. 모든 import 문 (파일 최상단에 모아두세요)
 import { db } from '../api.js';
-import {
-  collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp,
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  deleteDoc, 
+  doc, 
+  addDoc, 
+  updateDoc, 
+  serverTimestamp 
 } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
 import {
   TAX_LABEL, PROGRESS_LABEL, STATUS_META,
@@ -10,6 +19,36 @@ import {
   buildTimeOptions, updateDurationDisplay, syncEndTimeOptions, initTimeSelects,
   checkScheduleConflict,
 } from '../utils.js';
+
+// ---------------------------------------------------------
+// 2. [중요] window에 도구 등록 (반드시 import 문 아래에 위치!)
+// ---------------------------------------------------------
+try {
+  // 개별 통로 (기존 호환성 유지)
+  window._temp_db = db;
+  window._temp_collection = collection;
+  window._temp_addDoc = addDoc;
+  window._temp_serverTimestamp = serverTimestamp;
+  window.updateDoc = updateDoc; // 이전에 필요했던 도구들
+  window.doc = doc;
+
+  // 묶음 통로 (mypage.js 등에서 사용)
+  window.FirebaseFirestore = {
+    query, 
+    where, 
+    getDocs, 
+    deleteDoc, 
+    doc, 
+    addDoc, 
+    updateDoc, 
+    serverTimestamp
+  };
+
+  console.log('[강비서] ✅ 모든 Firebase 도구가 window에 안전하게 로드되었습니다.');
+} catch (e) {
+  console.error('[강비서] ❌ 도구 로딩 실패:', e.message);
+}
+
 
 /* ════════════════════════════════════════
    모듈 상태
@@ -249,6 +288,43 @@ async function _doSave(payload, currentUser, submitBtn) {
   } finally {
     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '저장하기'; }
   }
+
+  async function _doSave(payload, currentUser, submitBtn) {
+  // ... (기존 코드들) ...
+  
+  // 함수의 거의 끝부분, finally 블록 근처나 함수 닫기(}) 직전에 이 코드를 넣으세요.
+  // 딱 한 번만 실행되도록 체크하는 로직을 포함했습니다.
+  if (!window._icsImportChecked) {
+    window._icsImportChecked = true; 
+    _checkIcsImport(currentUser); // 아래에서 만들 함수를 호출
+  }
+}
+
+// _doSave 함수 바깥(아래)에 이 보조 함수를 하나만 더 써주세요.
+async function _checkIcsImport(user) {
+  const raw = localStorage.getItem('temp_lectures');
+  if (!raw || !user) return;
+
+  const importedData = JSON.parse(raw);
+  console.log('[강비서] 임시 데이터 발견, 저장 시작:', importedData.length);
+
+  try {
+    for (const data of importedData) {
+      // _doSave가 사용하는 Firebase 도구들을 그대로 사용
+      await addDoc(collection(db, 'lectures'), {
+        uid: user.uid,
+        ...data,
+        isDocumented: false,
+        createdAt: serverTimestamp(),
+      });
+    }
+    localStorage.removeItem('temp_lectures');
+    window.showToast?.(`${importedData.length}건의 강의가 등록되었습니다.`, 'success');
+    setTimeout(() => location.reload(), 1000);
+  } catch (err) {
+    console.error('[강비서] 연동 실패:', err);
+  }
+}
 }
 
 /* ════════════════════════════════════════
@@ -299,7 +375,7 @@ function _injectReviewStyles() {
   const s = document.createElement('style');
   s.id = 'lm-rv-styles';
   s.textContent = `
-.lm-rv-bd{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .2s}
+.lm-rv-bd{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .2s}
 .lm-rv-bd.open{opacity:1;pointer-events:auto}
 .lm-rv-modal{background:#fff;border-radius:20px;width:100%;max-width:520px;max-height:92vh;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.25);display:flex;flex-direction:column}
 .lm-rv-head{background:#dc2626;padding:18px 22px;border-radius:20px 20px 0 0;display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0}
@@ -655,4 +731,6 @@ function _bindEvents() {
       _closeConfirm();
     }
   });
+
+  
 }
