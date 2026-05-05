@@ -17,7 +17,7 @@ import {
   TAX_LABEL, PROGRESS_LABEL, STATUS_META,
   escapeHtml, formatDateKo, calcDuration, classifyStatus,
   buildTimeOptions, updateDurationDisplay, syncEndTimeOptions, initTimeSelects,
-  checkScheduleConflict,
+  checkScheduleConflict, _geocode,
 } from '../utils.js';
 
 // ---------------------------------------------------------
@@ -188,6 +188,7 @@ function _populateView(lec) {
   document.getElementById('v-wrapup-time').textContent     = lec.wrapupTime != null ? `${lec.wrapupTime}분` : '—';
   document.getElementById('v-supplies').textContent        = lec.supplies       || '—';
   document.getElementById('v-place').textContent           = lec.place          || '—';
+  document.getElementById('v-classroom').textContent       = lec.classroom      || '—';
   document.getElementById('v-parking').textContent         = lec.parkingInfo    || '—';
 
   const mgrName  = lec.managerName  || '';
@@ -234,6 +235,7 @@ function _populateForm(lec) {
   set('af-wrapup-time',     lec.wrapupTime ?? '');
   set('af-supplies',        lec.supplies);
   set('af-place',           lec.place);
+  set('af-classroom',       lec.classroom);
   set('af-parking',         lec.parkingInfo);
   set('af-manager-name',    lec.managerName);
   set('af-manager-phone',   lec.managerPhone);
@@ -424,6 +426,12 @@ function _injectReviewStyles() {
 .lm-rv-delay-value--ok{color:#16a34a}
 .lm-rv-btn--confirm{background:#16a34a;color:#fff}
 .lm-rv-btn--confirm:hover:not(:disabled){background:#15803d}
+.lm-rv-btn--force{background:#fff7ed;color:#92400e;border:1.5px solid #fcd34d}
+.lm-rv-btn--force:hover:not(:disabled){background:#fef3c7}
+.lm-rv-place{font-size:11px;color:#64748b;margin:0; white-space: normal; word-break: keep-all; overflow-wrap: break-word; line-height: 1.4; display: block;}
+.lm-rv-hard-warn{background:#fef2f2;border:2px solid #dc2626;border-radius:13px;padding:20px 18px;text-align:center}
+.lm-rv-hard-warn-title{font-size:16px;font-weight:900;color:#991b1b;margin:0 0 6px}
+.lm-rv-hard-warn-sub{font-size:13px;font-weight:500;color:#dc2626;margin:0}
   `;
   document.head.appendChild(s);
 }
@@ -443,11 +451,16 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
   const prevEnd    = prevIsNew ? rawNewLec.endTime            : _lecField(conflictLec, 'e');
   const prevTitle  = prevIsNew ? payload.title                : (conflictLec.title  || '(제목 없음)');
   const prevClient = prevIsNew ? payload.client               : (conflictLec.client || '—');
+  const prevPlace  = prevIsNew ? (rawNewLec.place  || '—')   : (conflictLec.place  || '—');
+  const prevStatus = prevIsNew ? null : (conflictLec.progressStatus ?? conflictLec._status ?? null);
   const nextStart  = prevIsNew ? _lecField(conflictLec, 's')  : rawNewLec.startTime;
   const nextEnd    = prevIsNew ? _lecField(conflictLec, 'e')  : rawNewLec.endTime;
   const nextTitle  = prevIsNew ? (conflictLec.title  || '(제목 없음)') : payload.title;
   const nextClient = prevIsNew ? (conflictLec.client || '—')            : payload.client;
+  const nextPlace  = prevIsNew ? (conflictLec.place  || '—') : (rawNewLec.place    || '—');
+  const nextStatus = prevIsNew ? (conflictLec.progressStatus ?? conflictLec._status ?? null) : null;
 
+  const isHard  = !!check.isHardConflict;
   const wrapup  = prevIsNew ? (rawNewLec.wrapupTime  ?? 0) : (conflictLec.wrapupTime ?? 0);
   const setup   = prevIsNew ? (conflictLec.setupTime ?? 0) : (rawNewLec.setupTime    ?? 0);
   const travel  = check.travelMin ?? 0;
@@ -464,12 +477,14 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
     ? '이동 버퍼 시간이 부족합니다'
     : '이동 시간 포함 시 도착이 늦습니다';
 
-  const mkCard = (isNew, start, end, title, client) =>
+    const _roleMap = { discussing: '논의 중인 강의', onhold: '보류 중인 강의', cancelled: '취소된 강의', needs_review: '검토 필요 강의' };
+    const mkCard = (isNew, start, end, title, client, place, status) =>
     `<div class="lm-rv-card ${isNew ? 'lm-rv-card--new' : 'lm-rv-card--ext'}">
-      <p class="lm-rv-role">${isNew ? '입력 중인 새 강의' : '기존 확정 강의'}</p>
+      <p class="lm-rv-role">${isNew ? '입력 중인 새 강의' : (_roleMap[status] || '기존 확정 강의')}</p>
       <p class="lm-rv-time">${escapeHtml(start)} ~ ${escapeHtml(end)}</p>
       <p class="lm-rv-lec-title">${escapeHtml(title)}</p>
       <p class="lm-rv-client">🏢 ${escapeHtml(client)}</p>
+      <p class="lm-rv-place">📍 ${escapeHtml(place)}</p>
     </div>`;
 
   const bd = document.createElement('div');
@@ -479,22 +494,27 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
   bd.setAttribute('aria-modal', 'true');
   bd.innerHTML = `
     <div class="lm-rv-modal">
-      <div class="lm-rv-head${delay <= 0 ? ' lm-rv-head--ok' : ''}">
+      <div class="lm-rv-head${(!isHard && delay <= 0) ? ' lm-rv-head--ok' : ''}">
         <div>
-          <h2>${delay <= 0 ? '✅ finish2' : '⚠️ 일정 충돌 검토'}</h2>
-          <p class="lm-rv-head-sub">${delay <= 0 ? 'okok' : escapeHtml(stepLabel)}</p>
+          <h2>${(!isHard && delay <= 0) ? '✅ finish2' : '⚠️ 일정 충돌 검토'}</h2>
+          <p class="lm-rv-head-sub">${(!isHard && delay <= 0) ? 'okok' : escapeHtml(stepLabel)}</p>
         </div>
         <button class="lm-rv-x" id="lm-rv-x" aria-label="닫기">✕</button>
       </div>
 
       <div class="lm-rv-body">
         <div class="lm-rv-vs">
-          ${mkCard(prevIsNew,  prevStart, prevEnd, prevTitle, prevClient)}
+          ${mkCard(prevIsNew,  prevStart, prevEnd, prevTitle, prevClient, prevPlace, prevStatus)}
           <div class="lm-rv-vs-badge">VS</div>
-          ${mkCard(!prevIsNew, nextStart, nextEnd, nextTitle, nextClient)}
+          ${mkCard(!prevIsNew, nextStart, nextEnd, nextTitle, nextClient, nextPlace, nextStatus)}
         </div>
 
-        <div class="lm-rv-breakdown">
+        ${isHard
+          ? `<div class="lm-rv-hard-warn">
+              <p class="lm-rv-hard-warn-title">⛔ TimeOverlapUU</p>
+              <p class="lm-rv-hard-warn-sub">${escapeHtml(stepLabel)}</p>
+            </div>`
+          : `<div class="lm-rv-breakdown">
           <p class="lm-rv-bd-title">🚨 지연 분석</p>
           <div class="lm-rv-row">
             <span>🚗 출발 예정 시각 (자차)</span>
@@ -524,13 +544,15 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
             <span class="lm-rv-delay-label${delay <= 0 ? ' lm-rv-delay-label--ok' : ''}">${delay <= 0 ? 'finish' : '🚩 최종 지연 예상'}</span>
             <span class="lm-rv-delay-value${delay <= 0 ? ' lm-rv-delay-value--ok' : ''}">${delay > 0 ? `${delay}분 부족` : 'OK'}</span>
           </div>
-        </div>
+        </div>`
+        }
       </div>
 
       <div class="lm-rv-foot">
         ${delay > 0
           ? `<button class="lm-rv-btn lm-rv-btn--back" id="lm-rv-back">← 수정하기</button>
-             <button class="lm-rv-btn lm-rv-btn--pending" id="lm-rv-pending">보류로 저장</button>`
+             <button class="lm-rv-btn lm-rv-btn--pending" id="lm-rv-pending">보류로 저장</button>
+             <button class="lm-rv-btn lm-rv-btn--force" id="lm-rv-force">그대로 저장하기</button>`
           : `<button class="lm-rv-btn lm-rv-btn--confirm" id="lm-rv-confirm">확인 후 등록</button>`
         }
       </div>
@@ -543,13 +565,21 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
   document.getElementById('lm-rv-x').addEventListener('click', _closeReviewModal);
   bd.addEventListener('click', e => { if (e.target === bd) _closeReviewModal(); });
 
-  if (delay > 0) {
+  if (isHard || delay > 0) {
     document.getElementById('lm-rv-back').addEventListener('click', _closeReviewModal);
     document.getElementById('lm-rv-pending').addEventListener('click', async () => {
       const btn = document.getElementById('lm-rv-pending');
       btn.disabled    = true;
       btn.textContent = '저장 중...';
       await _doSave({ ...payload, progressStatus: 'discussing' }, currentUser, null);
+      _closeReviewModal();
+      _closeModal();
+    });
+    document.getElementById('lm-rv-force').addEventListener('click', async () => {
+      const btn = document.getElementById('lm-rv-force');
+      btn.disabled    = true;
+      btn.textContent = '저장 중...';
+      await _doSave(payload, currentUser, null);
       _closeReviewModal();
       _closeModal();
     });
@@ -584,7 +614,7 @@ function _bindEvents() {
     const formPanel   = document.getElementById('form-panel');
     const isFormOpen  = formPanel && formPanel.style.display !== 'none';
     if (isFormOpen) {
-      const dirty = ['af-title','af-client','af-fee','af-topic','af-supplies','af-place','af-memo','af-group-info']
+      const dirty = ['af-title','af-client','af-fee','af-topic','af-supplies','af-place','af-classroom','af-memo','af-group-info']
         .some(id => (document.getElementById(id)?.value || '').trim() !== '');
       if (dirty && !confirm('작성 중인 내용이 사라집니다. 계속 닫으시겠어요?')) return;
     }
@@ -639,6 +669,12 @@ function _bindEvents() {
       return;
     }
 
+    const coords = await _geocode(place);
+    if (!coords) {
+      window.showToast?.('주소 오류: 카카오맵에서 찾을 수 없는 주소입니다.', 'error');
+      return;
+    }
+
     const { allLectures, currentUser } = _getCtx();
     const rawSettings = JSON.parse(localStorage.getItem('kangbiseo_device') ?? 'null')?.scheduler;
     const settings    = rawSettings ?? { bufferTime: 30, setupTime: 20, wrapupTime: 15 };
@@ -677,6 +713,7 @@ function _bindEvents() {
       wrapupTime:     Number(get('af-wrapup-time')) || 0,
       supplies:       get('af-supplies'),
       place:          get('af-place'),
+      classroom:      get('af-classroom'),
       parkingInfo:    get('af-parking'),
       managerName:    get('af-manager-name'),
       managerPhone:   get('af-manager-phone'),

@@ -156,6 +156,17 @@ function initCalendar() {
     nowIndicator:    true,
     noEventsContent: '이번 달 등록된 강의가 없어요.',
     eventDisplay:    'block',
+    displayEventTime: false,
+
+    eventContent: (arg) => {
+      const t   = arg.event.extendedProps.timeStart || '';
+      const isMobile = window.matchMedia('(max-width: 768px)').matches;
+      const fmt = isMobile ? t.trim().split(':')[0] : t.slice(0, 5);
+      const el  = document.createElement('span');
+      el.className   = 'fc-event-title';
+      el.textContent = `${fmt} ${arg.event.title}`;
+      return { domNodes: [el] };
+    },
 
     eventClick: ({ event }) => openModal(event.id),
 

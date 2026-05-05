@@ -133,14 +133,64 @@
 }
 
 .table-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   padding: var(--space-4) var(--space-6);
   border-bottom: 1px solid var(--color-border);
-  gap: var(--space-4);
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
+
+.search-row .table-result-count { margin-left: auto; white-space: nowrap; }
+
+/*
+.search-select {
+  height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-gray-50);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  padding: 0 var(--space-3);
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.search-select:focus {
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px rgba(37,99,196,0.10);
+}
+*/
+
+.search-date-range {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.search-date-input {
+  height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-gray-50);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  padding: 0 var(--space-2);
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.search-date-input:focus {
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px rgba(37,99,196,0.10);
+}
+
+.search-date-sep { font-size: var(--font-size-sm); color: var(--color-text-muted); }
 
 .table-result-count {
   font-size: var(--font-size-sm);
@@ -498,7 +548,7 @@
 .modal-section {}
 
 .modal-section-title-first {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-muted);
   letter-spacing: 0.06em;
@@ -509,7 +559,7 @@
 }
 
 .modal-section-title {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-muted);
   letter-spacing: 0.06em;
@@ -884,7 +934,7 @@
 ════════════════════════════════ */
 
 .add-form-section-title-first {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-muted);
   letter-spacing: 0.06em;
@@ -895,7 +945,7 @@
 }
 
 .add-form-section-title {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-muted);
   letter-spacing: 0.06em;

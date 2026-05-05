@@ -48,6 +48,7 @@ let currentUser          = null;
 let todos                = [];
 let allLectures          = [];
 let todayLectures        = [];
+let tomorrowLectures     = [];
 let unsubscribeTodos     = null;
 let unsubscribeLectures  = null;
 
@@ -182,56 +183,55 @@ function renderBriefingCards() {
 }
 
 /* ════════════════════════════════════════
-   5. 오늘의 타임스케줄
+   5. 타임스케줄 (오늘 / 내일 공용)
 ════════════════════════════════════════ */
-function renderTimeline() {
-  const container = document.getElementById('timeline-list');
+function timeToMin(t) {
+  if (!t) return 0;
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function renderTimelineInto(containerId, lectures, showNowBar) {
+  const container = document.getElementById(containerId);
   if (!container) return;
 
-  if (todayLectures.length === 0) {
+  if (lectures.length === 0) {
     container.innerHTML = `
       <div class="no-lecture-state" style="padding:var(--space-8) 0;">
         <div class="no-lecture-icon">📭</div>
-        <p class="no-lecture-text">오늘 일정이 없어요.</p>
+        <p class="no-lecture-text">${showNowBar ? '오늘 일정이 없어요.' : '내일은 강의가 없습니다.'}</p>
       </div>`;
     return;
   }
 
   const now    = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  const nowStr = `${String(now.getHours()).padStart(2,'00')}:${String(now.getMinutes()).padStart(2,'00')}`;
+  const nowStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
-  function timeToMin(t) {
-    if (!t) return 0;
-    const [h, m] = t.split(':').map(Number);
-    return h * 60 + m;
-  }
-
-  function nowBar() {
-    return `
-      <div style="display:flex;align-items:center;gap:12px;margin:12px 0 12px 90px;">
-        <div style="border-top:2px dashed #2563c4;width:40px;"></div>
-        <span style="color:#2563c4;font-weight:bold;font-size:0.85rem;">현재 ${nowStr}</span>
-      </div>`;
-  }
+  const nowBar = () => `
+    <div style="display:flex;align-items:center;gap:12px;margin:12px 0 12px 90px;">
+      <div style="border-top:2px dashed #2563c4;width:40px;"></div>
+      <span style="color:#2563c4;font-weight:bold;font-size:0.85rem;">현재 ${nowStr}</span>
+    </div>`;
 
   let nowInserted = false;
-  const html = todayLectures.map((lec, idx) => {
+  const html = lectures.map((lec, idx) => {
     const color    = getLectureColor(lec.id);
     const itemMin  = timeToMin(lec.timeStart);
-    const nextMin  = todayLectures[idx + 1] ? timeToMin(todayLectures[idx + 1].timeStart) : Infinity;
-    const isDone   = timeToMin(lec.timeEnd) < nowMin;
+    const nextMin  = lectures[idx + 1] ? timeToMin(lectures[idx + 1].timeStart) : Infinity;
+    const isDone   = showNowBar && timeToMin(lec.timeEnd) < nowMin;
 
     const nodeStyle       = isDone ? 'background:#9ca3af;border-color:#9ca3af;' : `background:${color};border-color:${color};`;
     const cardBorderStyle = isDone ? 'border-left:3px solid #9ca3af;opacity:0.7;' : `border-left:3px solid ${color};`;
 
     let barBefore = '';
     let barAfter  = '';
-
-    if (idx === 0 && nowMin < itemMin) {
-      nowInserted = true; barBefore = nowBar();
-    } else if (!nowInserted && nowMin >= itemMin && nowMin < nextMin) {
-      nowInserted = true; barAfter = nowBar();
+    if (showNowBar) {
+      if (idx === 0 && nowMin < itemMin) {
+        nowInserted = true; barBefore = nowBar();
+      } else if (!nowInserted && nowMin >= itemMin && nowMin < nextMin) {
+        nowInserted = true; barAfter = nowBar();
+      }
     }
 
     return `
@@ -249,8 +249,11 @@ function renderTimeline() {
       ${barAfter}`;
   }).join('');
 
-  container.innerHTML = html + (!nowInserted ? nowBar() : '');
+  container.innerHTML = html + (showNowBar && !nowInserted ? nowBar() : '');
 }
+
+function renderTimeline()         { renderTimelineInto('timeline-list',          todayLectures,    true);  }
+function renderTomorrowTimeline() { renderTimelineInto('tomorrow-timeline-list', tomorrowLectures, false); }
 
 /* ════════════════════════════════════════
    6. 이번 주 일정
@@ -334,15 +337,22 @@ function initLectures(uid) {
   unsubscribeLectures = subscribeLectures(uid, snapshot => {
     allLectures = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    const todayStr = getTodayString();
-    todayLectures  = allLectures
+    const todayStr    = getTodayString();
+    const tomorrowObj = new Date(); tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+    const tomorrowStr = `${tomorrowObj.getFullYear()}-${String(tomorrowObj.getMonth()+1).padStart(2,'0')}-${String(tomorrowObj.getDate()).padStart(2,'0')}`;
+
+    todayLectures    = allLectures
       .filter(l => l.date === todayStr)
+      .sort((a, b) => (a.timeStart || '').localeCompare(b.timeStart || ''));
+    tomorrowLectures = allLectures
+      .filter(l => l.date === tomorrowStr)
       .sort((a, b) => (a.timeStart || '').localeCompare(b.timeStart || ''));
 
     renderGreeting();
     renderStatBar();
     renderBriefingCards();
     renderTimeline();
+    renderTomorrowTimeline();
     renderWeekly();
     updateNavBadge();
   }, err => {
@@ -485,6 +495,7 @@ renderGreeting();
 renderStatBar();
 renderBriefingCards();
 renderTimeline();
+renderTomorrowTimeline();
 renderWeekly();
 renderTodoList();
 

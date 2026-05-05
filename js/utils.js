@@ -264,7 +264,7 @@ function _offsetDate(dateStr, days) {
 }
 
 // Kakao Local API: 주소 → { x(lng), y(lat) }
-async function _geocode(addr) {
+export async function _geocode(addr) {
   if (!addr?.trim()) return null;
   const key = addr.trim();
   if (_geocodeCache.has(key)) return _geocodeCache.get(key);
@@ -400,9 +400,8 @@ export async function checkScheduleConflict(newLec, sameDayLecs, settings, allLe
   for (const ext of sorted) {
     // ── Step 1: 직접 겹침 ──────────────────────────────
     if (Math.max(newStart, ext._s) < Math.min(newEnd, ext._e)) {
-      const D    = (await _fetchTravelMin(newLec.place, ext.place)) ?? 60;
-      const alts = await _buildAlternatives(newLec, sameDayLecs, settings, allLectures, D);
-      return { status: 'risk', step: 1, msg: 'overlap', travelMin: D, ...alts };
+      const alts = await _buildAlternatives(newLec, sameDayLecs, settings, allLectures, 0);
+      return { status: 'risk', step: 1, msg: 'overlap', travelMin: 0, isHardConflict: true, ...alts };
     }
 
     // prev / next 판별
@@ -422,9 +421,8 @@ export async function checkScheduleConflict(newLec, sameDayLecs, settings, allLe
 
     // ── Step 2: Pure Gap < B_min (API 없이 판단) ───────
     if (pureGap < bMin) {
-      const D    = (await _fetchTravelMin(prevPlace, nextPlace)) ?? 60;
-      const alts = await _buildAlternatives(newLec, sameDayLecs, settings, allLectures, D);
-      return { status: 'risk', step: 2, msg: 'buffer', bMin, pureGap, travelMin: D, ...alts };
+      const alts = await _buildAlternatives(newLec, sameDayLecs, settings, allLectures, 0);
+      return { status: 'risk', step: 2, msg: 'buffer', bMin, pureGap, travelMin: 0, isHardConflict: true, ...alts };
     }
 
     // ── Step 3: API 이동시간 포함 재판단 ───────────────
