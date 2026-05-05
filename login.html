@@ -192,7 +192,7 @@
               <input type="checkbox" id="login-remember" name="remember" />
               <span class="form-checkbox-label">로그인 상태 유지</span>
             </label>
-            <a href="#" class="form-link">비밀번호 찾기</a>
+            <a href="#" class="form-link" id="btn-forgot-pw">비밀번호 찾기</a>
           </div>
 
           <!-- 제출 -->
@@ -365,6 +365,40 @@
   ══════════════════════════════════════ -->
   <div class="toast" id="toast" role="alert" aria-live="assertive" aria-atomic="true"></div>
 
+
+  <!-- Password Reset: Input Modal -->
+  <div id="cp-modal" class="cp-bd" role="dialog" aria-modal="true" aria-labelledby="cp-modal-title">
+    <div class="cp-card">
+      <div class="cp-card-head">
+        <h2 id="cp-modal-title" class="cp-card-title">비밀번호 찾기</h2>
+        <button id="cp-close" class="cp-x" aria-label="닫기">✕</button>
+      </div>
+      <div class="cp-card-body">
+        <p class="cp-desc">가입 시 등록한 이메일 또는 전화번호를 입력하세요.</p>
+        <div class="cp-input-wrap">
+          <input type="text" id="cp-input" class="cp-input" placeholder=" " autocomplete="off" />
+          <div class="cp-hint" aria-hidden="true">
+            <span>예) example@email.com</span>
+            <span>또는 01012345678</span>
+          </div>
+        </div>
+      </div>
+      <div class="cp-card-foot">
+        <button id="cp-cancel" class="cp-btn cp-btn--cancel">취소</button>
+        <button id="cp-submit" class="cp-btn cp-btn--submit">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Password Reset: Result Modal -->
+  <div id="result-modal" class="cp-bd" role="alertdialog" aria-modal="true" aria-labelledby="result-title">
+    <div class="cp-card cp-result-card">
+      <div id="result-icon" class="cp-result-icon"></div>
+      <p id="result-title" class="cp-result-title"></p>
+      <p id="result-msg" class="cp-result-msg"></p>
+      <button id="result-close" class="cp-btn">확인</button>
+    </div>
+  </div>
 
   <!-- Scripts -->
   <script type="module" src="js/pages/login.js"></script>

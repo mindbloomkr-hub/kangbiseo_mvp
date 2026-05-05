@@ -9,9 +9,10 @@ import {
   updateProfile,
   GoogleAuthProvider,
   getAdditionalUserInfo,
+  sendPasswordResetEmail,
 } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-auth.js";
 import {
-  doc, setDoc, serverTimestamp,
+  doc, setDoc, serverTimestamp, collection, query, where, getDocs,
 } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js";
 
 /* ════════════════════════════════════════
@@ -322,3 +323,178 @@ function showToast(message, type = 'default') {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
 }
+
+/* ════════════════════════════════════════
+   비밀번호 찾기 — 모달 CSS 주입
+════════════════════════════════════════ */
+(function _injectCpStyles() {
+  if (document.getElementById('cp-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'cp-styles';
+  s.textContent = `
+.cp-bd{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .2s}
+.cp-bd.open{opacity:1;pointer-events:auto}
+.cp-card{background:#fff;border-radius:20px;width:100%;max-width:400px;box-shadow:0 24px 64px rgba(0,0,0,.22);overflow:hidden}
+.cp-card-head{display:flex;align-items:center;justify-content:space-between;padding:20px 22px 0}
+.cp-card-title{font-size:17px;font-weight:800;color:#1e293b;margin:0}
+.cp-x{background:none;border:none;font-size:18px;color:#94a3b8;cursor:pointer;padding:4px 8px;border-radius:6px;line-height:1}
+.cp-x:hover{background:#f1f5f9;color:#475569}
+.cp-card-body{padding:14px 22px 18px}
+.cp-desc{font-size:13px;color:#64748b;margin:0 0 14px;line-height:1.6}
+.cp-input-wrap{position:relative}
+.cp-input{width:100%;height:52px;box-sizing:border-box;border:1.5px solid #e2e8f0;border-radius:12px;padding:0 14px;font-size:15px;color:#1e293b;background:#f8fafc;outline:none;transition:border-color .15s,box-shadow .15s}
+.cp-input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,196,.12);background:#fff}
+.cp-hint{position:absolute;top:0;left:14px;height:52px;display:flex;flex-direction:column;justify-content:center;gap:1px;pointer-events:none}
+.cp-hint span{font-size:12px;color:#94a3b8;line-height:1.4}
+.cp-input:not(:placeholder-shown)+.cp-hint{display:none}
+.cp-card-foot{display:flex;gap:10px;padding:0 22px 22px}
+.cp-btn{flex:1;height:44px;border-radius:11px;font-size:14px;font-weight:800;border:none;cursor:pointer;transition:background .15s,opacity .15s}
+.cp-btn:disabled{opacity:.45;cursor:not-allowed}
+.cp-btn--cancel{background:#f1f5f9;color:#475569}.cp-btn--cancel:hover{background:#e2e8f0}
+.cp-btn--submit{background:#2563eb;color:#fff}.cp-btn--submit:hover{background:#1d4ed8}
+.cp-result-card{padding:36px 24px 28px;text-align:center}
+.cp-result-icon{font-size:52px;margin-bottom:14px;line-height:1}
+.cp-result-title{font-size:17px;font-weight:800;color:#1e293b;margin:0 0 8px}
+.cp-result-msg{font-size:13px;color:#64748b;margin:0 0 20px;word-break:break-all;line-height:1.7}
+.cp-result-card .cp-btn{width:100%;flex:none}
+.cp-btn--ok{background:#16a34a;color:#fff}.cp-btn--ok:hover{background:#15803d}
+.cp-btn--err{background:#dc2626;color:#fff}.cp-btn--err:hover{background:#b91c1c}
+  `;
+  document.head.appendChild(s);
+})();
+
+/* ════════════════════════════════════════
+   비밀번호 찾기 — Custom Prompt (Promise)
+════════════════════════════════════════ */
+function showCustomPrompt() {
+  return new Promise(resolve => {
+    const modal     = document.getElementById('cp-modal');
+    const input     = document.getElementById('cp-input');
+    const submitBtn = document.getElementById('cp-submit');
+    const cancelBtn = document.getElementById('cp-cancel');
+    const closeBtn  = document.getElementById('cp-close');
+
+    input.value = '';
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => input.focus(), 60);
+
+    function done(val) {
+      modal.classList.remove('open');
+      document.body.style.overflow = '';
+      submitBtn.removeEventListener('click', onSubmit);
+      cancelBtn.removeEventListener('click', onCancel);
+      closeBtn.removeEventListener('click',  onCancel);
+      input.removeEventListener('keydown',   onKey);
+      modal.removeEventListener('click',     onBackdrop);
+      resolve(val);
+    }
+
+    function onSubmit()   { const v = input.value.trim(); if (v) done(v); }
+    function onCancel()   { done(null); }
+    function onKey(e)     { if (e.key === 'Enter') { e.preventDefault(); onSubmit(); } else if (e.key === 'Escape') onCancel(); }
+    function onBackdrop(e){ if (e.target === modal) onCancel(); }
+
+    submitBtn.addEventListener('click', onSubmit);
+    cancelBtn.addEventListener('click', onCancel);
+    closeBtn.addEventListener('click',  onCancel);
+    input.addEventListener('keydown',   onKey);
+    modal.addEventListener('click',     onBackdrop);
+  });
+}
+
+/* ════════════════════════════════════════
+   비밀번호 찾기 — Result Modal (Promise)
+════════════════════════════════════════ */
+function showResultModal(type, title, msg) {
+  return new Promise(resolve => {
+    const modal    = document.getElementById('result-modal');
+    const iconEl   = document.getElementById('result-icon');
+    const titleEl  = document.getElementById('result-title');
+    const msgEl    = document.getElementById('result-msg');
+    const closeBtn = document.getElementById('result-close');
+
+    iconEl.textContent  = type === 'success' ? '✅' : '❌';
+    titleEl.textContent = title;
+    msgEl.textContent   = msg;
+    closeBtn.className  = `cp-btn ${type === 'success' ? 'cp-btn--ok' : 'cp-btn--err'}`;
+
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => closeBtn.focus(), 60);
+
+    function onClose() {
+      modal.classList.remove('open');
+      document.body.style.overflow = '';
+      closeBtn.removeEventListener('click', onClose);
+      modal.removeEventListener('click', onBackdrop);
+      resolve();
+    }
+    function onBackdrop(e) { if (e.target === modal) onClose(); }
+
+    closeBtn.addEventListener('click', onClose);
+    modal.addEventListener('click', onBackdrop);
+  });
+}
+
+/* ════════════════════════════════════════
+   비밀번호 찾기 — Phone Normalizer
+════════════════════════════════════════ */
+function normalizePhone(input) {
+  const d = input.replace(/\D/g, '');
+  if (d.length === 11) return `${d.slice(0,3)}-${d.slice(3,7)}-${d.slice(7)}`;
+  if (d.length === 10) return `${d.slice(0,3)}-${d.slice(3,6)}-${d.slice(6)}`;
+  return d;
+}
+
+/* ════════════════════════════════════════
+   비밀번호 찾기 — 핵심 로직
+════════════════════════════════════════ */
+async function _handlePasswordReset(input) {
+  let targetEmail = null;
+
+  if (input.includes('@')) {
+    // 1. 이메일로 입력을 받았을 때
+    try {
+      const snap = await getDocs(query(collection(db, 'users'), where('email', '==', input)));
+
+      if (snap.empty) { await showResultModal('error', '가입 정보 없음', `${input} 주소로 가입된 내역이 없습니다.`); return; }
+      targetEmail = input;
+    } catch {
+      await showResultModal('error', '조회 오류', '이메일 확인 중 문제가 발생했습니다.'); return;
+    }
+  } else {
+    // 2. 전화번호로 입력을 받았을 때
+    const normalized = normalizePhone(input);
+    try {
+      const snap = await getDocs(query(collection(db, 'users'), where('tel', '==', normalized)));
+      if (snap.empty) { await showResultModal('error', '정보를 찾을 수 없습니다', `${normalized} 번호로 등록된 사용자가 없습니다.`); return; }
+      targetEmail = snap.docs[0].data().email;
+    } catch {
+      await showResultModal('error', '조회 오류', '전화번호 확인 중 문제가 발생했습니다.'); return;
+    }
+  }
+
+  // 3. 최종 이메일 주소 유효성 검사
+  if (!targetEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+    await showResultModal('error', '유효하지 않은 이메일', '연결된 이메일 주소 형식이 올바르지 않습니다.'); return;
+  }
+
+  // 4. 파이어베이스 메일 전송 시도
+  try {
+    await sendPasswordResetEmail(auth, targetEmail);
+    await showResultModal('success', '이메일을 전송했습니다', `${targetEmail} 주소로 재설정 링크를 보냈습니다.`);
+  } catch {
+    // 이메일이 존재하지만 발송에 실패한 경우
+    await showResultModal('error', '전송 실패', '메일 발송 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+  }
+}
+
+/* ════════════════════════════════════════
+   비밀번호 찾기 — 버튼 바인딩
+════════════════════════════════════════ */
+document.getElementById('btn-forgot-pw')?.addEventListener('click', async e => {
+  e.preventDefault();
+  const input = await showCustomPrompt();
+  if (input) await _handlePasswordReset(input);
+});

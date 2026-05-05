@@ -307,13 +307,13 @@ function _computeSeqUpdates() {
   const groupIds = new Set();
   for (const id of selectedIds) {
     const lec = allLectures.find(l => l.id === id);
-    if (lec?.groupID) groupIds.add(lec.groupID);
+    if (lec?.groupId) groupIds.add(lec.groupId);
   }
 
   const updates = {};
   for (const gid of groupIds) {
     const inGroup = allLectures
-      .filter(l => l.groupID === gid)
+      .filter(l => l.groupId === gid)
       .sort((a, b) => {
         const d = a.date.localeCompare(b.date);
         return d !== 0 ? d : (a.timeStart ?? '').localeCompare(b.timeStart ?? '');
@@ -370,7 +370,7 @@ async function _runSeqOnly() {
 ════════════════════════════════════════ */
 function _openBatchModal() {
   document.getElementById('bm-backdrop')?.remove();
-  const hasGroup = [...selectedIds].some(id => allLectures.find(l => l.id === id)?.groupID);
+  const hasGroup = [...selectedIds].some(id => allLectures.find(l => l.id === id)?.groupId);
 
   const bd = document.createElement('div');
   bd.id = 'bm-backdrop';
@@ -384,6 +384,7 @@ function _openBatchModal() {
       <div class="bm-body">
         <p class="bm-hint">입력하지 않은 항목은 기존 값을 유지합니다.</p>
         <div class="bm-field"><label class="bm-label" for="bm-client">고객사</label><input class="bm-input" type="text" id="bm-client" placeholder="고객사명" /></div>
+        <div class="bm-field"><label class="bm-label" for="bm-place">강의장 주소</label><input class="bm-input" type="text" id="bm-place" placeholder="장소 또는 주소 입력" /></div>
         <div class="bm-field"><label class="bm-label" for="bm-fee">강사료 (만원)</label><input class="bm-input" type="number" id="bm-fee" placeholder="숫자만 입력" /></div>
         <div class="bm-field">
           <label class="bm-label" for="bm-progress">진행 상태</label>
@@ -438,6 +439,7 @@ function _openBatchModal() {
     try {
       const payload = {};
       const client   = document.getElementById('bm-client')?.value.trim();
+      const place    = document.getElementById('bm-place')?.value.trim();
       const fee      = document.getElementById('bm-fee')?.value.trim();
       const progress = document.getElementById('bm-progress')?.value;
       const paid     = document.getElementById('bm-paid')?.value;
@@ -447,6 +449,7 @@ function _openBatchModal() {
       const doSeq    = document.getElementById('bm-seq-cb')?.checked ?? false;
 
       if (client)   payload.client         = client;
+      if (place)    payload.place          = place;
       if (fee)      payload.fee            = Number(fee);
       if (progress) payload.progressStatus = progress;
       if (paid)     payload.isPaid         = paid === 'true';

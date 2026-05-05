@@ -107,6 +107,7 @@ async function loadFirebaseProfile(uid) {
       setVal('profile-slogan',    d.slogan   || '');
       setVal('profile-bio',       d.bio      || '');
       setVal('profile-nickname',  d.nickname || '');
+      setVal('prof-tel',          d.tel      || '');
       // Firestore 저장값이 있으면 기기 설정보다 우선 적용
       if (d.setupTime  != null) device.scheduler.setupTime  = Number(d.setupTime);
       if (d.wrapupTime != null) device.scheduler.wrapupTime = Number(d.wrapupTime);
@@ -164,6 +165,13 @@ function initProfile(user) {
   });
   kwInput?.addEventListener('blur', () => { if (kwInput.value.trim()) addKeyword(kwInput.value); });
   document.getElementById('keyword-chip-row')?.addEventListener('click', () => kwInput?.focus());
+
+  document.getElementById('prof-tel')?.addEventListener('input', function () {
+    const digits = this.value.replace(/\D/g, '').slice(0, 11);
+    if (digits.length < 4) this.value = digits;
+    else if (digits.length < 8) this.value = `${digits.slice(0,3)}-${digits.slice(3)}`;
+    else this.value = `${digits.slice(0,3)}-${digits.slice(3,7)}-${digits.slice(7)}`;
+  });
 }
 
 function showProfilePhoto(dataUrl) {
@@ -647,6 +655,7 @@ function initFloatingSave() {
         topics:     fbTopics,
         setupTime:  device.scheduler.setupTime,
         wrapupTime: device.scheduler.wrapupTime,
+        tel:        getVal('prof-tel').trim(),
         updatedAt:  serverTimestamp(),
       }, { merge: true });
 
