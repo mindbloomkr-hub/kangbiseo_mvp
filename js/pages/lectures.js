@@ -4,6 +4,7 @@ import { subscribeLectures, authGuard, db } from '../api.js';
 import { writeBatch, doc } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
 import { TODAY, STATUS_META, escapeHtml, formatDateKo, classifyStatus } from '../utils.js';
 import { initLectureModal, openModal } from '../components/lectureModal.js';
+import { initMultiSessionModal, openMultiSessionModal } from '../components/multiSessionModal.js';
 
 /* ════════════════════════════════════════
    상태
@@ -384,7 +385,26 @@ function _openBatchModal() {
       <div class="bm-body">
         <p class="bm-hint">입력하지 않은 항목은 기존 값을 유지합니다.</p>
         <div class="bm-field"><label class="bm-label" for="bm-client">고객사</label><input class="bm-input" type="text" id="bm-client" placeholder="고객사명" /></div>
-        <div class="bm-field"><label class="bm-label" for="bm-place">강의장 주소</label><input class="bm-input" type="text" id="bm-place" placeholder="장소 또는 주소 입력" /></div>
+        <div class="bm-field"><label class="bm-label" for="bm-place">강의장 주소</label><input class="bm-input" type="text" id="bm-place" placeholder="강의장 주소 입력" /></div>
+        <div class="bm-field">
+          <label class="bm-label" for="bm-feeType">정산 방식</label>
+          <select class="bm-select" id="bm-feeType">
+            <option value="">변경 안 함</option>
+            <option value="fixed">고정 금액 (전체)</option>
+            <option value="unit">회당 금액</option>
+          </select>
+        </div>
+        <div class="bm-field"><label class="bm-label" for="bm-feeAmount">강사료 금액 (원)</label><input class="bm-input" type="number" id="bm-feeAmount" placeholder="숫자만 입력" /></div>
+        <div class="bm-field">
+          <label class="bm-label" for="bm-settlementCycle">정산 주기</label>
+          <select class="bm-select" id="bm-settlementCycle">
+            <option value="">변경 안 함</option>
+            <option value="session">회차별 정산</option>
+            <option value="monthly">월별 정산</option>
+            <option value="total">완료 후 일괄</option>
+          </select>
+        </div>
+        <div class="bm-field"><label class="bm-label" for="bm-classroom">강의장</label><input class="bm-input" type="text" id="bm-classroom" placeholder="강의장 입력" /></div>
         <div class="bm-field"><label class="bm-label" for="bm-fee">강사료 (만원)</label><input class="bm-input" type="number" id="bm-fee" placeholder="숫자만 입력" /></div>
         <div class="bm-field">
           <label class="bm-label" for="bm-progress">진행 상태</label>
@@ -440,22 +460,30 @@ function _openBatchModal() {
       const payload = {};
       const client   = document.getElementById('bm-client')?.value.trim();
       const place    = document.getElementById('bm-place')?.value.trim();
+      const classroom = document.getElementById('bm-classroom')?.value.trim();
       const fee      = document.getElementById('bm-fee')?.value.trim();
       const progress = document.getElementById('bm-progress')?.value;
       const paid     = document.getElementById('bm-paid')?.value;
+      const feeType         = document.getElementById('bm-feeType')?.value;
+      const feeAmount       = document.getElementById('bm-feeAmount')?.value.trim();
+      const settlementCycle = document.getElementById('bm-settlementCycle')?.value;
       const mgrName  = document.getElementById('bm-mgr-name')?.value.trim();
       const mgrPhone = document.getElementById('bm-mgr-phone')?.value.trim();
       const mgrEmail = document.getElementById('bm-mgr-email')?.value.trim();
       const doSeq    = document.getElementById('bm-seq-cb')?.checked ?? false;
 
-      if (client)   payload.client         = client;
-      if (place)    payload.place          = place;
-      if (fee)      payload.fee            = Number(fee);
-      if (progress) payload.progressStatus = progress;
-      if (paid)     payload.isPaid         = paid === 'true';
-      if (mgrName)  payload.managerName    = mgrName;
-      if (mgrPhone) payload.managerPhone   = mgrPhone;
-      if (mgrEmail) payload.managerEmail   = mgrEmail;
+      if (client)          payload.client          = client;
+      if (place)           payload.place           = place;
+      if (feeType)         payload.feeType         = feeType;
+      if (feeAmount)       payload.feeAmount       = Number(feeAmount);
+      if (settlementCycle) payload.settlementCycle = settlementCycle;
+      if (classroom)       payload.classroom       = classroom;
+      if (fee)             payload.fee             = Number(fee);
+      if (progress)   payload.progressStatus = progress;
+      if (paid)       payload.isPaid         = paid === 'true';
+      if (mgrName)    payload.managerName    = mgrName;
+      if (mgrPhone)   payload.managerPhone   = mgrPhone;
+      if (mgrEmail)   payload.managerEmail   = mgrEmail;
 
       const seqUpdates = doSeq ? _computeSeqUpdates() : {};
       if (Object.keys(payload).length === 0 && Object.keys(seqUpdates).length === 0) {
@@ -522,7 +550,12 @@ document.getElementById('select-all-cb')?.addEventListener('change', e => {
 authGuard(user => {
   currentUser = user;
   initLectureModal(() => ({ allLectures, currentUser }));
+  initMultiSessionModal(() => ({ currentUser }));
   initLectures(user.uid);
+
+  document.getElementById('btn-multi-lecture')?.addEventListener('click', () => {
+    openMultiSessionModal();
+  });
 }, {
   withModal: true,
   cleanupFn: () => unsubLectures?.(),

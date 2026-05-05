@@ -438,6 +438,126 @@ export async function checkScheduleConflict(newLec, sameDayLecs, settings, allLe
 }
 
 /* ════════════════════════════════════════
+   정산 예상 금액 집계
+   lectures: Firestore 강의 배열 (allLectures)
+   반환값: {
+     'YYYY-MM': {
+       paid:   { amount: number, count: number },
+       unpaid: { amount: number, count: number },
+     },
+     ...
+   }
+════════════════════════════════════════ */
+export function calculateExpectedSettlement(lectures) {
+  // For settlementCycle === 'total': attribute every session's share to the
+  // month that contains the group's final session.
+  const lastDateByGroup = new Map();
+  for (const lec of lectures) {
+    if (!lec.groupId || !lec.date) continue;
+    const cur = lastDateByGroup.get(lec.groupId);
+    if (!cur || lec.date > cur) lastDateByGroup.set(lec.groupId, lec.date);
+  }
+
+  const summary = {};
+
+  for (const lec of lectures) {
+    if (lec.progressStatus === 'cancelled') continue;
+    if (!lec.feeType || !lec.feeAmount || !lec.date) continue;
+
+    let sessionAmount;
+    if (lec.feeType === 'unit') {
+      sessionAmount = lec.feeAmount;
+    } else if (lec.feeType === 'fixed') {
+      if (!lec.sessionTotal) continue; // can't divide without a total
+      sessionAmount = Math.round(lec.feeAmount / lec.sessionTotal);
+    } else {
+      continue;
+    }
+
+    // 'total' cycle: push all shares to the month of the last session
+    const attributionDate =
+      lec.settlementCycle === 'total' && lec.groupId
+        ? (lastDateByGroup.get(lec.groupId) ?? lec.date)
+        : lec.date;
+
+    const month  = attributionDate.slice(0, 7); // 'YYYY-MM'
+    const status = lec.isPaid ? 'paid' : 'unpaid';
+
+    if (!summary[month]) {
+      summary[month] = {
+        paid:   { amount: 0, count: 0 },
+        unpaid: { amount: 0, count: 0 },
+      };
+    }
+    summary[month][status].amount += sessionAmount;
+    summary[month][status].count  += 1;
+  }
+
+  return summary;
+}
+
+ /* ════════════════════════════════════════
+날짜 + 요일 표시 입력 (Date-with-Day Input)
+
+initDateWithDay(input)
+- <input type="date"> 를 투명하게 위에 올리고
+- 아래 read-only 텍스트 입력에 YYYY-MM-DD(요) 형식을 표시한다.
+- 원본 input의 모든 클래스·속성을 유지하므로 기존 이벤트 위임 / data-* 속성이 그대로 작동한다.
+
+initAllDateWithDay(root?)
+- root 안의 input[type="date"].day-input 전체에 위 함수를 적용한다.
+- data-ddi-init 속성으로 중복 초기화를 방지한다.
+════════════════════════════════════════ */
+
+function _injectDdiStyles() {
+if (document.getElementById('ddi-styles')) return;
+const s = document.createElement('style');
+s.id = 'ddi-styles';
+s.textContent = `
+.ddi-wrap{position:relative;display:block}
+.ddi-display{pointer-events:none!important;user-select:none;color:#1e293b}
+.ddi-native{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;opacity:0!important;cursor:pointer!important;z-index:1!important;box-sizing:border-box!important}
+`;
+document.head.appendChild(s);
+}
+
+export function initDateWithDay(input) {
+if (!input || input.dataset.ddiInit) return;
+input.dataset.ddiInit = '1';
+_injectDdiStyles();
+
+// Build display (read-only, visually identical to original)
+const display = document.createElement('input');
+display.type     = 'text';
+display.readOnly = true;
+display.className = input.className + ' ddi-display';
+display.tabIndex  = -1;
+display.setAttribute('aria-hidden', 'true');
+display.placeholder = input.placeholder || 'YYYY-MM-DD';
+
+// Wrap original input
+const wrap = document.createElement('div');
+wrap.className = 'ddi-wrap';
+input.parentNode.insertBefore(wrap, input);
+wrap.appendChild(display);
+wrap.appendChild(input);
+input.classList.add('ddi-native');
+
+// Sync helper: formats value → 'YYYY-MM-DD(요)'
+const sync = () => {
+if (!input.value) { display.value = ''; return; }
+const d = new Date(input.value + 'T00:00:00');
+display.value = isNaN(d) ? input.value : `${input.value}(${DAY_KO[d.getDay()]})`;
+};
+sync(); // initialize with any pre-set value
+input.addEventListener('change', sync);
+}
+
+export function initAllDateWithDay(root = document) {
+  root.querySelectorAll('input[type="date"].day-input:not([data-ddi-init])').forEach(initDateWithDay);
+}
+
+/* ════════════════════════════════════════
    강의 모달 HTML 동적 로드 — components/modal.html fetch 후 주입
 ════════════════════════════════════════ */
 export async function loadModal() {

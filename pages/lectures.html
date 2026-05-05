@@ -38,8 +38,9 @@
             <h1 class="page-title">나의 강의 리스트</h1>
             <p class="page-subtitle">등록된 전체 강의 일정과 정산 현황을 관리하세요.</p>
           </div>
-          <div class="lectures-header-right">
-            <button class="btn btn--primary" id="btn-add-lecture">＋ 강의 추가</button>
+          <div class="lectures-header-right" style="display:flex; gap:10px; flex-wrap: wrap;">
+            <button class="btn btn--secondary" id="btn-multi-lecture" style="white-space:nowrap">📅 연속 등록</button>
+            <button class="btn btn--primary"   id="btn-add-lecture">＋ 강의 추가</button>
           </div>
         </div>
 
@@ -95,7 +96,7 @@
                 <tr>
                   <th scope="col" class="col-cb"><input type="checkbox" id="select-all-cb" aria-label="전체 선택" /></th>
                   <th scope="col" style="width:72px">날짜</th>
-                  <th scope="col" style="width:96px">시간</th>
+                  <th scope="col" style="width:72px">시간</th>
                   <th scope="col">강의 제목</th>
                   <th scope="col" style="width:140px">강의처</th>
                   <th scope="col" style="width:160px">장소</th>

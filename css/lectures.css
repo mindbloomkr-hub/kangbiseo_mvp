@@ -52,18 +52,22 @@
 ════════════════════════════════ */
 .filter-tabs-bar {
   display: flex;
+  flex-wrap: wrap; /* 핵심: 아이템이 넘치면 다음 줄로 넘김 */
   align-items: center;
-  gap: 0;
+  gap: 8px; /* 줄바꿈 시 아이템 간의 간격을 위해 0보다 큰 값을 추천합니다 */
   background: var(--color-white);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: 4px;
+  padding: 8px; /* 줄바꿈 시 답답해 보이지 않도록 패딩을 약간 조절했습니다 */
   margin-bottom: var(--space-5);
-  overflow-x: auto;
-  scrollbar-width: none;
+  
+  /* 줄바꿈을 사용하므로 가로 스크롤 관련 설정은 더 이상 필요 없습니다 */
+  /* overflow-x: auto; 삭제 */
+  /* scrollbar-width: none; 삭제 */
 }
 
-.filter-tabs-bar::-webkit-scrollbar { display: none; }
+/* 스크롤바 숨김 관련 코드도 삭제하거나 주석 처리 */
+/* .filter-tabs-bar::-webkit-scrollbar { display: none; } */
 
 .filter-tab {
   display: inline-flex;
@@ -129,7 +133,14 @@
   background: var(--color-white);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  overflow: hidden;
+  overflow: hidden; /* overflow-x: auto 삭제 */
+  width: 100%;
+}
+
+.table-panel table {
+  width: 100%; /* 90%를 100%로 수정 */
+  border-collapse: collapse;
+  min-width: 600px; 
 }
 
 .table-toolbar {
@@ -141,7 +152,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  flex-wrap: wrap;
+  flex-wrap: wrap; /* 요소가 많으면 알아서 아래로 내려감 */
 }
 
 .search-row .table-result-count { margin-left: auto; white-space: nowrap; }
@@ -234,7 +245,9 @@
 
 /* ── 테이블 ── */
 .lectures-table-wrap {
+  width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .lectures-table {
@@ -315,6 +328,7 @@
 /* 강의명 셀 */
 .td-title { font-weight: var(--font-weight-semibold) !important; }
 .td-title-sub {
+  max-width: 240px;
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
   font-weight: var(--font-weight-regular) !important;
@@ -322,7 +336,9 @@
 }
 
 /* 강의처 */
-.td-client { color: var(--color-text-secondary) !important; }
+.td-client { 
+  font-size: var(--font-size-xs) !important;
+  color: var(--color-text-secondary) !important; }
 
 /* 장소 */
 .td-place {

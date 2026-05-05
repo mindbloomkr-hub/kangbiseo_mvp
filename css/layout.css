@@ -282,6 +282,8 @@
 ════════════════════════════════ */
 .app-main {
   flex: 1;
+  min-width: 0;      /* 핵심: 자식 때문에 늘어나는 것을 방지 */
+  max-width: 100%;   /* 화면 너비를 절대 넘지 못하게 함 */
   margin-left: var(--sidebar-width);
   display: flex;
   flex-direction: column;
@@ -368,6 +370,9 @@
 /* ── 페이지 콘텐츠 래퍼 ── */
 .page-content {
   flex: 1;
+  min-width: 0;      /* 핵심: 자식(테이블)이 커도 부모는 줄어들 수 있게 함 */
+  width: 100%;
+  overflow-x: hidden; /* 혹시나 튀어나오는 놈들은 여기서 가차없이 자름 */
   padding: var(--space-8);
   box-sizing: border-box;
 }
