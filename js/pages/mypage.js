@@ -112,6 +112,15 @@ async function loadFirebaseProfile(uid) {
       // Firestore 저장값이 있으면 기기 설정보다 우선 적용
       if (d.setupTime  != null) device.scheduler.setupTime  = Number(d.setupTime);
       if (d.wrapupTime != null) device.scheduler.wrapupTime = Number(d.wrapupTime);
+      if (d.bufferTime != null) {
+        if (d.bufferIsCustom) {
+          device.scheduler.bufferTime   = 'custom';
+          device.scheduler.bufferCustom = Number(d.bufferTime);
+        } else {
+          device.scheduler.bufferTime = Number(d.bufferTime);
+        }
+      }
+      if (d.originAddress != null) device.scheduler.originAddress = d.originAddress;
     } else {
       fbKeywords = []; fbTopics = [];
     }
@@ -656,8 +665,13 @@ function initFloatingSave() {
         nickname,
         keywords:   fbKeywords,
         topics:     fbTopics,
-        setupTime:  device.scheduler.setupTime,
-        wrapupTime: device.scheduler.wrapupTime,
+        setupTime:     device.scheduler.setupTime,
+        wrapupTime:    device.scheduler.wrapupTime,
+        bufferTime:    device.scheduler.bufferTime === 'custom'
+          ? (device.scheduler.bufferCustom || 45)
+          : (device.scheduler.bufferTime   || 30),
+        bufferIsCustom: device.scheduler.bufferTime === 'custom',
+        originAddress:  device.scheduler.originAddress || '',
         tel:        getVal('prof-tel').trim(),
         updatedAt:  serverTimestamp(),
       }, { merge: true });

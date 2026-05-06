@@ -371,6 +371,35 @@ function _findConflictLec(rawNewLec, sameDayRaw, check) {
 }
 
 /* ════════════════════════════════════════
+   카카오 주소 검색 (공통)
+════════════════════════════════════════ */
+function _openKakaoAddress(targetId) {
+  const load = () => new Promise((resolve, reject) => {
+    if (window.daum?.Postcode) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
+    s.onload  = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  load().then(() => {
+    new daum.Postcode({
+      oncomplete(data) {
+        const addr = data.roadAddress || data.jibunAddress;
+        const el = document.getElementById(targetId);
+        if (el) {
+          el.value = addr;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.focus();
+        }
+      },
+    }).open();
+  }).catch(() => {
+    window.showToast?.('주소 검색 서비스를 불러올 수 없습니다.', 'error');
+  });
+}
+
+/* ════════════════════════════════════════
    리뷰 모달 — CSS 주입 (1회)
 ════════════════════════════════════════ */
 function _injectReviewStyles() {
@@ -699,19 +728,24 @@ function _bindEvents() {
   document.getElementById('af-online')?.addEventListener('change', e => {
     const placeEl  = document.getElementById('af-place');
     const required = document.getElementById('af-place-required');
+    const addrBtn  = document.getElementById('v-addr-search');
     if (!placeEl) return;
     if (e.target.checked) {
       placeEl.disabled    = true;
       placeEl.value       = 'Online';
       placeEl.placeholder = '';
       if (required) required.style.display = 'none';
+      if (addrBtn)  addrBtn.disabled = true;
     } else {
       placeEl.disabled    = false;
       placeEl.value       = '';
       placeEl.placeholder = '예) 서울 강남구 SSDC 4F';
       if (required) required.style.display = '';
+      if (addrBtn)  addrBtn.disabled = false;
     }
   });
+
+  document.getElementById('v-addr-search')?.addEventListener('click', () => _openKakaoAddress('af-place'));
 
   document.getElementById('btn-form-cancel')?.addEventListener('click', () => {
     if (_editingLecId) {

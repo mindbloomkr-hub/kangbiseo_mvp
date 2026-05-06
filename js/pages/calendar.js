@@ -7,6 +7,7 @@ import {
   parseDate, getTodayString,
 } from '../utils.js';
 import { initLectureModal, openModal } from '../components/lectureModal.js';
+import { initMultiSessionModal, openMultiSessionModal } from '../components/multiSessionModal.js';
 
 (function prepareBridge() {
   const checkInterval = setInterval(() => {
@@ -267,6 +268,14 @@ authGuard(user => {
     () => ({ allLectures, currentUser }),
     { classifyStatus, statusMeta: STATUS_META }
   );
+  initMultiSessionModal(() => ({ allLectures, currentUser }));
+
+  document.getElementById('btn-multi-lecture')?.addEventListener('click', () => {
+    const selectedDate = calendar
+      ? calendar.getDate().toISOString().slice(0, 10)
+      : null;
+    openMultiSessionModal(selectedDate);
+  });
 }, {
   withModal: true,
   cleanupFn: () => unsubLectures?.(),

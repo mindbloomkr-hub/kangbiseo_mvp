@@ -1020,6 +1020,24 @@
 
 .add-form-input::placeholder { color: var(--color-gray-400); }
 
+.lm-addr-wrap { display: flex; gap: 6px; align-items: stretch; }
+.lm-addr-btn {
+  height: 38px;
+  padding: 0 12px;
+  white-space: nowrap;
+  background: #fee500;
+  border: 1.5px solid #e6cf00;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  color: #3c1e1e;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity var(--transition-fast);
+  outline: none;
+}
+.lm-addr-btn:hover { opacity: 0.85; }
+
 .add-form-textarea {
   padding: var(--space-3);
   resize: vertical;

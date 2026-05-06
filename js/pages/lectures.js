@@ -261,6 +261,10 @@ input[type=checkbox].row-cb,input[type=checkbox]#select-all-cb{width:16px;height
 .bm-group-row{display:flex;align-items:center;gap:12px;padding:12px;background:#f0fdf4;border-radius:10px;border:1.5px solid #bbf7d0}
 .bm-group-label{font-size:13px;font-weight:700;color:#065f46;flex:1}
 .bm-group-sub{font-size:11px;color:#10b981;display:block;margin-top:2px}
+.bm-addr-wrap{display:flex;gap:6px;align-items:stretch}
+.bm-addr-btn{height:38px;padding:0 12px;white-space:nowrap;background:#fee500;border:1.5px solid #e6cf00;border-radius:9px;font-size:12px;font-weight:700;color:#3c1e1e;cursor:pointer;flex-shrink:0;transition:opacity .15s;outline:none}
+.bm-addr-btn:hover{opacity:.85}
+.bm-addr-btn:disabled{opacity:.4;cursor:not-allowed}
   `;
   document.head.appendChild(s);
 }
@@ -370,6 +374,35 @@ async function _runSeqOnly() {
 }
 
 /* ════════════════════════════════════════
+   카카오 주소 검색 (배치 모달용)
+════════════════════════════════════════ */
+function _openKakaoAddress() {
+  const load = () => new Promise((resolve, reject) => {
+    if (window.daum?.Postcode) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
+    s.onload  = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  load().then(() => {
+    new daum.Postcode({
+      oncomplete(data) {
+        const addr = data.roadAddress || data.jibunAddress;
+        const el = document.getElementById('bm-place');
+        if (el) {
+          el.value = addr;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.focus();
+        }
+      },
+    }).open();
+  }).catch(() => {
+    window.showToast?.('주소 검색 서비스를 불러올 수 없습니다.', 'error');
+  });
+}
+
+/* ════════════════════════════════════════
    일괄 처리 — 수정 모달
 ════════════════════════════════════════ */
 function _openBatchModal() {
@@ -388,7 +421,13 @@ function _openBatchModal() {
       <div class="bm-body">
         <p class="bm-hint">입력하지 않은 항목은 기존 값을 유지합니다.</p>
         <div class="bm-field"><label class="bm-label" for="bm-client">고객사</label><input class="bm-input" type="text" id="bm-client" placeholder="고객사명" /></div>
-        <div class="bm-field"><label class="bm-label" for="bm-place">강의장 주소</label><input class="bm-input" type="text" id="bm-place" placeholder="강의장 주소 입력" /></div>
+        <div class="bm-field">
+          <label class="bm-label" for="bm-place">강의장 주소</label>
+          <div class="bm-addr-wrap">
+            <input class="bm-input" type="text" id="bm-place" placeholder="강의장 주소 입력" />
+            <button type="button" class="bm-addr-btn" id="bm-addr-search">🔍 주소 검색</button>
+          </div>
+        </div>
         <div class="bm-field">
           <label class="bm-label" for="bm-feeType">정산 방식</label>
           <select class="bm-select" id="bm-feeType">
@@ -463,6 +502,7 @@ function _openBatchModal() {
   document.getElementById('bm-x').addEventListener('click', _closeBatchModal);
   document.getElementById('bm-cancel').addEventListener('click', _closeBatchModal);
   bd.addEventListener('click', e => { if (e.target === bd) _closeBatchModal(); });
+  document.getElementById('bm-addr-search').addEventListener('click', _openKakaoAddress);
 
   document.getElementById('bm-apply').addEventListener('click', async () => {
     const applyBtn = document.getElementById('bm-apply');
@@ -587,7 +627,7 @@ document.getElementById('select-all-cb')?.addEventListener('change', e => {
 authGuard(user => {
   currentUser = user;
   initLectureModal(() => ({ allLectures, currentUser }));
-  initMultiSessionModal(() => ({ currentUser }));
+  initMultiSessionModal(() => ({ allLectures, currentUser }));
   initLectures(user.uid);
 
   document.getElementById('btn-multi-lecture')?.addEventListener('click', () => {
