@@ -15,12 +15,13 @@ import {
 ════════════════════════════════════════ */
 const DEFAULT_DEVICE = {
   scheduler: {
-    transport:    'car',
-    bufferTime:   30,
-    bufferCustom: 45,
-    setupTime:    20,
-    wrapupTime:   15,
-    parkingAlert: true,
+    transport:     'car',
+    bufferTime:    30,
+    bufferCustom:  45,
+    setupTime:     20,
+    wrapupTime:    15,
+    parkingAlert:  true,
+    originAddress: '',
   },
   settlement: {
     hourlyRate:    30,
@@ -239,6 +240,8 @@ function initScheduler() {
   if (wrapupInput) wrapupInput.value = s.wrapupTime ?? 15;
   const parkingCb = document.getElementById('parking-alert');
   if (parkingCb) parkingCb.checked = s.parkingAlert;
+  const originInput = document.getElementById('origin-address-input');
+  if (originInput) originInput.value = s.originAddress ?? '';
   updateParkingRow(s.transport);
 }
 
@@ -692,6 +695,8 @@ function collectDeviceValues() {
   if (wrapupInput) device.scheduler.wrapupTime = Number(wrapupInput.value) || 0;
   const parkingCb = document.getElementById('parking-alert');
   if (parkingCb)  device.scheduler.parkingAlert = parkingCb.checked;
+  const originInputVal = document.getElementById('origin-address-input');
+  if (originInputVal) device.scheduler.originAddress = originInputVal.value.trim();
 
   device.settlement.hourlyRate    = Number(getVal('hourly-rate')) || 0;
   device.settlement.bankName      = getVal('bank-name');

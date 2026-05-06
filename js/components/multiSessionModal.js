@@ -4,7 +4,7 @@ import { db } from '../api.js';
 import {
   collection, writeBatch, doc, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
-import { buildTimeOptions, initAllDateWithDay } from '../utils.js';
+import { buildTimeOptions, initAllDateWithDay, checkScheduleConflict } from '../utils.js';
 
 /* ════════════════════════════════════════
    한국 공휴일
@@ -218,9 +218,20 @@ function _injectStyles() {
 .ms-modal{background:#fff;border-radius:20px;width:100%;max-width:660px;max-height:90vh;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.25);display:flex;flex-direction:column;box-sizing:border-box}
 
 /* header */
-.ms-head{background:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);padding:18px 22px;border-radius:20px 20px 0 0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.ms-head-title{color:#fff;font-size:17px;font-weight:800;margin:0}
-.ms-head-sub{color:rgba(255,255,255,.75);font-size:12px;margin-top:3px}
+.ms-head{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--space-6) var(--space-8);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.ms-head-title{font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-extrabold);
+  color: var(--color-gray-900);
+  line-height: var(--line-height-snug);
+  margin-bottom: var(--space-2);}
+.ms-head-sub{font-size:var(--font-size-xs);color:rgba(53, 53, 53, 0.7);margin-top:4px;}
 .ms-x{background:none;border:none;color:rgba(255,255,255,.7);font-size:20px;cursor:pointer;padding:2px 8px;border-radius:6px;line-height:1;transition:all .15s}
 .ms-x:hover{color:#fff;background:rgba(255,255,255,.18)}
 
@@ -271,6 +282,7 @@ function _injectStyles() {
 .ms-preview-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .ms-preview-count{font-size:14px;font-weight:800;color:#1e293b}
 .ms-holiday-badge{font-size:11px;font-weight:700;color:#d97706;background:#fffbeb;border:1px solid #fde68a;padding:4px 10px;border-radius:20px}
+.ms-online-badge{font-size:11px;font-weight:700;color:#2563eb;background:#eff6ff;border:1px solid #bfdbfe;padding:4px 10px;border-radius:20px}
 .ms-preview-wrap{overflow-x:auto;border:1.5px solid #e2e8f0;border-radius:12px}
 .ms-preview-table{width:100%;border-collapse:collapse;font-size:13px}
 .ms-preview-table th{font-size:11px;font-weight:700;color:#64748b;text-align:left;padding:8px 10px;background:#f8fafc;white-space:nowrap}
@@ -363,7 +375,13 @@ function _html() {
             <input class="ms-input" type="text" id="ms-client" placeholder="고객사명" />
           </div>
           <div class="ms-field">
-            <label class="ms-label" for="ms-place">강의 장소</label>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <label class="ms-label" for="ms-place" style="margin-bottom:0">강의 장소</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#2563eb;cursor:pointer;user-select:none">
+                <input type="checkbox" id="ms-online" style="width:14px;height:14px;accent-color:#2563eb;cursor:pointer" />
+                💻 온라인 수업
+              </label>
+            </div>
             <input class="ms-input" type="text" id="ms-place" placeholder="강의장 주소" />
           </div>
           <div class="ms-field">
@@ -476,7 +494,10 @@ function _html() {
         <hr class="ms-divider" />
         <div class="ms-preview-header">
           <span class="ms-preview-count" id="ms-pcount"></span>
-          <span class="ms-holiday-badge" id="ms-hbadge" style="display:none">★ 공휴일 → 자동 이동됨</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span class="ms-online-badge" id="ms-obadge" style="display:none">💻 온라인 수업</span>
+            <span class="ms-holiday-badge" id="ms-hbadge" style="display:none">★ 공휴일 → 자동 이동됨</span>
+          </div>
         </div>
         <div class="ms-preview-wrap">
           <table class="ms-preview-table">
@@ -511,6 +532,7 @@ function _html() {
 ════════════════════════════════════════ */
 let _sessions   = [];   // generated sessions
 let _skipHol    = false;
+let _isOnline   = false;
 let _selDow     = new Set([0]);        // 0=Mon default
 let _selDays    = new Set();           // specific month days
 let _getCtx     = null;
@@ -552,6 +574,7 @@ function _close() {
 function _reset() {
   _sessions = [];
   _skipHol  = false;
+  _isOnline = false;
   _selDow   = new Set([0]);
   _selDays  = new Set();
 
@@ -561,8 +584,11 @@ function _reset() {
   const $ = id => document.getElementById(id);
   $('ms-title').value   = '';
   $('ms-client').value  = '';
-  $('ms-place').value   = '';
   $('ms-fee').value     = '';
+  const onlineCb = $('ms-online');
+  if (onlineCb) onlineCb.checked = false;
+  const placeEl = $('ms-place');
+  if (placeEl) { placeEl.disabled = false; placeEl.value = ''; placeEl.placeholder = '강의장 주소'; }
   $('ms-start').value   = today;
   $('ms-total').value   = '';
   $('ms-rec').value     = 'weekly';
@@ -655,6 +681,22 @@ function _bindEvents() {
     _skipHol = !_skipHol;
     $('ms-hol-toggle').classList.toggle('on', _skipHol);
     $('ms-hol-toggle').setAttribute('aria-checked', String(_skipHol));
+  });
+
+  // Online toggle
+  document.getElementById('ms-online')?.addEventListener('change', e => {
+    _isOnline = e.target.checked;
+    const placeEl = document.getElementById('ms-place');
+    if (!placeEl) return;
+    if (_isOnline) {
+      placeEl.disabled    = true;
+      placeEl.value       = 'Online';
+      placeEl.placeholder = '';
+    } else {
+      placeEl.disabled    = false;
+      placeEl.value       = '';
+      placeEl.placeholder = '강의장 주소';
+    }
   });
 
   // Generate
@@ -762,6 +804,7 @@ function _renderPreview() {
 
   const hasShifted = _sessions.some(s => s.wasShifted);
   $('ms-hbadge').style.display  = hasShifted ? '' : 'none';
+  $('ms-obadge').style.display  = _isOnline  ? '' : 'none';
   $('ms-pcount').textContent    = `${_sessions.length}회차 생성됨`;
   $('ms-save').textContent      = `저장하기 (${_sessions.length}회차)`;
 

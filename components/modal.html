@@ -113,7 +113,16 @@
                 <div class="add-form-field"><label class="add-form-label" for="af-client">고객사 <span class="required">*</span></label><input class="add-form-input" type="text" id="af-client" placeholder="예) 삼성SDS" required /></div>
                 <div class="add-form-field"><label class="add-form-label" for="af-fee">강사료 (만원) </label><input class="add-form-input" type="number" id="af-fee" placeholder="예) 50" min="0" required /></div>
               </div>
-              <div class="add-form-field" style="margin-top:var(--space-3)"><label class="add-form-label" for="af-place">강의장 주소 <span class="required">*</span></label><input class="add-form-input" type="text" id="af-place" placeholder="예) 서울 강남구 SSDC 4F" /></div>
+              <div class="add-form-field" style="margin-top:var(--space-3)">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                  <label class="add-form-label" for="af-place" style="margin-bottom:0">강의장 주소 <span class="required" id="af-place-required">*</span></label>
+                  <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#2563eb;cursor:pointer;user-select:none">
+                    <input type="checkbox" id="af-online" style="width:14px;height:14px;accent-color:#2563eb;cursor:pointer" />
+                    💻 온라인 수업
+                  </label>
+                </div>
+                <input class="add-form-input" type="text" id="af-place" placeholder="예) 서울 강남구 SSDC 4F" />
+              </div>
               <div class="add-form-grid" style="margin-top:var(--space-3)">
                 <div class="add-form-field"><label class="add-form-label" for="af-classroom">강의장/교실</label><input class="add-form-input" type="text" id="af-classroom" placeholder="예) 3층 소강당, 행복실" /></div>
                 <div class="add-form-field"><label class="add-form-label" for="af-parking">주차 정보</label><input class="add-form-input" type="text" id="af-parking" placeholder="예) 지하 2시간 무료" /></div>

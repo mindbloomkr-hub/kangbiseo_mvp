@@ -4,7 +4,7 @@ import {
   collection, doc, addDoc, updateDoc, deleteDoc,
   query, where, onSnapshot, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
-import { DAY_KO, escapeHtml, getTodayString } from '../utils.js';
+import { DAY_KO, escapeHtml, getTodayString, fetchTravelMin } from '../utils.js';
 import { initLectureModal, openModal } from '../components/lectureModal.js';
 
 /* ════════════════════════════════════════
@@ -112,9 +112,9 @@ function renderStatBar() {
     .reduce((s, l) => s + (Number(l.fee) || 0), 0);
 
   const stats = [
-    { icon: '📅', iconCls: 'stat-icon--blue',   value: `${todayLectures.length}건`,                              label: '오늘 강의',      delta: '' },
-    { icon: '💰', iconCls: 'stat-icon--green',  value: totalFee > 0 ? `${(totalFee).toFixed(0)}만원` : '—', label: '오늘 예상 수익', delta: '' },
-    { icon: '⏱',  iconCls: 'stat-icon--yellow', value: todayLectures.length > 1 ? '이동 확인' : '—',              label: '이동 버퍼 타임', delta: '' },
+    { icon: '📅', iconCls: 'stat-icon--blue',   value: `${todayLectures.length}건`,                               label: '오늘 강의',      delta: '' },
+    { icon: '💰', iconCls: 'stat-icon--green',  value: totalFee > 0 ? `${(totalFee).toFixed(0)}만원` : '—',       label: '오늘 예상 수익', delta: '' },
+    { icon: '⏱',  iconCls: 'stat-icon--yellow', value: todayLectures.length > 1 ? '이동 확인' : '—',               label: '이동 버퍼 타임', delta: '' },
     { icon: '💳', iconCls: 'stat-icon--red',    value: `${unpaidCnt}건`,                                          label: '미입금 정산',    delta: unpaidAmt > 0 ? `₩${unpaidAmt.toLocaleString()} 미수` : '' },
   ];
 
@@ -191,7 +191,39 @@ function timeToMin(t) {
   return h * 60 + m;
 }
 
-function renderTimelineInto(containerId, lectures, showNowBar) {
+function _minToStr(min) {
+  const total = ((min % 1440) + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+// Builds an ISO 8601 datetime string from a lecture date + HH:MM + optional extra minutes.
+// Handles overflow past midnight by advancing the date.
+function buildOriginTime(date, timeHHMM, extraMin = 0) {
+  const totalMin = timeToMin(timeHHMM) + extraMin;
+  const dayOff   = Math.floor(totalMin / 1440);
+  const minOfDay = totalMin % 1440;
+  const d = new Date(date + 'T00:00:00');
+  d.setDate(d.getDate() + dayOff);
+  const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const h  = String(Math.floor(minOfDay / 60)).padStart(2, '0');
+  const m  = String(minOfDay % 60).padStart(2, '0');
+  return `${ds}T${h}:${m}:00`;
+}
+
+function getDeviceScheduler() {
+  try {
+    const d = JSON.parse(localStorage.getItem('kangbiseo_device') ?? 'null');
+    return d?.scheduler ?? {};
+  } catch { return {}; }
+}
+
+function getEffectiveBufferTime() {
+  const s = getDeviceScheduler();
+  if (s.bufferTime === 'custom') return Number(s.bufferCustom) || 30;
+  return Number(s.bufferTime) || 30;
+}
+
+async function renderTimelineInto(containerId, lectures, showNowBar) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
@@ -204,6 +236,41 @@ function renderTimelineInto(containerId, lectures, showNowBar) {
     return;
   }
 
+  const sched       = getDeviceScheduler();
+  const bufferTime  = getEffectiveBufferTime();
+  const originAddr  = sched.originAddress?.trim() || '';
+  const hasOrigin   = !!originAddr;
+
+  const firstLec = lectures[0];
+  const lastLec  = lectures[lectures.length - 1];
+
+  // Fetch all travel times in parallel: inter-lecture + home legs if needed
+  // Inter-lecture: pass endTime + wrapupTime as originTime for time-aware routing
+  const interLecPromises = lectures.slice(0, -1).map((lec, i) => {
+    const wrapup     = Number(lec.wrapupTime ?? sched.wrapupTime ?? 15);
+    const originTime = buildOriginTime(lec.date, lec.timeEnd, wrapup);
+    return fetchTravelMin(lec.place, lectures[i + 1].place, originTime);
+  });
+  const homePromises = hasOrigin
+    ? [fetchTravelMin(originAddr, firstLec.place), fetchTravelMin(lastLec.place, originAddr)]
+    : [Promise.resolve(null), Promise.resolve(null)];
+
+  const [travelMins, [travelToFirst, travelToHome]] = await Promise.all([
+    Promise.all(interLecPromises),
+    Promise.all(homePromises),
+  ]);
+
+  // Home-to-Home calculations
+  const firstSetup  = Number(firstLec.setupTime  ?? sched.setupTime  ?? 20);
+  const lastWrapup  = Number(lastLec.wrapupTime   ?? sched.wrapupTime ?? 15);
+  // Round departure DOWN to nearest 10-min increment (07:06 → 07:00, 08:19 → 08:10)
+  const departureMin = hasOrigin
+    ? Math.floor((timeToMin(firstLec.timeStart) - (firstSetup + bufferTime + (travelToFirst ?? 0))) / 10) * 10
+    : null;
+  const returnMin = hasOrigin
+    ? timeToMin(lastLec.timeEnd) + lastWrapup + (travelToHome ?? 0)
+    : null;
+
   const now    = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const nowStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
@@ -215,7 +282,45 @@ function renderTimelineInto(containerId, lectures, showNowBar) {
     </div>`;
 
   let nowInserted = false;
-  const html = lectures.map((lec, idx) => {
+  const parts = [];
+
+  // ── Home departure node ──────────────────────────────
+  if (hasOrigin) {
+    const depStr = _minToStr(departureMin);
+    parts.push(`
+      <div class="timeline-item">
+        <div class="tl-time-col"><div class="tl-time">${depStr}</div></div>
+        <div class="tl-track"><div class="tl-node tl-node--home"></div></div>
+        <div class="tl-content">
+          <div class="tl-card tl-card--home-origin">
+            <div class="tl-card-title">🏠 출발</div>
+            <div class="tl-card-sub">${escapeHtml(originAddr)}</div>
+          </div>
+        </div>
+      </div>`);
+
+    // Home → First lecture gap
+    const t2f = travelToFirst ?? 0;
+    const totalMargin = t2f + bufferTime + firstSetup;
+    parts.push(`
+      <div class="tl-gap-row">
+        <div class="tl-time-col"></div>
+        <div class="tl-track tl-gap-track"></div>
+        <div class="tl-content">
+          <div class="tl-gap-card tl-gap-card--info">
+            <span class="tl-gap-icon">🚗</span>
+            <div class="tl-gap-info">
+              <div class="tl-gap-main">${travelToFirst == null ? '이동 시간 미확인' : `이동 ${t2f}분`} · 버퍼 ${bufferTime}분 · 준비 ${firstSetup}분</div>
+              <div class="tl-gap-sub">출발 후 총 ${totalMargin}분 확보</div>
+            </div>
+          </div>
+        </div>
+      </div>`);
+  }
+
+  // ── Lecture loop ─────────────────────────────────────
+  for (let idx = 0; idx < lectures.length; idx++) {
+    const lec      = lectures[idx];
     const color    = getLectureColor(lec.id);
     const itemMin  = timeToMin(lec.timeStart);
     const nextMin  = lectures[idx + 1] ? timeToMin(lectures[idx + 1].timeStart) : Infinity;
@@ -234,7 +339,7 @@ function renderTimelineInto(containerId, lectures, showNowBar) {
       }
     }
 
-    return `
+    parts.push(`
       ${barBefore}
       <div class="timeline-item">
         <div class="tl-time-col"><div class="tl-time">${lec.timeStart}</div></div>
@@ -246,10 +351,80 @@ function renderTimelineInto(containerId, lectures, showNowBar) {
           </div>
         </div>
       </div>
-      ${barAfter}`;
-  }).join('');
+      ${barAfter}`);
 
-  container.innerHTML = html + (showNowBar && !nowInserted ? nowBar() : '');
+    // Gap row between consecutive lectures
+    if (idx < lectures.length - 1) {
+      const next       = lectures[idx + 1];
+      const rawTravel  = travelMins[idx];
+      const travelMin  = rawTravel ?? 0;
+      const wrapup1    = Number(lec.wrapupTime  ?? sched.wrapupTime ?? 15);
+      const setup2     = Number(next.setupTime  ?? sched.setupTime  ?? 20);
+      const reqGap     = wrapup1 + travelMin + bufferTime + setup2;
+      const actGap     = timeToMin(next.timeStart) - timeToMin(lec.timeEnd);
+      const arrivalMin = timeToMin(lec.timeEnd) + wrapup1 + travelMin;
+      const depStr     = _minToStr(timeToMin(lec.timeEnd) + wrapup1);
+      const arrivalStr = _minToStr(arrivalMin);
+      const isWarn     = actGap < reqGap;
+      const travelLabel = rawTravel == null
+        ? '이동 시간 미확인'
+        : `이동 ${travelMin}분 · 도착 예정 ${arrivalStr}`;
+
+      parts.push(`
+        <div class="tl-gap-row${isWarn ? ' tl-gap-row--warn' : ''}">
+          <div class="tl-time-col">
+            <div class="tl-time" style="font-size:9px;color:#9ca3af;">${depStr}</div>
+          </div>
+          <div class="tl-track tl-gap-track"></div>
+          <div class="tl-content">
+            <div class="tl-gap-card${isWarn ? ' tl-gap-card--warn' : ' tl-gap-card--ok'}">
+              <span class="tl-gap-icon">${isWarn ? '⚠️' : '🚗'}</span>
+              <div class="tl-gap-info">
+                <div class="tl-gap-main">${travelLabel}</div>
+                <div class="tl-gap-sub">필요 ${reqGap}분 (정리+이동+버퍼+준비) · 실제 ${actGap}분</div>
+              </div>
+              ${isWarn ? '<span class="tl-gap-warn-badge">촉박</span>' : ''}
+            </div>
+          </div>
+        </div>`);
+    }
+  }
+
+  // ── Home return node ─────────────────────────────────
+  if (hasOrigin) {
+    const t2h      = travelToHome ?? 0;
+    const depStr   = _minToStr(timeToMin(lastLec.timeEnd) + lastWrapup);
+    const retStr   = _minToStr(returnMin);
+
+    parts.push(`
+      <div class="tl-gap-row">
+        <div class="tl-time-col">
+          <div class="tl-time" style="font-size:9px;color:#9ca3af;">${depStr}</div>
+        </div>
+        <div class="tl-track tl-gap-track"></div>
+        <div class="tl-content">
+          <div class="tl-gap-card tl-gap-card--info">
+            <span class="tl-gap-icon">🏠</span>
+            <div class="tl-gap-info">
+              <div class="tl-gap-main">정리 ${lastWrapup}분 · ${travelToHome == null ? '이동 시간 미확인' : `이동 ${t2h}분`}</div>
+              <div class="tl-gap-sub">귀가 예정 ${retStr}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-time-col"><div class="tl-time">${retStr}</div></div>
+        <div class="tl-track"><div class="tl-node tl-node--home"></div></div>
+        <div class="tl-content">
+          <div class="tl-card tl-card--home-origin">
+            <div class="tl-card-title">🏠 귀가</div>
+            <div class="tl-card-sub">${escapeHtml(originAddr)}</div>
+          </div>
+        </div>
+      </div>`);
+  }
+
+  container.innerHTML = parts.join('') + (showNowBar && !nowInserted ? nowBar() : '');
 }
 
 function renderTimeline()         { renderTimelineInto('timeline-list',          todayLectures,    true);  }

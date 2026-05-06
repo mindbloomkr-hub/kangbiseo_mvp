@@ -120,6 +120,9 @@ export function openAddModal() {
   if (setupEl)  setupEl.value  = sched.setupTime  ?? 20;
   if (wrapupEl) wrapupEl.value = sched.wrapupTime ?? 15;
 
+  const placeEl = document.getElementById('af-place');
+  if (placeEl) { placeEl.disabled = false; placeEl.placeholder = '예) 서울 강남구 SSDC 4F'; }
+
   _switchMode('form');
   _backdrop().classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -187,7 +190,7 @@ function _populateView(lec) {
   document.getElementById('v-setup-time').textContent      = lec.setupTime  != null ? `${lec.setupTime}분`  : '—';
   document.getElementById('v-wrapup-time').textContent     = lec.wrapupTime != null ? `${lec.wrapupTime}분` : '—';
   document.getElementById('v-supplies').textContent        = lec.supplies       || '—';
-  document.getElementById('v-place').textContent           = lec.place          || '—';
+  document.getElementById('v-place').textContent           = lec.isOnline ? '💻 온라인 수업' : (lec.place || '—');
   document.getElementById('v-classroom').textContent       = lec.classroom      || '—';
   document.getElementById('v-parking').textContent         = lec.parkingInfo    || '—';
 
@@ -234,7 +237,14 @@ function _populateForm(lec) {
   set('af-setup-time',      lec.setupTime  ?? '');
   set('af-wrapup-time',     lec.wrapupTime ?? '');
   set('af-supplies',        lec.supplies);
-  set('af-place',           lec.place);
+  const onlineCb = document.getElementById('af-online');
+  const placeEl  = document.getElementById('af-place');
+  if (onlineCb) onlineCb.checked = lec.isOnline ?? false;
+  if (placeEl) {
+    placeEl.disabled    = lec.isOnline ?? false;
+    placeEl.value       = lec.isOnline ? 'Online' : (lec.place ?? '');
+    placeEl.placeholder = lec.isOnline ? '' : '예) 서울 강남구 SSDC 4F';
+  }
   set('af-classroom',       lec.classroom);
   set('af-parking',         lec.parkingInfo);
   set('af-manager-name',    lec.managerName);
@@ -283,6 +293,10 @@ async function _doSave(payload, currentUser, submitBtn) {
       });
       window.showToast?.('강의가 등록되었습니다.', 'success');
       _closeModal();
+      if (!window._icsImportChecked) {
+        window._icsImportChecked = true;
+        _checkIcsImport(currentUser);
+      }
     }
   } catch (err) {
     console.error('[강비서] 강의 저장 오류:', err);
@@ -290,19 +304,8 @@ async function _doSave(payload, currentUser, submitBtn) {
   } finally {
     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '저장하기'; }
   }
-
-  async function _doSave(payload, currentUser, submitBtn) {
-  // ... (기존 코드들) ...
-  
-  // 함수의 거의 끝부분, finally 블록 근처나 함수 닫기(}) 직전에 이 코드를 넣으세요.
-  // 딱 한 번만 실행되도록 체크하는 로직을 포함했습니다.
-  if (!window._icsImportChecked) {
-    window._icsImportChecked = true; 
-    _checkIcsImport(currentUser); // 아래에서 만들 함수를 호출
-  }
 }
 
-// _doSave 함수 바깥(아래)에 이 보조 함수를 하나만 더 써주세요.
 async function _checkIcsImport(user) {
   const raw = localStorage.getItem('temp_lectures');
   if (!raw || !user) return;
@@ -312,7 +315,6 @@ async function _checkIcsImport(user) {
 
   try {
     for (const data of importedData) {
-      // _doSave가 사용하는 Firebase 도구들을 그대로 사용
       await addDoc(collection(db, 'lectures'), {
         uid: user.uid,
         ...data,
@@ -326,7 +328,6 @@ async function _checkIcsImport(user) {
   } catch (err) {
     console.error('[강비서] 연동 실패:', err);
   }
-}
 }
 
 /* ════════════════════════════════════════
@@ -432,6 +433,15 @@ function _injectReviewStyles() {
 .lm-rv-hard-warn{background:#fef2f2;border:2px solid #dc2626;border-radius:13px;padding:20px 18px;text-align:center}
 .lm-rv-hard-warn-title{font-size:16px;font-weight:900;color:#991b1b;margin:0 0 6px}
 .lm-rv-hard-warn-sub{font-size:13px;font-weight:500;color:#dc2626;margin:0}
+.lm-rv-alts{margin-top:16px;border-top:1px dashed #e2e8f0;padding-top:14px}
+.lm-rv-alts-title{font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin:0 0 10px}
+.lm-rv-alt-group{margin-bottom:12px}
+.lm-rv-alt-group:last-child{margin-bottom:0}
+.lm-rv-alt-group-label{font-size:11px;font-weight:700;color:#475569;margin:0 0 6px}
+.lm-rv-alt-btn{display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 13px;background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:10px;font-size:13px;font-weight:600;color:#0369a1;cursor:pointer;margin-bottom:6px;text-align:left;transition:background .15s,border-color .15s}
+.lm-rv-alt-btn:last-child{margin-bottom:0}
+.lm-rv-alt-btn:hover{background:#e0f2fe;border-color:#7dd3fc}
+.lm-rv-alt-btn-date{font-size:11px;color:#64748b;font-weight:400;flex-shrink:0;margin-left:8px;white-space:nowrap}
   `;
   document.head.appendChild(s);
 }
@@ -460,7 +470,8 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
   const nextPlace  = prevIsNew ? (conflictLec.place  || '—') : (rawNewLec.place    || '—');
   const nextStatus = prevIsNew ? (conflictLec.progressStatus ?? conflictLec._status ?? null) : null;
 
-  const isHard  = !!check.isHardConflict;
+  const isHard        = !!check.isHardConflict;
+  const isOnlineCtx   = (rawNewLec.isOnline ?? false) || (conflictLec?.isOnline ?? false);
   const wrapup  = prevIsNew ? (rawNewLec.wrapupTime  ?? 0) : (conflictLec.wrapupTime ?? 0);
   const setup   = prevIsNew ? (conflictLec.setupTime ?? 0) : (rawNewLec.setupTime    ?? 0);
   const travel  = check.travelMin ?? 0;
@@ -470,6 +481,32 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
     : _toMin(nextStart) - _toMin(prevEnd);
   const delay   = reqGap - actGap;
   const depStr  = _minToStr(_toMin(prevEnd) + wrapup);
+
+  // ── Alternatives ────────────────────────────────────
+  const _alts    = check.alternatives ?? {};
+  const _optA    = _alts.optionA ?? [];
+  const _optB    = _alts.optionB ?? [];
+  const _optC    = _alts.optionC ?? null;
+  const _hasAlts = _optA.length > 0 || _optB.length > 0 || _optC != null;
+
+  const _mkAltBtn = slot => {
+    const { main, day } = formatDateKo(slot.date);
+    return `<button class="lm-rv-alt-btn"
+      data-opt-date="${escapeHtml(slot.date)}"
+      data-opt-start="${escapeHtml(slot.startTime)}"
+      data-opt-end="${escapeHtml(slot.endTime)}">
+      <span>${escapeHtml(slot.startTime)} ~ ${escapeHtml(slot.endTime)}</span>
+      <span class="lm-rv-alt-btn-date">${main} (${day}) →</span>
+    </button>`;
+  };
+
+  const altsHtml = (_hasAlts && delay > 0) ? `
+    <div class="lm-rv-alts" id="lm-rv-alts">
+      <p class="lm-rv-alts-title">💡 대안 일정 제안</p>
+      ${_optA.length > 0 ? `<div class="lm-rv-alt-group"><p class="lm-rv-alt-group-label">📅 같은 날 · 다른 시간대</p>${_optA.map(_mkAltBtn).join('')}</div>` : ''}
+      ${_optB.length > 0 ? `<div class="lm-rv-alt-group"><p class="lm-rv-alt-group-label">📆 인접 날짜 · 같은 시간대</p>${_optB.map(_mkAltBtn).join('')}</div>` : ''}
+      ${_optC ? `<div class="lm-rv-alt-group"><p class="lm-rv-alt-group-label">🗓 다음 주 · 같은 요일</p>${_mkAltBtn(_optC)}</div>` : ''}
+    </div>` : '';
 
   const stepLabel = check.step === 1
     ? '시간이 직접 겹칩니다'
@@ -496,8 +533,8 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
     <div class="lm-rv-modal">
       <div class="lm-rv-head${(!isHard && delay <= 0) ? ' lm-rv-head--ok' : ''}">
         <div>
-          <h2>${(!isHard && delay <= 0) ? '✅ finish2' : '⚠️ 일정 충돌 검토'}</h2>
-          <p class="lm-rv-head-sub">${(!isHard && delay <= 0) ? 'okok' : escapeHtml(stepLabel)}</p>
+          <h2>${(!isHard && delay <= 0) ? '✅ 일정 여유 확인됨' : '⚠️ 일정 충돌 검토'}</h2>
+          <p class="lm-rv-head-sub">${(!isHard && delay <= 0) ? '이동 시간을 포함해도 여유가 있습니다' : escapeHtml(stepLabel)}</p>
         </div>
         <button class="lm-rv-x" id="lm-rv-x" aria-label="닫기">✕</button>
       </div>
@@ -525,8 +562,8 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
             <span class="v">${wrapup}분</span>
           </div>
           <div class="lm-rv-row">
-            <span>🚚 예상 이동 시간 (카카오)</span>
-            <span class="v">${travel}분</span>
+            <span>🚚 예상 이동 시간${isOnlineCtx ? '' : ' (카카오)'}</span>
+            <span class="v">${isOnlineCtx ? '💻 온라인 (이동 없음)' : `${travel}분`}</span>
           </div>
           <div class="lm-rv-row">
             <span>⚙️ 강의 세팅 시간</span>
@@ -541,15 +578,16 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
             <span class="v">${actGap}분 확보</span>
           </div>
           <div class="lm-rv-delay${delay <= 0 ? ' lm-rv-delay--ok' : ''}">
-            <span class="lm-rv-delay-label${delay <= 0 ? ' lm-rv-delay-label--ok' : ''}">${delay <= 0 ? 'finish' : '🚩 최종 지연 예상'}</span>
+            <span class="lm-rv-delay-label${delay <= 0 ? ' lm-rv-delay-label--ok' : ''}">${delay <= 0 ? '✅ 여유 충분' : '🚩 최종 지연 예상'}</span>
             <span class="lm-rv-delay-value${delay <= 0 ? ' lm-rv-delay-value--ok' : ''}">${delay > 0 ? `${delay}분 부족` : 'OK'}</span>
           </div>
         </div>`
         }
+        ${altsHtml}
       </div>
 
       <div class="lm-rv-foot">
-        ${delay > 0
+        ${(isHard || delay > 0)
           ? `<button class="lm-rv-btn lm-rv-btn--back" id="lm-rv-back">← 수정하기</button>
              <button class="lm-rv-btn lm-rv-btn--pending" id="lm-rv-pending">보류로 저장</button>
              <button class="lm-rv-btn lm-rv-btn--force" id="lm-rv-force">그대로 저장하기</button>`
@@ -593,6 +631,17 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
       _closeModal();
     });
   }
+
+  // ── Alternative slot selection ───────────────────────
+  bd.querySelector('#lm-rv-alts')?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-opt-date]');
+    if (!btn) return;
+    _applyAlternative({
+      date:      btn.dataset.optDate,
+      startTime: btn.dataset.optStart,
+      endTime:   btn.dataset.optEnd,
+    });
+  });
 }
 
 function _closeReviewModal() {
@@ -601,6 +650,16 @@ function _closeReviewModal() {
   bd.classList.remove('open');
   setTimeout(() => bd.remove(), 200);
   document.body.style.overflow = _backdrop()?.classList.contains('open') ? 'hidden' : '';
+}
+
+function _applyAlternative(option) {
+  _closeReviewModal();
+  const dateEl   = document.getElementById('af-date');
+  const startSel = document.getElementById('af-time-start');
+  if (dateEl)   dateEl.value = option.date;
+  if (startSel) { startSel.innerHTML = buildTimeOptions(); startSel.value = option.startTime; }
+  syncEndTimeOptions(option.endTime);
+  updateDurationDisplay();
 }
 
 /* ════════════════════════════════════════
@@ -637,6 +696,23 @@ function _bindEvents() {
     document.getElementById('af-title')?.focus();
   });
 
+  document.getElementById('af-online')?.addEventListener('change', e => {
+    const placeEl  = document.getElementById('af-place');
+    const required = document.getElementById('af-place-required');
+    if (!placeEl) return;
+    if (e.target.checked) {
+      placeEl.disabled    = true;
+      placeEl.value       = 'Online';
+      placeEl.placeholder = '';
+      if (required) required.style.display = 'none';
+    } else {
+      placeEl.disabled    = false;
+      placeEl.value       = '';
+      placeEl.placeholder = '예) 서울 강남구 SSDC 4F';
+      if (required) required.style.display = '';
+    }
+  });
+
   document.getElementById('btn-form-cancel')?.addEventListener('click', () => {
     if (_editingLecId) {
       const id = _activeModalId;
@@ -657,10 +733,11 @@ function _bindEvents() {
     const timeEnd   = get('af-time-end');
     const title     = get('af-title');
     const client    = get('af-client');
-    const place     = get('af-place');
+    const isOnline  = document.getElementById('af-online')?.checked ?? false;
+    const place     = isOnline ? 'Online' : get('af-place');
     const feeRaw    = get('af-fee');
 
-    if (!date || !timeStart || !timeEnd || !title || !client || !place) {
+    if (!date || !timeStart || !timeEnd || !title || !client || (!isOnline && !place)) {
       window.showToast?.('날짜, 시간, 강의명, 고객사, 강의장소는 필수 입력 항목이에요.', 'error');
       return;
     }
@@ -669,21 +746,28 @@ function _bindEvents() {
       return;
     }
 
-    const coords = await _geocode(place);
-    if (!coords) {
-      window.showToast?.('주소 오류: 카카오맵에서 찾을 수 없는 주소입니다.', 'error');
-      return;
+    if (!isOnline) {
+      const coords = await _geocode(place);
+      if (!coords) {
+        window.showToast?.('주소 오류: 카카오맵에서 찾을 수 없는 주소입니다.', 'error');
+        return;
+      }
     }
 
     const { allLectures, currentUser } = _getCtx();
-    const rawSettings = JSON.parse(localStorage.getItem('kangbiseo_device') ?? 'null')?.scheduler;
-    const settings    = rawSettings ?? { bufferTime: 30, setupTime: 20, wrapupTime: 15 };
+    const rawSched = JSON.parse(localStorage.getItem('kangbiseo_device') ?? 'null')?.scheduler ?? {};
+    const settings = {
+      bufferTime:  rawSched.bufferTime === 'custom' ? (Number(rawSched.bufferCustom) || 30) : (Number(rawSched.bufferTime) || 30),
+      setupTime:   Number(rawSched.setupTime)  || 20,
+      wrapupTime:  Number(rawSched.wrapupTime) || 15,
+    };
 
     const newLec = {
       date,
       startTime:  timeStart,
       endTime:    timeEnd,
-      place:      get('af-place'),
+      place,
+      isOnline,
       setupTime:  Number(get('af-setup-time'))  || 0,
       wrapupTime: Number(get('af-wrapup-time')) || 0,
     };
@@ -693,7 +777,8 @@ function _bindEvents() {
       date:       l.date,
       startTime:  l.startTime  ?? l.timeStart  ?? '',
       endTime:    l.endTime    ?? l.timeEnd    ?? '',
-      place:      l.place      ?? '',
+      place:      l.isOnline ? 'Online' : (l.place ?? ''),
+      isOnline:   l.isOnline   ?? false,
       setupTime:  l.setupTime  ?? 0,
       wrapupTime: l.wrapupTime ?? 0,
     }));
@@ -712,7 +797,8 @@ function _bindEvents() {
       setupTime:      Number(get('af-setup-time'))  || 0,
       wrapupTime:     Number(get('af-wrapup-time')) || 0,
       supplies:       get('af-supplies'),
-      place:          get('af-place'),
+      place,
+      isOnline,
       classroom:      get('af-classroom'),
       parkingInfo:    get('af-parking'),
       managerName:    get('af-manager-name'),
@@ -723,9 +809,17 @@ function _bindEvents() {
       memo:           get('af-memo'),
     };
 
-    const check = await checkScheduleConflict(newLec, existingLecs, settings, allLectures);
+    let check;
+    try {
+      check = await checkScheduleConflict(newLec, existingLecs, settings, allLectures);
+    } catch (err) {
+      console.error('[강비서] 충돌 검사 오류:', err);
+      window.showToast?.('일정 충돌 검사 중 오류가 발생했습니다.', 'error');
+      return;
+    }
+    console.log('[강비서] Check Result:', check);
 
-    if (check.status === 'risk') {
+    if (check.status !== 'safe') {
       const conflictLec = _findConflictLec(newLec, sameDayRaw, check);
       _openReviewModal(check, newLec, conflictLec, payload, currentUser);
       return;

@@ -258,6 +258,9 @@ input[type=checkbox].row-cb,input[type=checkbox]#select-all-cb{width:16px;height
 .bm-foot-btn:disabled{opacity:.45;cursor:not-allowed}
 .bm-foot-btn--cancel{background:#f1f5f9;color:#475569}.bm-foot-btn--cancel:hover:not(:disabled){background:#e2e8f0}
 .bm-foot-btn--apply{background:#2563eb;color:#fff}.bm-foot-btn--apply:hover:not(:disabled){background:#1d4ed8}
+.bm-group-row{display:flex;align-items:center;gap:12px;padding:12px;background:#f0fdf4;border-radius:10px;border:1.5px solid #bbf7d0}
+.bm-group-label{font-size:13px;font-weight:700;color:#065f46;flex:1}
+.bm-group-sub{font-size:11px;color:#10b981;display:block;margin-top:2px}
   `;
   document.head.appendChild(s);
 }
@@ -438,6 +441,14 @@ function _openBatchModal() {
           </div>
           <input type="checkbox" id="bm-seq-cb" style="width:18px;height:18px;cursor:pointer;accent-color:#2563eb;flex-shrink:0" />
         </div>` : ''}
+        <hr class="bm-divider" />
+        <div class="bm-group-row">
+          <div>
+            <span class="bm-group-label">🔗 그룹으로 묶기</span>
+            <span class="bm-group-sub">선택한 ${selectedIds.size}건에 공유 그룹 ID를 부여합니다. 회차도 자동 설정됩니다.</span>
+          </div>
+          <input type="checkbox" id="bm-group-cb" style="width:18px;height:18px;cursor:pointer;accent-color:#10b981;flex-shrink:0" />
+        </div>
       </div>
       <div class="bm-foot">
         <button class="bm-foot-btn bm-foot-btn--cancel" id="bm-cancel">취소</button>
@@ -471,6 +482,7 @@ function _openBatchModal() {
       const mgrPhone = document.getElementById('bm-mgr-phone')?.value.trim();
       const mgrEmail = document.getElementById('bm-mgr-email')?.value.trim();
       const doSeq    = document.getElementById('bm-seq-cb')?.checked ?? false;
+      const doGroup  = document.getElementById('bm-group-cb')?.checked ?? false;
 
       if (client)          payload.client          = client;
       if (place)           payload.place           = place;
@@ -485,15 +497,40 @@ function _openBatchModal() {
       if (mgrPhone)   payload.managerPhone   = mgrPhone;
       if (mgrEmail)   payload.managerEmail   = mgrEmail;
 
-      const seqUpdates = doSeq ? _computeSeqUpdates() : {};
+      let seqUpdates = doSeq ? _computeSeqUpdates() : {};
+
+      if (doGroup) {
+        const newGroupId = 'GRP-' + Date.now();
+        payload.groupId = newGroupId;
+        // _computeSeqUpdates reads allLectures (pre-commit), so it can't see the new groupId yet.
+        // Compute sequence numbers inline from the current selection.
+        const groupedLecs = [...selectedIds]
+          .map(id => allLectures.find(l => l.id === id))
+          .filter(Boolean)
+          .sort((a, b) => {
+            const d = a.date.localeCompare(b.date);
+            return d !== 0 ? d : (a.timeStart ?? '').localeCompare(b.timeStart ?? '');
+          });
+        const total = groupedLecs.length;
+        groupedLecs.forEach((lec, i) => {
+          seqUpdates[lec.id] = { ...(seqUpdates[lec.id] ?? {}), sessionTotal: total, sessionCurrent: i + 1 };
+        });
+      }
+
       if (Object.keys(payload).length === 0 && Object.keys(seqUpdates).length === 0) {
         window.showToast?.('변경할 내용이 없습니다.', 'warn');
         applyBtn.disabled = false; applyBtn.textContent = '적용하기';
         return;
       }
 
+      const savedCount = selectedIds.size;
       await _executeBatch(payload, seqUpdates);
-      window.showToast?.(`${selectedIds.size}건이 수정되었습니다.`, 'success');
+      window.showToast?.(
+        doGroup
+          ? `${savedCount}건이 그룹(${payload.groupId})으로 묶였습니다.`
+          : `${savedCount}건이 수정되었습니다.`,
+        'success'
+      );
       _closeBatchModal();
       _clearSelection();
     } catch (err) {

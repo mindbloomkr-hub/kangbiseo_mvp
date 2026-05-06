@@ -132,6 +132,19 @@ body {
   transform: translateY(-1px);
 }
 
+.btn--secondary {
+  background: var(--color-primary-300);
+  color: var(--color-white);
+  box-shadow: var(--shadow-primary);
+}
+
+.btn--secondary:hover {
+  background: var(--color-primary-700);
+  box-shadow: 0 12px 32px rgba(37,99,196,0.35);
+  transform: translateY(-1px);
+}
+
+
 .btn--outline {
   border: 1.5px solid var(--color-primary-500);
   color: var(--color-primary-500);
@@ -633,6 +646,100 @@ body {
 
 .tl-card-badge--buffer  { background: var(--color-warning-600); color: var(--color-white); }
 .tl-card-badge--lecture { background: var(--color-primary-100); color: var(--color-primary-700); }
+
+/* ────────────────────────────────────────
+   Gap row — 강의 간 이동/버퍼 정보 행
+──────────────────────────────────────── */
+.tl-gap-row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: stretch;
+  min-height: 52px;
+}
+
+.tl-gap-track {
+  position: relative;
+  width: 20px;
+  flex-shrink: 0;
+}
+
+.tl-gap-track::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  background: var(--color-border);
+  transform: translateX(-50%);
+}
+
+.tl-gap-row--warn .tl-gap-track::before {
+  background: #fca5a5;
+}
+
+.tl-gap-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  flex: 1;
+  border: 1px solid transparent;
+  margin-bottom: 4px;
+}
+
+.tl-gap-card--ok {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.tl-gap-card--warn {
+  background: #fff5f5;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+.tl-gap-icon { flex-shrink: 0; font-size: 14px; }
+
+.tl-gap-info { flex: 1; min-width: 0; }
+
+.tl-gap-main {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-gap-sub {
+  font-size: 11px;
+  opacity: 0.75;
+  margin-top: 1px;
+}
+
+.tl-gap-warn-badge {
+  font-size: 11px;
+  font-weight: 700;
+  background: #dc2626;
+  color: #fff;
+  padding: 2px 7px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.tl-gap-card--info {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.tl-card--home-origin {
+  background: var(--color-gray-50);
+  border-left: 3px solid #6b7280;
+}
 
 /* 현재 시간 줄 */
 .tl-now-bar {

@@ -282,19 +282,23 @@ export async function _geocode(addr) {
 }
 
 // Kakao Navi API: 두 장소 간 이동 소요 시간(분), 실패 시 null
-async function _fetchTravelMin(placeA, placeB) {
+// originTime: ISO 8601 출발 시각 (예: "2026-05-06T09:30:00"). 미지정 시 시간 무관 탐색.
+export async function fetchTravelMin(placeA, placeB, originTime = null) {
   const a = placeA?.trim() || '';
   const b = placeB?.trim() || '';
   if (!a || !b || a === b) return 0;
-  const cacheKey = a < b ? `${a}|||${b}` : `${b}|||${a}`;
+  if (a === 'Online' || b === 'Online') return 0;
+  // originTime 포함 시 방향 · 시각 모두 캐시 키에 포함 (대칭 키 사용 불가)
+  const cacheKey = originTime
+    ? `${a}|||${b}|||${originTime}`
+    : (a < b ? `${a}|||${b}` : `${b}|||${a}`);
   if (_travelCache.has(cacheKey)) return _travelCache.get(cacheKey);
   try {
     const [orig, dest] = await Promise.all([_geocode(a), _geocode(b)]);
     if (!orig || !dest) { _travelCache.set(cacheKey, null); return null; }
-    const r = await fetch(
-      `https://apis-navi.kakaomobility.com/v1/directions?origin=${orig.x},${orig.y}&destination=${dest.x},${dest.y}`,
-      { headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` } }
-    );
+    let url = `https://apis-navi.kakaomobility.com/v1/directions?origin=${orig.x},${orig.y}&destination=${dest.x},${dest.y}`;
+    if (originTime) url += `&priority=TIME&origin_time=${encodeURIComponent(originTime)}`;
+    const r = await fetch(url, { headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` } });
     const j    = await r.json();
     const secs = j.routes?.[0]?.summary?.duration;
     const val  = secs != null ? Math.ceil(secs / 60) : null;
@@ -309,7 +313,8 @@ function _normLec(l) {
     date:       l.date       ?? '',
     startTime:  l.startTime  ?? l.timeStart  ?? '',
     endTime:    l.endTime    ?? l.timeEnd    ?? '',
-    place:      l.place      ?? '',
+    place:      l.isOnline ? 'Online' : (l.place ?? ''),
+    isOnline:   l.isOnline   ?? false,
     setupTime:  l.setupTime  ?? 0,
     wrapupTime: l.wrapupTime ?? 0,
   };
@@ -408,8 +413,10 @@ export async function checkScheduleConflict(newLec, sameDayLecs, settings, allLe
     const isPrevNew     = newEnd <= ext._s;
     const prevEnd       = isPrevNew ? newEnd   : ext._e;
     const nextStart     = isPrevNew ? ext._s   : newStart;
-    const prevPlace     = isPrevNew ? newLec.place : ext.place;
-    const nextPlace     = isPrevNew ? ext.place    : newLec.place;
+    const prevOnline    = isPrevNew ? (newLec.isOnline ?? false) : (ext.isOnline ?? false);
+    const nextOnline    = isPrevNew ? (ext.isOnline ?? false)    : (newLec.isOnline ?? false);
+    const prevPlace     = prevOnline ? 'Online' : (isPrevNew ? newLec.place : ext.place);
+    const nextPlace     = nextOnline ? 'Online' : (isPrevNew ? ext.place    : newLec.place);
     const prevWrapup    = isPrevNew ? (newLec.wrapupTime ?? defaultWrapup) : (ext.wrapupTime ?? defaultWrapup);
     const nextSetup     = isPrevNew ? (ext.setupTime  ?? defaultSetup)     : (newLec.setupTime ?? defaultSetup);
     const pureGap       = nextStart - prevEnd;
@@ -425,9 +432,11 @@ export async function checkScheduleConflict(newLec, sameDayLecs, settings, allLe
       return { status: 'risk', step: 2, msg: 'buffer', bMin, pureGap, travelMin: 0, isHardConflict: true, ...alts };
     }
 
-    // ── Step 3: API 이동시간 포함 재판단 ───────────────
-    const travelMin = await _fetchTravelMin(prevPlace, nextPlace);
-    const D         = travelMin ?? 60;
+    // ── Step 3: API 이동시간 포함 재판단 (origin_time 적용) ───────────────
+    const depMinOfDay = (prevEnd + prevWrapup) % 1440;
+    const originTime  = newLec.date ? `${newLec.date}T${_minToTime(depMinOfDay)}:00` : null;
+    const travelMin   = await fetchTravelMin(prevPlace, nextPlace, originTime);
+    const D           = travelMin ?? 60;
     if (pureGap < D + bMin) {
       const alts = await _buildAlternatives(newLec, sameDayLecs, settings, allLectures, D);
       return { status: 'risk', step: 3, msg: 'travel', bMin, pureGap, travelMin: D, ...alts };
