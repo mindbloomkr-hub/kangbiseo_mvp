@@ -6,7 +6,7 @@ import {
   STATUS_META as STATUS_META_BASE,
   parseDate, getTodayString,
 } from '../utils.js';
-import { initLectureModal, openModal } from '../components/lectureModal.js';
+import { initLectureModal, openModal, getTopicTags } from '../components/lectureModal.js';
 import { initMultiSessionModal, openMultiSessionModal } from '../components/multiSessionModal.js';
 
 (function prepareBridge() {
@@ -78,12 +78,16 @@ function getEventColor(lec) {
     ? { bg: '#059669', border: '#047857', text: '#fff' }
     : { bg: '#96efc1', border: '#9ca3af', text: '#ef4444' };
 
-  // scheduled (past or future)
+  // scheduled (past)
   if (d < TODAY) {
     return lec.isPaid
       ? { bg: '#9ca3af', border: '#6b7280', text: '#fff' }
       : { bg: '#fee2e2', border: '#fca5a5', text: '#b91c1c' };
   }
+
+  // scheduled (future) — topicTag color takes priority
+  const _tag = lec.topicTagId != null ? getTopicTags().find(t => t.id === lec.topicTagId) : null;
+  if (_tag?.color) return { bg: _tag.color, border: _tag.color, text: '#fff' };
   if (d <= IN_7DAYS) return { bg: '#f59e0b', border: '#d97706', text: '#fff' };
   return { bg: '#0ea5e9', border: '#0284c7', text: '#fff' };
 }
@@ -260,11 +264,11 @@ function initLectures(uid) {
 /* ════════════════════════════════════════
    인증 상태 감지
 ════════════════════════════════════════ */
-authGuard(user => {
+authGuard(async user => {
   currentUser = user;
   initCalendar();
   initLectures(user.uid);
-  initLectureModal(
+  await initLectureModal(
     () => ({ allLectures, currentUser }),
     { classifyStatus, statusMeta: STATUS_META }
   );

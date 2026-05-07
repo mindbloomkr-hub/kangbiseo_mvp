@@ -2,22 +2,24 @@
 
 // 1. 모든 import 문 (파일 최상단에 모아두세요)
 import { db } from '../api.js';
-import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  deleteDoc, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  serverTimestamp 
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  getDoc,
+  deleteDoc,
+  doc,
+  addDoc,
+  updateDoc,
+  setDoc,
+  serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
 import {
   TAX_LABEL, PROGRESS_LABEL, STATUS_META,
   escapeHtml, formatDateKo, calcDuration, classifyStatus,
   buildTimeOptions, updateDurationDisplay, syncEndTimeOptions, initTimeSelects,
-  checkScheduleConflict, _geocode,
+  checkScheduleConflict, _geocode, positionPanel,
 } from '../utils.js';
 
 // ---------------------------------------------------------
@@ -58,26 +60,51 @@ let _editingLecId  = null;
 let _getCtx        = null;
 let _classifyFn    = classifyStatus;
 let _statusMeta    = STATUS_META;
+let _topicTags     = [];
+
+export function getTopicTags() { return _topicTags; }
+
+let _msBulkTagUpdate = null;
+export function registerMsBulkTagUpdate(fn) { _msBulkTagUpdate = fn; }
+export function refreshMsTagPicker(selectedId) { _refreshTagPicker(selectedId, 'ms'); }
+export function bindMsTagPickerEvents()         { _bindTagPickerEvents('ms'); }
+
+async function _loadTopicTags(uid) {
+  if (!uid) return;
+  try {
+    const snap = await getDoc(doc(db, 'users', uid));
+    if (snap.exists()) {
+      const d = snap.data();
+      _topicTags = Array.isArray(d.topicTags) ? d.topicTags
+                 : (Array.isArray(d.topics)    ? d.topics : []);
+    }
+  } catch { /* keep existing cache on error */ }
+}
 
 /* ════════════════════════════════════════
    초기화
 ════════════════════════════════════════ */
-export function initLectureModal(getCtx, opts = {}) {
+export async function initLectureModal(getCtx, opts = {}) {
   _getCtx     = getCtx;
   if (opts.classifyStatus) _classifyFn = opts.classifyStatus;
   if (opts.statusMeta)     _statusMeta = opts.statusMeta;
   initTimeSelects();
   _injectReviewStyles();
+  _injectTagPickerStyles();
   _bindEvents();
+  // Eagerly load topicTags so color functions work before first modal open
+  const uid = _getCtx?.()?.currentUser?.uid;
+  if (uid) await _loadTopicTags(uid);
 }
 
 /* ════════════════════════════════════════
    공개 API
 ════════════════════════════════════════ */
-export function openModal(id) {
-  const { allLectures } = _getCtx();
+export async function openModal(id) {
+  const { allLectures, currentUser } = _getCtx();
   const lec = allLectures.find(l => l.id === id);
   if (!lec || !_backdrop()) return;
+  await _loadTopicTags(currentUser?.uid);
   _activeModalId = id;
   _editingLecId  = null;
   _populateView(lec);
@@ -87,10 +114,12 @@ export function openModal(id) {
   document.getElementById('modal-close-btn')?.focus();
 }
 
-export function openAddModal() {
+export async function openAddModal() {
   if (!_backdrop()) return;
   _activeModalId = null;
   _editingLecId  = null;
+  const uid = _getCtx?.()?.currentUser?.uid;
+  await _loadTopicTags(uid);
 
   document.getElementById('modal-title').textContent = '강의 추가';
   const sub = document.getElementById('modal-form-subtitle');
@@ -119,6 +148,8 @@ export function openAddModal() {
   const wrapupEl = document.getElementById('af-wrapup-time');
   if (setupEl)  setupEl.value  = sched.setupTime  ?? 20;
   if (wrapupEl) wrapupEl.value = sched.wrapupTime ?? 15;
+
+  _refreshTagPicker(null);
 
   const placeEl = document.getElementById('af-place');
   if (placeEl) { placeEl.disabled = false; placeEl.placeholder = '예) 서울 강남구 SSDC 4F'; }
@@ -187,6 +218,15 @@ function _populateView(lec) {
   document.getElementById('v-participants').textContent    = lec.participants    ? `${lec.participants}명`   : '—';
   document.getElementById('v-group-info').textContent      = lec.groupInfo      || '—';
   document.getElementById('v-topic').textContent           = lec.topic          || '—';
+  const _tagEl = document.getElementById('v-topic-tag');
+  if (_tagEl) {
+    const _tag = lec.topicTagId != null ? _topicTags.find(t => t.id === lec.topicTagId) : null;
+    if (_tag) {
+      _tagEl.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:20px;background:${escapeHtml(_tag.color)};color:#fff;font-size:12px;font-weight:600;">${escapeHtml(_tag.name)}</span>`;
+    } else {
+      _tagEl.textContent = '—';
+    }
+  }
   document.getElementById('v-setup-time').textContent      = lec.setupTime  != null ? `${lec.setupTime}분`  : '—';
   document.getElementById('v-wrapup-time').textContent     = lec.wrapupTime != null ? `${lec.wrapupTime}분` : '—';
   document.getElementById('v-supplies').textContent        = lec.supplies       || '—';
@@ -234,6 +274,7 @@ function _populateForm(lec) {
   set('af-participants',    lec.participants);
   set('af-group-info',      lec.groupInfo);
   set('af-topic',           lec.topic);
+  _refreshTagPicker(lec.topicTagId);
   set('af-setup-time',      lec.setupTime  ?? '');
   set('af-wrapup-time',     lec.wrapupTime ?? '');
   set('af-supplies',        lec.supplies);
@@ -262,6 +303,224 @@ function _populateForm(lec) {
   if (paidSel) paidSel.value = lec.isPaid ? 'true' : 'false';
   const taxSel = document.getElementById('af-tax');
   if (taxSel) taxSel.value = lec.taxType || 'income3_3';
+}
+
+/* ════════════════════════════════════════
+   강의 주제 카테고리 피커 — 커스텀 드롭다운
+════════════════════════════════════════ */
+const _TAG_COLORS = [
+  '#2563c4', '#059669', '#d97706', '#dc2626',
+  '#7c3aed', '#0891b2', '#db2777', '#374151',
+];
+let _newTagColor = _TAG_COLORS[0];
+
+function _injectTagPickerStyles() {
+  if (document.getElementById('lm-tp-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'lm-tp-styles';
+  s.textContent = `
+.lm-tag-picker{position:relative;width:100%}
+.lm-tag-trigger{width:100%;display:flex;align-items:center;gap:8px;padding:7px 11px;border:1.5px solid #e5e7eb;border-radius:8px;background:#fff;font-size:13px;font-weight:500;color:#374151;cursor:pointer;text-align:left;transition:border-color .15s,box-shadow .15s;min-height:36px}
+.lm-tag-trigger:hover{border-color:#93a3b8}
+.lm-tag-trigger[aria-expanded="true"]{border-color:#2563c4;box-shadow:0 0 0 3px rgba(37,99,196,.13)}
+.lm-tag-swatch{width:14px;height:14px;border-radius:50%;border:1.5px solid rgba(0,0,0,.12);flex-shrink:0;background:#fff;transition:background .15s}
+.lm-tag-caret{margin-left:auto;color:#9ca3af;font-size:10px;transition:transform .15s;line-height:1}
+.lm-tag-trigger[aria-expanded="true"] .lm-tag-caret{transform:rotate(180deg)}
+.lm-tag-panel{position:fixed;z-index:3000;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.14);overflow:hidden;min-width:180px}
+.lm-tag-panel[hidden]{display:none!important}
+.lm-tag-option-list{max-height:190px;overflow-y:auto;padding:4px}
+.lm-tag-option{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:500;color:#374151;transition:background .1s;user-select:none}
+.lm-tag-option:hover{background:#f3f4f6}
+.lm-tag-option.selected{background:#eff6ff;color:#1d4ed8}
+.lm-tag-option-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;border:1.5px solid rgba(0,0,0,.1)}
+.lm-tag-option-none .lm-tag-option-dot{background:#fff;border-color:#d1d5db}
+.lm-tag-option-none{color:#9ca3af}
+.lm-tag-new-btn{width:100%;padding:8px 14px;background:none;border:none;border-top:1px solid #f3f4f6;text-align:left;font-size:12px;font-weight:700;color:#2563c4;cursor:pointer}
+.lm-tag-new-btn:hover{background:#f0f9ff}
+.lm-tag-new-form{padding:10px 12px 12px;border-top:1px solid #f3f4f6;display:flex;flex-direction:column;gap:8px}
+.lm-tag-new-input{width:100%;padding:7px 10px;border:1.5px solid #e5e7eb;border-radius:7px;font-size:13px;box-sizing:border-box;outline:none;font-family:inherit}
+.lm-tag-new-input:focus{border-color:#2563c4}
+.lm-tag-new-colors{display:flex;gap:6px;flex-wrap:wrap;padding:2px 0}
+.lm-tag-color-dot{width:22px;height:22px;border-radius:50%;cursor:pointer;border:2.5px solid transparent;transition:border-color .1s,transform .12s;flex-shrink:0;padding:0;background-clip:padding-box}
+.lm-tag-color-dot.selected,.lm-tag-color-dot:hover{border-color:#1e293b;transform:scale(1.18)}
+.lm-tag-new-actions{display:flex;gap:6px;justify-content:flex-end}
+.lm-tp-btn{padding:5px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid transparent;line-height:1.4}
+.lm-tp-btn--cancel{background:#fff;border-color:#e5e7eb;color:#6b7280}
+.lm-tp-btn--cancel:hover{background:#f9fafb}
+.lm-tp-btn--save{background:#2563c4;color:#fff;border-color:#2563c4}
+.lm-tp-btn--save:hover:not(:disabled){background:#1d4ed8}
+.lm-tp-btn--save:disabled{opacity:.5;cursor:not-allowed}
+  `;
+  document.head.appendChild(s);
+}
+
+function _refreshTagPicker(selectedId, prefix = 'lm') {
+  const listEl = document.getElementById(`${prefix}-tag-option-list`);
+  if (!listEl) return;
+
+  const noneHtml = `<div class="lm-tag-option lm-tag-option-none${selectedId == null ? ' selected' : ''}"
+    data-tag-id="" role="option" aria-selected="${selectedId == null}">
+    <span class="lm-tag-option-dot"></span><span>일반 강의</span>
+  </div>`;
+
+  const tagsHtml = _topicTags.map(t => `
+    <div class="lm-tag-option${t.id === selectedId ? ' selected' : ''}"
+         data-tag-id="${t.id}" role="option" aria-selected="${t.id === selectedId}">
+      <span class="lm-tag-option-dot" style="background:${escapeHtml(t.color)};"></span>
+      <span>${escapeHtml(t.name)}</span>
+    </div>`).join('');
+
+  listEl.innerHTML = noneHtml + tagsHtml;
+  _applyTagTrigger(selectedId, prefix);
+}
+
+function _applyTagTrigger(tagId, prefix = 'lm') {
+  const tag = tagId != null ? _topicTags.find(t => t.id === tagId) : null;
+
+  const swatchEl = document.getElementById(`${prefix}-tag-swatch`);
+  const labelEl  = document.getElementById(`${prefix}-tag-trigger-label`);
+  const hiddenEl = document.getElementById(prefix === 'lm' ? 'af-topic-tag' : `${prefix}-tag-id`);
+
+  if (swatchEl) swatchEl.style.background = tag?.color ?? '#fff';
+  if (labelEl)  labelEl.textContent        = tag ? tag.name : '일반 강의';
+  if (hiddenEl) hiddenEl.value             = tagId != null ? String(tagId) : '';
+
+  document.querySelectorAll(`#${prefix}-tag-option-list .lm-tag-option`).forEach(el => {
+    const raw = el.dataset.tagId;
+    const match = (raw === '' && tagId == null) || (raw !== '' && Number(raw) === tagId);
+    el.classList.toggle('selected', match);
+    el.setAttribute('aria-selected', String(match));
+  });
+
+  if (prefix === 'ms') _msBulkTagUpdate?.(tagId);
+}
+
+function _openTagPanel(prefix = 'lm') {
+  const trigger = document.getElementById(`${prefix}-tag-trigger`);
+  const panel   = document.getElementById(`${prefix}-tag-panel`);
+  if (!panel || !trigger) return;
+  positionPanel(trigger, panel);
+  if (prefix === 'lm') {
+    const currentTop = parseInt(panel.style.top);
+    panel.style.top = `${currentTop - 60}px`; // 숫자를 키울수록 더 올라갑니다!
+  }
+  panel.hidden = false;
+  trigger.setAttribute('aria-expanded', 'true');
+}
+
+function _closeTagPanel(prefix = 'lm') {
+  const trigger = document.getElementById(`${prefix}-tag-trigger`);
+  const panel   = document.getElementById(`${prefix}-tag-panel`);
+  if (!panel) return;
+  panel.hidden = true;
+  trigger?.setAttribute('aria-expanded', 'false');
+}
+
+function _resetNewTagColorPicker(prefix = 'lm') {
+  _newTagColor = _TAG_COLORS[0];
+  document.querySelectorAll(`#${prefix}-tag-new-colors .lm-tag-color-dot`).forEach((b, i) => {
+    b.classList.toggle('selected', i === 0);
+  });
+}
+
+async function _doSaveNewTag(prefix = 'lm') {
+  const nameInput = document.getElementById(`${prefix}-tag-new-name`);
+  const saveBtn   = document.getElementById(`${prefix}-tag-new-save`);
+  const newForm   = document.getElementById(`${prefix}-tag-new-form`);
+  const name      = nameInput?.value.trim();
+  if (!name) { nameInput?.focus(); return; }
+
+  const { currentUser } = _getCtx?.() ?? {};
+  if (!currentUser) { window.showToast?.('로그인이 필요합니다.', 'error'); return; }
+  if (_topicTags.some(t => t.name === name)) { window.showToast?.('이미 존재하는 카테고리입니다.', 'warn'); return; }
+  if (_topicTags.length >= 20) { window.showToast?.('카테고리는 최대 20개까지 가능합니다.', 'warn'); return; }
+
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '저장 중…'; }
+
+  try {
+    const newId  = _topicTags.length > 0 ? Math.max(..._topicTags.map(t => t.id)) + 1 : 1;
+    const newTag = { id: newId, name, color: _newTagColor };
+
+    await setDoc(doc(db, 'users', currentUser.uid), { topicTags: [..._topicTags, newTag] }, { merge: true });
+
+    _topicTags.push(newTag);
+
+    _refreshTagPicker(newId, prefix);
+
+    if (newForm)   newForm.hidden = true;
+    if (nameInput) nameInput.value = '';
+    _resetNewTagColorPicker(prefix);
+    window.showToast?.(`카테고리 "${name}"이 추가되었습니다.`, 'success');
+  } catch (err) {
+    console.error('[강비서] 카테고리 저장 오류:', err);
+    window.showToast?.('카테고리 저장에 실패했습니다.', 'error');
+  } finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '저장'; }
+  }
+}
+
+function _bindTagPickerEvents(prefix = 'lm') {
+  const trigger   = document.getElementById(`${prefix}-tag-trigger`);
+  const panel     = document.getElementById(`${prefix}-tag-panel`);
+  const newBtn    = document.getElementById(`${prefix}-tag-new-btn`);
+  const newForm   = document.getElementById(`${prefix}-tag-new-form`);
+  const cancelBtn = document.getElementById(`${prefix}-tag-new-cancel`);
+  const nameInput = document.getElementById(`${prefix}-tag-new-name`);
+  const colorsDiv = document.getElementById(`${prefix}-tag-new-colors`);
+  if (!trigger || !panel) return;
+
+  // Build color preset buttons once
+  if (colorsDiv && !colorsDiv.dataset.built) {
+    colorsDiv.innerHTML = _TAG_COLORS.map((c, i) =>
+      `<button type="button" class="lm-tag-color-dot${i === 0 ? ' selected' : ''}"
+               data-color="${c}" style="background:${c}" title="${c}"></button>`
+    ).join('');
+    colorsDiv.dataset.built = '1';
+    colorsDiv.addEventListener('click', e => {
+      const btn = e.target.closest('.lm-tag-color-dot');
+      if (!btn) return;
+      colorsDiv.querySelectorAll('.lm-tag-color-dot').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      _newTagColor = btn.dataset.color;
+    });
+  }
+
+  trigger.addEventListener('click', e => {
+    e.stopPropagation();
+    panel.hidden ? _openTagPanel(prefix) : _closeTagPanel(prefix);
+  });
+
+  document.getElementById(`${prefix}-tag-option-list`)?.addEventListener('click', e => {
+    const opt = e.target.closest('.lm-tag-option');
+    if (!opt) return;
+    const raw   = opt.dataset.tagId;
+    const tagId = raw === '' ? null : Number(raw);
+    _applyTagTrigger(tagId, prefix);
+    _closeTagPanel(prefix);
+  });
+
+  newBtn?.addEventListener('click', () => {
+    if (!newForm) return;
+    newForm.hidden = !newForm.hidden;
+    if (!newForm.hidden) nameInput?.focus();
+  });
+
+  cancelBtn?.addEventListener('click', () => {
+    if (newForm)   newForm.hidden = true;
+    if (nameInput) nameInput.value = '';
+    _resetNewTagColorPicker(prefix);
+  });
+
+  nameInput?.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { e.preventDefault(); _doSaveNewTag(prefix); }
+    if (e.key === 'Escape') { e.stopPropagation(); cancelBtn?.click(); }
+  });
+
+  document.getElementById(`${prefix}-tag-new-save`)?.addEventListener('click', () => _doSaveNewTag(prefix));
+
+  // Close on outside click
+  document.addEventListener('click', () => { if (panel && !panel.hidden) _closeTagPanel(prefix); });
+  panel.addEventListener('click', e => e.stopPropagation());
 }
 
 /* ════════════════════════════════════════
@@ -828,6 +1087,7 @@ function _bindEvents() {
       participants:   Number(get('af-participants'))     || null,
       groupInfo:      get('af-group-info'),
       topic:          get('af-topic'),
+      topicTagId:     get('af-topic-tag') ? Number(get('af-topic-tag')) : null,
       setupTime:      Number(get('af-setup-time'))  || 0,
       wrapupTime:     Number(get('af-wrapup-time')) || 0,
       supplies:       get('af-supplies'),
@@ -889,6 +1149,8 @@ function _bindEvents() {
 
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
+    const tagPanel = document.getElementById('lm-tag-panel');
+    if (tagPanel && !tagPanel.hidden) { _closeTagPanel(); return; }
     if (document.getElementById('lm-rv-backdrop')?.classList.contains('open')) {
       _closeReviewModal();
     } else {
@@ -897,5 +1159,5 @@ function _bindEvents() {
     }
   });
 
-  
+  _bindTagPickerEvents();
 }

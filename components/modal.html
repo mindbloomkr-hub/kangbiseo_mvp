@@ -6,6 +6,7 @@
       <div class="modal-title-block">
         <h2 class="modal-title" id="modal-title">강의 상세</h2>
         <div class="modal-meta-row" id="modal-meta-row">
+          <span class="lec-badge-tag" id="v-topic-tag"></span>
           <span class="lec-badge" id="modal-badge"></span>
           <span class="modal-meta-item">📅 <span id="modal-date-meta"></span></span>
           <span class="modal-meta-item">🏢 <span id="modal-client-meta"></span></span>
@@ -32,7 +33,8 @@
             <div class="modal-info-item"><div class="modal-info-label">총 회차</div><div class="modal-info-value" id="v-session-total"></div></div>
           </div>
           <div class="modal-info-grid" style="margin-top:var(--space-3)">
-            <div class="modal-info-item" style="grid-column:1/-1"><div class="modal-info-label">강의 주제</div><div class="modal-info-value" id="v-topic"></div></div>
+            <div class="modal-info-item"><div class="modal-info-label">강의 주제</div><div class="modal-info-value" id="v-topic"></div></div>
+            <div class="modal-info-item"><div class="modal-info-label">카테고리</div><div class="modal-info-value" id="v-topic-tag"></div></div>
           </div>
           <div class="modal-info-grid" style="margin-top:var(--space-3)">
             <div class="modal-info-item"><div class="modal-info-label">고객사</div><div class="modal-info-value" id="v-client"></div></div>
@@ -97,7 +99,31 @@
           <div class="add-form-sections">
             <div>
               <div class="add-form-section-title-first">기본 정보</div>
-              <div class="add-form-grid add-form-grid--4">
+              <div class="add-form-field">
+                  <label class="add-form-label">카테고리</label>
+                  <div class="lm-tag-picker" id="lm-tag-picker">
+                    <button type="button" class="lm-tag-trigger" id="lm-tag-trigger"
+                            aria-expanded="false" aria-haspopup="listbox">
+                      <span class="lm-tag-swatch" id="lm-tag-swatch"></span>
+                      <span id="lm-tag-trigger-label">일반 강의</span>
+                      <span class="lm-tag-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="lm-tag-panel" id="lm-tag-panel" role="listbox" hidden>
+                      <div class="lm-tag-option-list" id="lm-tag-option-list"></div>
+                      <button type="button" class="lm-tag-new-btn" id="lm-tag-new-btn">+ 새 카테고리 추가</button>
+                      <div class="lm-tag-new-form" id="lm-tag-new-form" hidden>
+                        <input class="lm-tag-new-input" type="text" id="lm-tag-new-name" placeholder="카테고리 이름" maxlength="20" />
+                        <div class="lm-tag-new-colors" id="lm-tag-new-colors"></div>
+                        <div class="lm-tag-new-actions">
+                          <button type="button" class="lm-tp-btn lm-tp-btn--cancel" id="lm-tag-new-cancel">취소</button>
+                          <button type="button" class="lm-tp-btn lm-tp-btn--save"   id="lm-tag-new-save">저장</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <input type="hidden" id="af-topic-tag" />
+                </div>
+              <div class="add-form-grid add-form-grid--4"  style="margin-top:var(--space-3)">
                 <div class="add-form-field"><label class="add-form-label" for="af-date">날짜 <span class="required">*</span></label><input class="add-form-input" type="date" id="af-date" required /></div>
                 <div class="add-form-field"><label class="add-form-label" for="af-time-start">시작 시간 <span class="required">*</span></label><select class="add-form-input" id="af-time-start" required></select></div>
                 <div class="add-form-field"><label class="add-form-label" for="af-time-end">종료 시간 <span class="required">*</span></label><select class="add-form-input" id="af-time-end" required></select></div>
@@ -108,7 +134,9 @@
                 <div class="add-form-field"><label class="add-form-label" for="af-session-current">현재 회차</label><input class="add-form-input" type="number" id="af-session-current" placeholder="1" min="1" /></div>
                 <div class="add-form-field"><label class="add-form-label" for="af-session-total">총 회차</label><input class="add-form-input" type="number" id="af-session-total" placeholder="4" min="1" /></div>
               </div>
-              <div class="add-form-field" style="margin-top:var(--space-3)"><label class="add-form-label" for="af-topic">강의 주제</label><input class="add-form-input" type="text" id="af-topic" placeholder="예) 리더십, 조직문화" /></div>
+              <div class="add-form-grid" style="margin-top:var(--space-3)">
+                <div class="add-form-field"><label class="add-form-label" for="af-topic">강의 주제</label><input class="add-form-input" type="text" id="af-topic" placeholder="예) 리더십, 조직문화" /></div>
+              </div>
               <div class="add-form-grid" style="margin-top:var(--space-3)">
                 <div class="add-form-field"><label class="add-form-label" for="af-client">고객사 <span class="required">*</span></label><input class="add-form-input" type="text" id="af-client" placeholder="예) 삼성SDS" required /></div>
                 <div class="add-form-field"><label class="add-form-label" for="af-fee">강사료 (만원) </label><input class="add-form-input" type="number" id="af-fee" placeholder="예) 50" min="0" required /></div>
@@ -122,8 +150,8 @@
                   </label>
                 </div>
                 <div class="lm-addr-wrap">
-                  <input class="add-form-input" type="text" id="af-place" placeholder="예) 서울 강남구 SSDC 4F" />
                   <button type="button" class="lm-addr-btn" id="v-addr-search">🔍 주소 검색</button>
+                  <input class="add-form-input" type="text" id="af-place" placeholder="예) 서울 강남구 SSDC 4F" />
                 </div>
               </div>
               <div class="add-form-grid" style="margin-top:var(--space-3)">

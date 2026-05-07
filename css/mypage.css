@@ -413,6 +413,25 @@
   gap: var(--space-3);
 }
 
+.mp-addr-btn {
+  height: 38px;
+  padding: 0 12px;
+  white-space: nowrap;
+  background: #6bb2f5;
+  border: 1.5px solid #5eadf8;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  color: #3c1e1e;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity var(--transition-fast);
+  outline: none;
+}
+.mp-addr-btn:hover { opacity: 0.85; }
+
+
+
 .transport-btn {
   flex: 1;
   display: flex;
@@ -647,7 +666,7 @@
 }
 
 /* ════════════════════════════════
-   SECTION 4: 강의 주제 태그
+   SECTION 4: 카테고리
 ════════════════════════════════ */
 .topic-tag-list {
   display: flex;
@@ -695,7 +714,7 @@
   color: var(--color-danger-600);
 }
 
-/* 태그 추가 영역 */
+/* 카테고리 영역 */
 .topic-add-row {
   display: flex;
   align-items: center;

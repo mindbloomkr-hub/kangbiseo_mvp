@@ -2,8 +2,8 @@
 
 import { subscribeLectures, authGuard, db } from '../api.js';
 import { writeBatch, doc } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
-import { TODAY, STATUS_META, escapeHtml, formatDateKo, classifyStatus } from '../utils.js';
-import { initLectureModal, openModal } from '../components/lectureModal.js';
+import { TODAY, STATUS_META, escapeHtml, formatDateKo, classifyStatus, positionPanel } from '../utils.js';
+import { initLectureModal, openModal, getTopicTags } from '../components/lectureModal.js';
 import { initMultiSessionModal, openMultiSessionModal } from '../components/multiSessionModal.js';
 
 /* ════════════════════════════════════════
@@ -16,6 +16,7 @@ let searchQuery   = '';
 let searchStatus  = '';
 let dateFrom      = '';
 let dateTo        = '';
+let filterTagId   = '';
 let unsubLectures = null;
 const selectedIds = new Set();
 
@@ -52,6 +53,13 @@ function getFilteredLectures() {
   if (searchStatus) list = list.filter(l => (l.progressStatus || '') === searchStatus);
   if (dateFrom)     list = list.filter(l => l.date >= dateFrom);
   if (dateTo)       list = list.filter(l => l.date <= dateTo);
+
+  if (filterTagId === 'default') {
+    list = list.filter(l => l.topicTagId == null || l.topicTagId === '');
+  } else if (filterTagId && filterTagId !== 'all') {
+    const tid = Number(filterTagId);
+    list = list.filter(l => l.topicTagId === tid);
+  }
 
   return list.sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -219,6 +227,120 @@ document.getElementById('search-date-to')?.addEventListener('change', e => {
   renderTable();
 });
 
+document.getElementById('btn-reset-filters')?.addEventListener('click', () => {
+  if (searchInput) { searchInput.value = ''; searchQuery = ''; }
+  const fromEl = document.getElementById('search-date-from');
+  const toEl   = document.getElementById('search-date-to');
+  if (fromEl) { fromEl.value = ''; dateFrom = ''; }
+  if (toEl)   { toEl.value   = ''; dateTo   = ''; }
+  _applyFilterTrigger('all');
+  renderTable();
+});
+
+/* ════════════════════════════════════════
+   카테고리 필터 피커
+════════════════════════════════════════ */
+function _renderFilterOptions() {
+  const listEl = document.getElementById('filter-tag-option-list');
+  if (!listEl) return;
+  const current = filterTagId || 'all';
+  const tags    = getTopicTags();
+
+  const allHtml = `<div class="lm-tag-option lm-tag-option-none${current === 'all' ? ' selected' : ''}"
+    data-fval="all" role="option" aria-selected="${current === 'all'}">
+    <span class="lm-tag-option-dot" style="background:transparent;border-color:transparent"></span>
+    <span>전체 카테고리</span>
+  </div>`;
+
+  const defaultHtml = `<div class="lm-tag-option${current === 'default' ? ' selected' : ''}"
+    data-fval="default" role="option" aria-selected="${current === 'default'}">
+    <span class="lm-tag-option-dot" style="background:#fff"></span>
+    <span>일반 강의 (태그 없음)</span>
+  </div>`;
+
+  const tagsHtml = tags.map(t => `
+    <div class="lm-tag-option${String(t.id) === current ? ' selected' : ''}"
+         data-fval="${t.id}" role="option" aria-selected="${String(t.id) === current}">
+      <span class="lm-tag-option-dot" style="background:${escapeHtml(t.color)}"></span>
+      <span>${escapeHtml(t.name)}</span>
+    </div>`).join('');
+
+  listEl.innerHTML = allHtml + defaultHtml + tagsHtml;
+}
+
+function _applyFilterTrigger(val) {
+  const swatchEl = document.getElementById('filter-tag-swatch');
+  const labelEl  = document.getElementById('filter-tag-trigger-label');
+  const tags     = getTopicTags();
+
+  if (!val || val === 'all') {
+    filterTagId = '';
+    if (swatchEl) { swatchEl.style.background = 'transparent'; swatchEl.style.borderColor = 'transparent'; }
+    if (labelEl)  labelEl.textContent = '전체 카테고리';
+  } else if (val === 'default') {
+    filterTagId = 'default';
+    if (swatchEl) { swatchEl.style.background = '#fff'; swatchEl.style.borderColor = 'rgba(0,0,0,.12)'; }
+    if (labelEl)  labelEl.textContent = '일반 강의 (태그 없음)';
+  } else {
+    filterTagId = val;
+    const tag = tags.find(t => String(t.id) === String(val));
+    if (swatchEl) { swatchEl.style.background = tag?.color ?? '#fff'; swatchEl.style.borderColor = 'rgba(0,0,0,.12)'; }
+    if (labelEl)  labelEl.textContent = tag?.name ?? '';
+  }
+
+  document.querySelectorAll('#filter-tag-option-list .lm-tag-option').forEach(el => {
+    const match = el.dataset.fval === (filterTagId || 'all');
+    el.classList.toggle('selected', match);
+    el.setAttribute('aria-selected', String(match));
+  });
+}
+
+function _openFilterPanel() {
+  const trigger = document.getElementById('filter-tag-trigger');
+  const panel   = document.getElementById('filter-tag-panel');
+  if (!trigger || !panel) return;
+  _renderFilterOptions();
+  positionPanel(trigger, panel, { alignLeft: true });
+  panel.hidden = false;
+  trigger.setAttribute('aria-expanded', 'true');
+}
+
+function _closeFilterPanel() {
+  const panel   = document.getElementById('filter-tag-panel');
+  const trigger = document.getElementById('filter-tag-trigger');
+  if (!panel) return;
+  panel.hidden = true;
+  trigger?.setAttribute('aria-expanded', 'false');
+}
+
+function _initFilterPicker() {
+  _renderFilterOptions();
+  _applyFilterTrigger('all');
+
+  const trigger = document.getElementById('filter-tag-trigger');
+  const panel   = document.getElementById('filter-tag-panel');
+  if (!trigger || !panel) return;
+
+  trigger.addEventListener('click', e => {
+    e.stopPropagation();
+    panel.hidden ? _openFilterPanel() : _closeFilterPanel();
+  });
+
+  document.getElementById('filter-tag-option-list')?.addEventListener('click', e => {
+    const opt = e.target.closest('.lm-tag-option');
+    if (!opt) return;
+    _applyFilterTrigger(opt.dataset.fval);
+    _closeFilterPanel();
+    renderTable();
+  });
+
+  panel.addEventListener('click', e => e.stopPropagation());
+  document.addEventListener('click', () => { if (panel && !panel.hidden) _closeFilterPanel(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && panel && !panel.hidden) _closeFilterPanel();
+  });
+}
+
 /* ════════════════════════════════════════
    일괄 처리 — CSS 주입
 ════════════════════════════════════════ */
@@ -262,9 +384,12 @@ input[type=checkbox].row-cb,input[type=checkbox]#select-all-cb{width:16px;height
 .bm-group-label{font-size:13px;font-weight:700;color:#065f46;flex:1}
 .bm-group-sub{font-size:11px;color:#10b981;display:block;margin-top:2px}
 .bm-addr-wrap{display:flex;gap:6px;align-items:stretch}
-.bm-addr-btn{height:38px;padding:0 12px;white-space:nowrap;background:#fee500;border:1.5px solid #e6cf00;border-radius:9px;font-size:12px;font-weight:700;color:#3c1e1e;cursor:pointer;flex-shrink:0;transition:opacity .15s;outline:none}
+.bm-addr-btn{height:38px;padding:0 12px;white-space:nowrap;background:#6bb2f5;border:1.5px solid #5eadf8;border-radius:9px;font-size:12px;font-weight:700;color:#3c1e1e;cursor:pointer;flex-shrink:0;transition:opacity .15s;outline:none}
 .bm-addr-btn:hover{opacity:.85}
 .bm-addr-btn:disabled{opacity:.4;cursor:not-allowed}
+.filter-tag-picker{position:relative;display:inline-flex}
+.filter-tag-picker .lm-tag-trigger{width:160px;height:36px;font-size:13px}
+#filter-tag-panel{transform:none!important}
   `;
   document.head.appendChild(s);
 }
@@ -624,9 +749,10 @@ document.getElementById('select-all-cb')?.addEventListener('change', e => {
 /* ════════════════════════════════════════
    인증 상태 감지
 ════════════════════════════════════════ */
-authGuard(user => {
+authGuard(async user => {
   currentUser = user;
-  initLectureModal(() => ({ allLectures, currentUser }));
+  await initLectureModal(() => ({ allLectures, currentUser }));
+  _initFilterPicker();
   initMultiSessionModal(() => ({ allLectures, currentUser }));
   initLectures(user.uid);
 

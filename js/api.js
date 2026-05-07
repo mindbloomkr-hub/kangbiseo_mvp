@@ -2,7 +2,8 @@
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js';
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-auth.js';
-import { getFirestore, collection, query, where, onSnapshot, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
+import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-storage.js';
 import { loadSidebar, loadModal, updateSidebarUI } from './utils.js';
 
 const firebaseConfig = {
@@ -20,10 +21,31 @@ const app = initializeApp(firebaseConfig);
 export const auth           = getAuth(app);
 window.auth = auth;
 export const db             = getFirestore(app);
+export const storage        = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 googleProvider.addScope('email profile openid');
 //googleProvider.addScope('https://www.googleapis.com/auth/calendar.readonly');
+
+/* ════════════════════════════════════════
+   Firebase Storage — 프로필 사진 업로드
+════════════════════════════════════════ */
+export async function uploadProfilePhoto(uid, file) {
+  const photoRef = ref(storage, `users/${uid}/profile`);
+  await uploadBytes(photoRef, file);
+  return getDownloadURL(photoRef);
+}
+
+/* ════════════════════════════════════════
+   Firestore — 사용자 프로필 동기화
+   모든 페이지에서 최신 사용자 데이터를 한 번에 가져올 때 사용
+════════════════════════════════════════ */
+export async function syncUserProfile(uid) {
+  try {
+    const snap = await getDoc(doc(db, 'users', uid));
+    return snap.exists() ? snap.data() : null;
+  } catch { return null; }
+}
 
 /* ════════════════════════════════════════
    구글 캘린더 API
@@ -104,7 +126,7 @@ function _bindLogout(cleanupFn) {
     try {
       cleanupFn?.();
       await signOut(auth);
-      ['userName', 'userNickname', 'userUid', 'userEmail'].forEach(k => localStorage.removeItem(k));
+      ['userName', 'userNickname', 'userUid', 'userEmail', 'navBadgeCount'].forEach(k => localStorage.removeItem(k));
       window.location.replace('../login.html');
     } catch (err) {
       console.error('[강비서] 로그아웃 오류:', err);

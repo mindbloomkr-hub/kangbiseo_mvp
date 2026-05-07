@@ -567,6 +567,27 @@ export function initAllDateWithDay(root = document) {
 }
 
 /* ════════════════════════════════════════
+   드롭다운 패널 position:fixed 배치 유틸
+   alignLeft=false → 화면 수평 중앙 (모달 태그 피커)
+   alignLeft=true  → trigger 좌측 정렬 (검색바 필터 피커)
+════════════════════════════════════════ */
+export function positionPanel(triggerEl, panelEl, { alignLeft = false } = {}) {
+  const rect = triggerEl.getBoundingClientRect();
+  panelEl.style.position = 'fixed';
+  panelEl.style.top      = `${rect.bottom + window.scrollY + 4}px`;
+  panelEl.style.bottom   = '';
+  if (alignLeft) {
+    panelEl.style.left      = `${rect.left}px`;
+    panelEl.style.width     = `${rect.width}px`;
+    panelEl.style.transform = 'none';
+  } else {
+    panelEl.style.left      = '50%';
+    panelEl.style.width     = '';
+    panelEl.style.transform = 'translateX(-50%)';
+  }
+}
+
+/* ════════════════════════════════════════
    강의 모달 HTML 동적 로드 — components/modal.html fetch 후 주입
 ════════════════════════════════════════ */
 export async function loadModal() {

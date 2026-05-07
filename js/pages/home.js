@@ -5,23 +5,17 @@ import {
   query, where, onSnapshot, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
 import { DAY_KO, escapeHtml, getTodayString, fetchTravelMin } from '../utils.js';
-import { initLectureModal, openModal } from '../components/lectureModal.js';
+import { initLectureModal, openModal, getTopicTags } from '../components/lectureModal.js';
 
 /* ════════════════════════════════════════
-   강의별 고유 색상 팔레트 (ID 해시 기반)
+   강의별 색상 — topicTag 색상 우선, 없으면 중립 회색
 ════════════════════════════════════════ */
-const LECTURE_COLORS = [
-  '#0ea5e9', '#8b5cf6', '#ec4899', '#f59e0b',
-  '#10b981', '#f97316', '#3b82f6', '#ef4444',
-];
-
-function getLectureColor(id) {
-  if (!id) return LECTURE_COLORS[0];
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = (hash * 31 + id.charCodeAt(i)) & 0xffffffff;
+function getLectureColor(lec) {
+  if (lec?.topicTagId != null) {
+    const tag = getTopicTags().find(t => t.id === lec.topicTagId);
+    if (tag?.color) return tag.color;
   }
-  return LECTURE_COLORS[Math.abs(hash) % LECTURE_COLORS.length];
+  return '#e5e7eb';
 }
 
 /* ════════════════════════════════════════
@@ -147,7 +141,7 @@ function renderBriefingCards() {
   }
 
   container.innerHTML = todayLectures.map((l) => {
-    const color      = getLectureColor(l.id);
+    const color      = getLectureColor(l);
     const mgrInitial = (l.managerName || '담').charAt(0);
     return `
       <div class="lecture-briefing-card" data-id="${escapeHtml(l.id)}"
@@ -321,7 +315,7 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
   // ── Lecture loop ─────────────────────────────────────
   for (let idx = 0; idx < lectures.length; idx++) {
     const lec      = lectures[idx];
-    const color    = getLectureColor(lec.id);
+    const color    = getLectureColor(lec);
     const itemMin  = timeToMin(lec.timeStart);
     const nextMin  = lectures[idx + 1] ? timeToMin(lectures[idx + 1].timeStart) : Infinity;
     const isDone   = showNowBar && timeToMin(lec.timeEnd) < nowMin;
@@ -468,7 +462,7 @@ function renderWeekly() {
     const dateNum  = dateObj ? dateObj.getDate() : '—';
     const lecCards = lectures.length > 0
       ? lectures.map(lec => {
-          const color = getLectureColor(lec.id);
+          const color = getLectureColor(lec);
           return `
             <div class="week-lec-card" data-id="${escapeHtml(lec.id)}"
                  style="${isPast && !isToday ? 'opacity:0.55;' : ''}border-left:3px solid ${color};">
@@ -679,7 +673,7 @@ renderTodoList();
 ════════════════════════════════════════ */
 authGuard(async user => {
   currentUser = user;
-  initLectureModal(() => ({ allLectures, currentUser }));
+  await initLectureModal(() => ({ allLectures, currentUser }));
   renderGreeting();
   initLectures(user.uid);
   initTodos(user.uid);

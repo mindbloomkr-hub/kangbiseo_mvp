@@ -87,6 +87,18 @@
                 <span class="search-date-sep">~</span>
                 <input type="date" class="search-date-input" id="search-date-to" aria-label="종료 날짜" />
               </div>
+              <div class="filter-tag-picker" id="filter-tag-picker">
+                <button type="button" class="lm-tag-trigger filter-tag-trigger" id="filter-tag-trigger"
+                        aria-expanded="false" aria-haspopup="listbox">
+                  <span class="lm-tag-swatch" id="filter-tag-swatch"></span>
+                  <span id="filter-tag-trigger-label">전체 카테고리</span>
+                  <span class="lm-tag-caret" aria-hidden="true">▾</span>
+                </button>
+                <div class="lm-tag-panel" id="filter-tag-panel" role="listbox" hidden>
+                  <div class="lm-tag-option-list" id="filter-tag-option-list"></div>
+                </div>
+              </div>
+              <button class="btn-reset" id="btn-reset-filters" title="필터 초기화">↺ 초기화</button>
               <span class="table-result-count" id="result-count">총 <strong>0</strong>건</span>
             </div>
           </div>

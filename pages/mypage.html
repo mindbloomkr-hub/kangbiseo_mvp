@@ -74,7 +74,7 @@
               <span class="mypage-nav-icon">💰</span>정산 &amp; 행정
             </div>
             <div class="mypage-nav-item" data-target="section-topics">
-              <span class="mypage-nav-icon">🏷️</span>강의 주제 태그
+              <span class="mypage-nav-icon">🏷️</span>카테고리 태그
             </div>
             <div class="mypage-nav-item" data-target="section-subscription">
               <span class="mypage-nav-icon">👑</span>구독 &amp; 서비스
@@ -210,11 +210,18 @@
                     <span class="scheduler-row-title">출발지 주소 (집 / 사무실)</span>
                   </div>
                   <p class="scheduler-row-sub">입력 시 홈 타임라인에 집 출발·귀가 시각을 자동 계산합니다.</p>
-                  <input class="mp-input" type="text" id="origin-address-input"
-                         placeholder="예: 서울시 강남구 테헤란로 123"
-                         style="width:100%;box-sizing:border-box;"
-                         autocomplete="street-address"
-                         aria-label="출발지 주소 입력" />
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <button type="button" class="mp-addr-btn" id="addr-search"
+                            style="flex-shrink:0;padding:8px 14px;white-space:nowrap;">
+                      🔍 주소 검색
+                    </button>
+                    <input class="mp-input" type="text" id="origin-address-input"
+                           placeholder="주소 검색 버튼을 눌러 주소를 선택하세요"
+                           style="flex:1;box-sizing:border-box;"
+                           readonly
+                           autocomplete="off"
+                           aria-label="출발지 주소" />                    
+                  </div>
                 </div>
 
                 <!-- 이동 수단 선택 -->
@@ -438,32 +445,32 @@
 
 
             <!-- ══════════════════════════════════════
-                 SECTION 4: 강의 주제 태그 관리
+                 SECTION 4: 카테고리 관리
             ══════════════════════════════════════ -->
             <section class="mypage-card" id="section-topics" aria-labelledby="topics-heading">
               <div class="mypage-card-header">
                 <div class="mypage-card-icon" aria-hidden="true">🏷️</div>
                 <div>
-                  <h2 class="mypage-card-title" id="topics-heading">강의 주제 태그 관리</h2>
-                  <p class="mypage-card-desc">강의 분류에 사용되는 주제 태그와 색상을 관리합니다.</p>
+                  <h2 class="mypage-card-title" id="topics-heading">카테고리 관리</h2>
+                  <p class="mypage-card-desc">강의 및 일정 분류에 사용되는 카테고리와 색상을 관리합니다.</p>
                 </div>
               </div>
 
               <div class="mypage-card-body">
 
-                <!-- 태그 목록 -->
-                <div class="topic-tag-list" id="topic-tag-list" role="list" aria-label="강의 주제 태그 목록">
+                <!-- 카테고리 목록 -->
+                <div class="topic-tag-list" id="topic-tag-list" role="list" aria-label="카테고리 목록">
                   <!-- JS로 렌더링 -->
                 </div>
 
-                <!-- 태그 추가 입력 영역 -->
-                <div class="topic-add-row" role="group" aria-label="새 태그 추가">
+                <!-- 카테고리 입력 영역 -->
+                <div class="topic-add-row" role="group" aria-label="새 카테고리 추가">
                   <input class="topic-add-input" type="text" id="topic-add-input"
                          placeholder="주제 이름 입력 (예: 경영, IT, 인문학)"
-                         maxlength="20" aria-label="태그 이름" />
+                         maxlength="20" aria-label="카테고리 이름" />
 
                   <!-- 컬러 프리셋 -->
-                  <div class="color-preset-group" role="group" aria-label="태그 색상 선택">
+                  <div class="color-preset-group" role="group" aria-label="카테고리 색상 선택">
                     <button type="button" class="color-preset selected" data-color="#2563c4"
                             style="background:#2563c4;" aria-label="파란색" title="파란색"></button>
                     <button type="button" class="color-preset" data-color="#059669"
@@ -482,7 +489,7 @@
                             style="background:#374151;" aria-label="회색" title="회색"></button>
                   </div>
 
-                  <button type="button" class="topic-add-btn" id="topic-add-btn">+ 태그 추가</button>
+                  <button type="button" class="topic-add-btn" id="topic-add-btn">+ 카테고리 추가</button>
                 </div>
 
               </div><!-- /.mypage-card-body -->
@@ -610,6 +617,7 @@
     저장하기
   </button>
 
+  <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
   <script type="module" src="../js/components/lectureModal.js"></script>
   <script src="../js/common.js"></script>
   <script type="module" src="../js/pages/mypage.js"></script>

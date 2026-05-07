@@ -1,13 +1,13 @@
 // js/pages/mypage.js — 마이 페이지 (Firebase Auth + Firestore 연동, ES Module)
 
-import { auth, db, fetchGoogleCalendarEvents, authGuard } from '../api.js';
+import { auth, db, uploadProfilePhoto, fetchGoogleCalendarEvents, authGuard } from '../api.js';
 import {
   collection, doc, getDoc, setDoc, addDoc,
   query, where, getDocs, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
 import {
   escapeHtml, classifyStatus, STATUS_META,
-  showToast, setVal, getVal, updateSidebarUI,
+  showToast, setVal, getVal, updateSidebarUI, _geocode,
 } from '../utils.js';
 
 /* ════════════════════════════════════════
@@ -52,6 +52,7 @@ let device = loadDevice();
    Firebase 프로필 상태 (Firestore 연동)
 ════════════════════════════════════════ */
 let currentUser        = null;
+let currentPhotoUrl    = null;   // Firebase Storage URL (null이면 이니셜 표시)
 let fbKeywords         = [];
 let fbTopics           = [];
 let selectedTopicColor = '#2563c4';
@@ -94,22 +95,29 @@ function initSectionNav() {
 /* ════════════════════════════════════════
    SECTION 1: 프로필
    이름·이메일 → Firebase Auth (읽기 전용)
-   슬로건·소개·키워드·태그 → Firestore users/{uid}
+   슬로건·소개·키워드·카테고리 → Firestore users/{uid}
 ════════════════════════════════════════ */
 async function loadFirebaseProfile(uid) {
   try {
     const snap = await getDoc(doc(db, 'users', uid));
     if (snap.exists()) {
       const d = snap.data();
-      fbKeywords     = Array.isArray(d.keywords) ? d.keywords : [];
-      fbTopics       = Array.isArray(d.topics)   ? d.topics   : [];
+      fbKeywords     = Array.isArray(d.keywords)   ? d.keywords   : [];
+      fbTopics       = Array.isArray(d.topicTags) ? d.topicTags : (Array.isArray(d.topics) ? d.topics : []);
       topicIdCounter = fbTopics.length > 0
         ? Math.max(...fbTopics.map(t => t.id)) + 1 : 1;
       setVal('profile-slogan',    d.slogan   || '');
       setVal('profile-bio',       d.bio      || '');
       setVal('profile-nickname',  d.nickname || '');
       setVal('prof-tel',          d.tel      || '');
-      // Firestore 저장값이 있으면 기기 설정보다 우선 적용
+
+      // 프로필 사진 — Firebase Storage URL (localStorage 대체)
+      if (d.photoURL) {
+        currentPhotoUrl = d.photoURL;
+        showProfilePhoto(d.photoURL);
+      }
+
+      // 스케줄러 설정 — Firestore 값이 기기 로컬보다 우선
       if (d.setupTime  != null) device.scheduler.setupTime  = Number(d.setupTime);
       if (d.wrapupTime != null) device.scheduler.wrapupTime = Number(d.wrapupTime);
       if (d.bufferTime != null) {
@@ -121,6 +129,12 @@ async function loadFirebaseProfile(uid) {
         }
       }
       if (d.originAddress != null) device.scheduler.originAddress = d.originAddress;
+
+      // 정산 설정 — 기기를 넘어 동기화
+      if (d.hourlyRate    != null) device.settlement.hourlyRate    = Number(d.hourlyRate);
+      if (d.bankName      != null) device.settlement.bankName      = d.bankName;
+      if (d.accountNumber != null) device.settlement.accountNumber = d.accountNumber;
+      if (d.accountHolder != null) device.settlement.accountHolder = d.accountHolder;
     } else {
       fbKeywords = []; fbTopics = [];
     }
@@ -149,23 +163,27 @@ function initProfile(user) {
     Object.assign(emailEl.style, readonlyStyle);
   }
 
-  /* 프로필 사진 복원 */
-  const photoUrl = localStorage.getItem('profilePhotoUrl');
-  if (photoUrl) showProfilePhoto(photoUrl);
+  /* 프로필 사진 복원은 loadFirebaseProfile()에서 처리 */
 
-  /* 사진 업로드 */
-  document.getElementById('profile-photo-input')?.addEventListener('change', e => {
+  /* 사진 업로드 — Firebase Storage에 저장 후 Firestore URL 기록 */
+  document.getElementById('profile-photo-input')?.addEventListener('change', async e => {
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
       showToast('파일 크기는 5MB 이하여야 합니다.', 'error'); return;
     }
-    const reader = new FileReader();
-    reader.onload = ev => {
-      localStorage.setItem('profilePhotoUrl', ev.target.result);
-      showProfilePhoto(ev.target.result);
-    };
-    reader.readAsDataURL(file);
+    if (!currentUser) { showToast('로그인이 필요합니다.', 'error'); return; }
+    try {
+      showToast('사진 업로드 중...', 'info');
+      const url = await uploadProfilePhoto(currentUser.uid, file);
+      currentPhotoUrl = url;
+      showProfilePhoto(url);
+      await setDoc(doc(db, 'users', currentUser.uid), { photoURL: url }, { merge: true });
+      showToast('프로필 사진이 저장되었습니다.', 'success');
+    } catch (err) {
+      console.error('[강비서] 사진 업로드 오류:', err);
+      showToast('사진 업로드에 실패했습니다.', 'error');
+    }
   });
 
   /* 키워드 입력 이벤트 */
@@ -184,16 +202,17 @@ function initProfile(user) {
   });
 }
 
-function showProfilePhoto(dataUrl) {
+function showProfilePhoto(url) {
+  currentPhotoUrl = url;
   const initial = document.getElementById('profile-photo-initial');
   const img     = document.getElementById('profile-photo-img');
   if (initial) initial.style.display = 'none';
-  if (img) { img.src = dataUrl; img.style.display = 'block'; }
+  if (img) { img.src = url; img.style.display = 'block'; }
 }
 
 function updateAvatarInitial(name) {
   const photoInitial = document.getElementById('profile-photo-initial');
-  if (photoInitial && name && !localStorage.getItem('profilePhotoUrl')) {
+  if (photoInitial && name && !currentPhotoUrl) {
     photoInitial.textContent = name[0];
   }
 }
@@ -276,7 +295,7 @@ function toggleCustomBuffer(show) {
 /* ════════════════════════════════════════
    SECTION 3: 정산 & 행정
 ════════════════════════════════════════ */
-
+function initSettlement() {
   const s = device.settlement;
   setVal('hourly-rate',    s.hourlyRate);
   setVal('bank-name',      s.bankName);
@@ -305,8 +324,7 @@ function toggleCustomBuffer(show) {
       unmarkDocUploaded(key);
     });
   });
-
-function initSettlement() {}
+}
 
 function updateFeeDisplay(val) {
   const el = document.getElementById('fee-display');
@@ -326,7 +344,7 @@ function unmarkDocUploaded(key) {
 }
 
 /* ════════════════════════════════════════
-   SECTION 4: 강의 주제 태그
+   SECTION 4: 카테고리
 ════════════════════════════════════════ */
 function initTopics() {
   renderTopicTags();
@@ -348,7 +366,7 @@ function renderTopicTags() {
   if (!list) return;
   list.innerHTML = '';
   if (fbTopics.length === 0) {
-    list.innerHTML = '<span style="color:var(--color-text-muted);font-size:var(--font-size-sm);">아직 추가된 태그가 없습니다.</span>';
+    list.innerHTML = '<span style="color:var(--color-text-muted);font-size:var(--font-size-sm);">아직 추가된 카테고리가 없습니다.</span>';
     return;
   }
   fbTopics.forEach(tag => {
@@ -370,8 +388,8 @@ function addTopicTag() {
   const input = document.getElementById('topic-add-input');
   const name = input?.value.trim();
   if (!name) { input?.focus(); return; }
-  if (fbTopics.some(t => t.name === name)) { showToast('이미 존재하는 태그입니다.', 'warn'); return; }
-  if (fbTopics.length >= 20)               { showToast('태그는 최대 20개까지 가능합니다.', 'warn'); return; }
+  if (fbTopics.some(t => t.name === name)) { showToast('이미 존재하는 카테고리입니다.', 'warn'); return; }
+  if (fbTopics.length >= 20)               { showToast('카테고리는 최대 20개까지 가능합니다.', 'warn'); return; }
   fbTopics.push({ id: topicIdCounter++, name, color: selectedTopicColor });
   renderTopicTags();
   if (input) input.value = '';
@@ -638,6 +656,42 @@ function initGcalImport() {
 }
 
 /* ════════════════════════════════════════
+   출발지 주소 검색 (Kakao Postcode + Geocoder 검증)
+════════════════════════════════════════ */
+function initAddressSearch() {
+  const btn   = document.getElementById('addr-search');
+  const input = document.getElementById('origin-address-input');
+  if (!btn || !input) return;
+
+  btn.addEventListener('click', () => {
+    if (typeof daum === 'undefined' || !daum.Postcode) {
+      showToast('주소 검색 서비스를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.', 'error');
+      return;
+    }
+
+    new daum.Postcode({
+      oncomplete: async function (data) {
+        // 도로명 주소 우선, 없으면 지번 주소
+        const addr = data.roadAddress || data.jibunAddress || '';
+        if (!addr) { showToast('카카오맵에서 인식할 수 없는 주소입니다. 다시 선택해주세요.', 'error'); return; }
+
+        // Kakao REST Geocoder로 좌표 변환 가능 여부 검증
+        const coords = await _geocode(addr);
+        if (!coords) {
+          input.value = '';
+          device.scheduler.originAddress = '';
+          showToast('카카오맵에서 인식할 수 없는 주소입니다. 다시 선택해주세요.', 'error');
+          return;
+        }
+
+        input.value = addr;
+        device.scheduler.originAddress = addr;
+      },
+    }).open();
+  });
+}
+
+/* ════════════════════════════════════════
    FLOATING SAVE: 기기 설정 + Firestore 프로필
 ════════════════════════════════════════ */
 function initFloatingSave() {
@@ -660,11 +714,14 @@ function initFloatingSave() {
       updateSidebarUI(nickname || currentUser?.displayName || '강사');
 
       await setDoc(doc(db, 'users', currentUser.uid), {
-        slogan:     getVal('profile-slogan'),
-        bio:        getVal('profile-bio'),
+        // 프로필
+        slogan:    getVal('profile-slogan'),
+        bio:       getVal('profile-bio'),
         nickname,
-        keywords:   fbKeywords,
-        topics:     fbTopics,
+        tel:       getVal('prof-tel').trim(),
+        keywords:  fbKeywords,
+        topicTags: fbTopics,
+        // 스케줄러 설정
         setupTime:     device.scheduler.setupTime,
         wrapupTime:    device.scheduler.wrapupTime,
         bufferTime:    device.scheduler.bufferTime === 'custom'
@@ -672,8 +729,12 @@ function initFloatingSave() {
           : (device.scheduler.bufferTime   || 30),
         bufferIsCustom: device.scheduler.bufferTime === 'custom',
         originAddress:  device.scheduler.originAddress || '',
-        tel:        getVal('prof-tel').trim(),
-        updatedAt:  serverTimestamp(),
+        // 정산 설정 (기기 간 동기화)
+        hourlyRate:    device.settlement.hourlyRate    || 0,
+        bankName:      device.settlement.bankName      || '',
+        accountNumber: device.settlement.accountNumber || '',
+        accountHolder: device.settlement.accountHolder || '',
+        updatedAt:     serverTimestamp(),
       }, { merge: true });
 
       btn.classList.add('saved');
@@ -800,6 +861,7 @@ authGuard(async user => {
   renderTopicTags();
 
   initScheduler();
+  initAddressSearch();
   initSettlement();
   initTopics();
   initSubscription();
