@@ -589,9 +589,7 @@ body {
 }
 
 .tl-card--lecture {
-  background: var(--color-primary-50);
-  border: 1px solid var(--color-primary-200);
-  border-left: 3px solid var(--color-primary-500);
+  /* background, border, border-left set inline per lecture tag color */
 }
 
 .tl-card--buffer {
@@ -746,7 +744,6 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin: 2px 0 6px 0;
   padding-left: 67px;
 }
 

@@ -4,8 +4,10 @@ import { db } from '../api.js';
 import {
   collection, writeBatch, doc, getDoc, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
-import { buildTimeOptions, initAllDateWithDay, checkScheduleConflict, formatDateKo } from '../utils.js';
+import { buildTimeOptions, initAllDateWithDay, checkScheduleConflict, formatDateKo, getTodayString } from '../utils.js';
 import { getTopicTags, registerMsBulkTagUpdate, refreshMsTagPicker, bindMsTagPickerEvents } from './lectureModal.js';
+import { addTodo } from '../services/todoService.js';
+import { renderTodoUI } from './todoComponent.js';
 
 /* ════════════════════════════════════════
    한국 공휴일
@@ -228,6 +230,9 @@ let _htmlLoaded        = false;
 let _msTagId           = null;          // selected topicTagId for ms-modal
 // Firestore에서 로드한 스케줄러 기본값 — localStorage 비의존
 let _schedulerDefaults = { setupTime: 0, wrapupTime: 0, bufferTime: 30, originAddress: '' };
+// Pending todos staged before the group is created
+let _msPendingTodos    = [];
+let _msRefreshPendingUI = null;
 
 /* ════════════════════════════════════════
    공개 API
@@ -369,6 +374,17 @@ function _reset() {
   // Tag picker reset
   _msTagId = null;
   refreshMsTagPicker(null);
+
+  // Pending todo reset
+  _msPendingTodos    = [];
+  _msRefreshPendingUI = null;
+  const todoListEl = $('ms-todo-list');
+  if (todoListEl) {
+    _msRefreshPendingUI = renderTodoUI(todoListEl, null, {
+      getPendingTodos:  () => _msPendingTodos,
+      onPendingChange:  updated => { _msPendingTodos = updated; },
+    });
+  }
 
   // Hide preview + disable save
   $('ms-preview').style.display = 'none';
@@ -520,6 +536,23 @@ function _bindEvents() {
     if ($('ms-tbody')) _reRenderTableBody();
   });
   bindMsTagPickerEvents();
+
+  // Pending todo — add button & Enter key
+  $('ms-todo-add-btn')?.addEventListener('click', () => {
+    const input = $('ms-todo-input');
+    const text  = input?.value.trim();
+    if (!text) return;
+    _msPendingTodos = [
+      ..._msPendingTodos,
+      { id: `p_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, text, isDone: false, postponeCount: 0, deadline: getTodayString(), lectureId: null, groupId: null },
+    ];
+    _msRefreshPendingUI?.();
+    input.value = '';
+  });
+
+  $('ms-todo-input')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); $('ms-todo-add-btn')?.click(); }
+  });
 
 }
 
@@ -713,6 +746,16 @@ async function _commitBatch(commonData, sessionTotal) {
       });
     }
     await batch.commit();
+
+    // Flush pending todos linked to the new groupId
+    if (_msPendingTodos.length > 0) {
+      const uid = _getCtx?.()?.currentUser?.uid;
+      if (uid && commonData.groupId) {
+        await Promise.all(_msPendingTodos.map(t => addTodo(uid, t.text, null, commonData.groupId)));
+      }
+      _msPendingTodos = [];
+    }
+
     window.showToast?.(`${sessionTotal}회차 강의가 등록되었습니다! 🎉`, 'success');
     _close();
   } catch (err) {

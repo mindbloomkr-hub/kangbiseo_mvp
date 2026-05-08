@@ -2,6 +2,8 @@
 
 // 1. 모든 import 문 (파일 최상단에 모아두세요)
 import { db } from '../api.js';
+import { addTodo } from '../services/todoService.js';
+import { renderTodoUI } from './todoComponent.js';
 import {
   collection,
   query,
@@ -19,7 +21,7 @@ import {
   TAX_LABEL, PROGRESS_LABEL, STATUS_META,
   escapeHtml, formatDateKo, calcDuration, classifyStatus,
   buildTimeOptions, updateDurationDisplay, syncEndTimeOptions, initTimeSelects,
-  checkScheduleConflict, _geocode, positionPanel,
+  checkScheduleConflict, _geocode, positionPanel, getTodayString,
 } from '../utils.js';
 
 // ---------------------------------------------------------
@@ -55,12 +57,17 @@ try {
 /* ════════════════════════════════════════
    모듈 상태
 ════════════════════════════════════════ */
-let _activeModalId = null;
-let _editingLecId  = null;
-let _getCtx        = null;
-let _classifyFn    = classifyStatus;
-let _statusMeta    = STATUS_META;
-let _topicTags     = [];
+let _activeModalId  = null;
+let _editingLecId   = null;
+let _getCtx         = null;
+let _classifyFn     = classifyStatus;
+let _statusMeta     = STATUS_META;
+let _topicTags      = [];
+
+// Lecture-scoped todo state
+let _unsubLecTodos    = null;
+let _pendingTodos     = [];      // todos staged while adding a new lecture
+let _refreshPendingUI = null;    // refresh fn returned by renderTodoUI (pending mode)
 
 export function getTopicTags() { return _topicTags; }
 
@@ -112,6 +119,19 @@ export async function openModal(id) {
   _backdrop().classList.add('open');
   document.body.style.overflow = 'hidden';
   document.getElementById('modal-close-btn')?.focus();
+
+  // Subscribe to this lecture's todos (live mode via renderTodoUI)
+  if (currentUser) {
+    _unsubLecTodos?.();
+    const listEl = document.getElementById('v-todo-list');
+    const gId    = lec.groupId ?? null;
+    _unsubLecTodos = renderTodoUI(listEl, gId ? null : id, {
+      uid:         currentUser.uid,
+      allLectures: _getCtx().allLectures,
+      topicTags:   _topicTags,
+      groupId:     gId,
+    });
+  }
 }
 
 export async function openAddModal() {
@@ -154,6 +174,14 @@ export async function openAddModal() {
   const placeEl = document.getElementById('af-place');
   if (placeEl) { placeEl.disabled = false; placeEl.placeholder = '예) 서울 강남구 SSDC 4F'; }
 
+  // Pending todo UI for new lecture
+  _pendingTodos = [];
+  const formTodoList = document.getElementById('af-todo-list');
+  _refreshPendingUI = renderTodoUI(formTodoList, null, {
+    getPendingTodos:  () => _pendingTodos,
+    onPendingChange:  updated => { _pendingTodos = updated; },
+  });
+
   _switchMode('form');
   _backdrop().classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -169,8 +197,12 @@ const _confirmBd = () => document.getElementById('confirm-backdrop');
 function _closeModal() {
   _backdrop()?.classList.remove('open');
   document.body.style.overflow = '';
-  _activeModalId = null;
-  _editingLecId  = null;
+  _activeModalId    = null;
+  _editingLecId     = null;
+  _unsubLecTodos?.();
+  _unsubLecTodos    = null;
+  _pendingTodos     = [];
+  _refreshPendingUI = null;
 }
 
 function _closeConfirm() {
@@ -547,9 +579,14 @@ async function _doSave(payload, currentUser, submitBtn) {
       }
     } else {
       if (!currentUser) return;
-      await addDoc(collection(db, 'lectures'), {
+      const docRef = await addDoc(collection(db, 'lectures'), {
         uid: currentUser.uid, ...payload, isDocumented: false, createdAt: serverTimestamp(),
       });
+      // Flush pending todos that were staged before the lecture existed
+      if (_pendingTodos.length > 0) {
+        await Promise.all(_pendingTodos.map(t => addTodo(currentUser.uid, t.text, docRef.id)));
+        _pendingTodos = [];
+      }
       window.showToast?.('강의가 등록되었습니다.', 'success');
       _closeModal();
       if (!window._icsImportChecked) {
@@ -1160,4 +1197,40 @@ function _bindEvents() {
   });
 
   _bindTagPickerEvents();
+
+  // ── 모달 뷰 패널: 기존 강의 할 일 추가 (Firestore 직접) ─────────────
+  document.getElementById('v-todo-add-btn')?.addEventListener('click', async () => {
+    const input = document.getElementById('v-todo-input');
+    const text  = input?.value.trim();
+    if (!text || !_activeModalId) return;
+    const { currentUser, allLectures } = _getCtx?.() ?? {};
+    if (!currentUser) return;
+    try {
+      const lec = allLectures?.find(l => l.id === _activeModalId);
+      const gId = lec?.groupId ?? null;
+      await addTodo(currentUser.uid, text, gId ? null : _activeModalId, gId);
+      input.value = '';
+    } catch (err) { console.error('[강비서] 모달 Todo 추가 오류:', err); }
+  });
+
+  document.getElementById('v-todo-input')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('v-todo-add-btn')?.click(); }
+  });
+
+  // ── 폼 패널: 신규 강의 pending 할 일 추가 (로컬 배열) ───────────────
+  document.getElementById('af-todo-add-btn')?.addEventListener('click', () => {
+    const input = document.getElementById('af-todo-input');
+    const text  = input?.value.trim();
+    if (!text) return;
+    _pendingTodos = [
+      ..._pendingTodos,
+      { id: `p_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, text, isDone: false, postponeCount: 0, deadline: getTodayString(), lectureId: null },
+    ];
+    _refreshPendingUI?.();
+    input.value = '';
+  });
+
+  document.getElementById('af-todo-input')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('af-todo-add-btn')?.click(); }
+  });
 }

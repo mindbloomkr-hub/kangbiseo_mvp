@@ -1,9 +1,7 @@
 // js/pages/home.js — 홈 대시보드 (Firestore 실시간 연동)
-import { db, subscribeLectures, authGuard } from '../api.js';
-import {
-  collection, doc, addDoc, updateDoc, deleteDoc,
-  query, where, onSnapshot, serverTimestamp,
-} from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
+import { subscribeLectures, authGuard } from '../api.js';
+import { subscribeTodos, addTodo, clearDoneTodos, postponeAllTodayTodos } from '../services/todoService.js';
+import { renderTodoList, bindTodoEvents } from '../components/todoComponent.js';
 import { DAY_KO, escapeHtml, getTodayString, fetchTravelMin } from '../utils.js';
 import { initLectureModal, openModal, getTopicTags } from '../components/lectureModal.js';
 
@@ -16,6 +14,19 @@ function getLectureColor(lec) {
     if (tag?.color) return tag.color;
   }
   return '#e5e7eb';
+}
+
+/* ════════════════════════════════════════
+   헥스 색상을 rgba()로 변환
+════════════════════════════════════════ */
+function _hexToRgba(hex, alpha) {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return hex;
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 /* ════════════════════════════════════════
@@ -217,6 +228,96 @@ function getEffectiveBufferTime() {
   return Number(s.bufferTime) || 30;
 }
 
+/* ════════════════════════════════════════
+   타임라인 강의 카드 — 오늘/내일 공용
+════════════════════════════════════════ */
+function _createTimelineCard(lec, isDone) {
+  const color     = getLectureColor(lec);
+  const bg        = _hexToRgba(color, isDone ? 0.1 : 0.3);
+  const nodeStyle = isDone
+    ? 'background:#9ca3af;border-color:#9ca3af;'
+    : `background:${color};border-color:${color};`;
+  const cardStyle = [
+    `background:${bg}`,
+    `border:1px solid ${_hexToRgba(color, 0.3)}`,
+    `border-left:3px solid ${color}`,
+    isDone ? 'opacity:0.7;' : '',
+  ].join(';');
+  return `
+      <div class="timeline-item" data-start-min="${timeToMin(lec.timeStart)}" data-end-min="${timeToMin(lec.timeEnd)}">
+        <div class="tl-time-col"><div class="tl-time">${lec.timeStart}</div></div>
+        <div class="tl-track"><div class="tl-node" style="${nodeStyle}"></div></div>
+        <div class="tl-content">
+          <div class="tl-card ${isDone ? 'tl-card--done' : 'tl-card--lecture'}" style="${cardStyle}">
+            <div class="tl-card-title">${escapeHtml(lec.title)}</div>
+            <div class="tl-card-sub">${escapeHtml(lec.place || lec.client)} · ${lec.timeStart}~${lec.timeEnd}</div>
+          </div>
+        </div>
+      </div>`;
+}
+
+/* ════════════════════════════════════════
+   현재 시간 바 — DOM 기반 분 단위 정밀 위치
+════════════════════════════════════════ */
+function _injectNowBar(container, nowMin) {
+  const now    = new Date();
+  const nowStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+  const bar = document.createElement('div');
+  bar.className = 'tl-now-bar';
+  bar.innerHTML = `<div class="tl-now-line"></div><span class="tl-now-label">현재 ${nowStr}</span>`;
+  Object.assign(bar.style, {
+    position: 'absolute', left: '0', right: '0', margin: '0',
+    pointerEvents: 'none', zIndex: '10',
+  });
+  container.style.position = 'relative';
+  container.appendChild(bar);
+
+  requestAnimationFrame(() => {
+    const items = [...container.querySelectorAll('.timeline-item[data-start-min]')];
+    if (!items.length) { bar.style.top = '0px'; return; }
+
+    const contTop = container.getBoundingClientRect().top;
+    let topPx;
+
+    // Case 1: nowMin falls inside a lecture item
+    let withinEl = null, withinS = 0, withinE = 0;
+    for (const el of items) {
+      const s = Number(el.dataset.startMin), e = Number(el.dataset.endMin);
+      if (s <= nowMin && nowMin < e) { withinEl = el; withinS = s; withinE = e; break; }
+    }
+
+    if (withinEl) {
+      const r     = withinEl.getBoundingClientRect();
+      const ratio = (nowMin - withinS) / (withinE - withinS);
+      topPx = (r.top - contTop) + ratio * r.height;
+    } else {
+      // Case 2: nowMin is in a gap between lectures (or before/after all)
+      let prevEl = null, prevE = -Infinity, nextEl = null, nextS = Infinity;
+      for (const el of items) {
+        const s = Number(el.dataset.startMin), e = Number(el.dataset.endMin);
+        if (e <= nowMin && e > prevE) { prevEl = el; prevE = e; }
+        if (s > nowMin && s < nextS)  { nextEl = el; nextS = s; }
+      }
+
+      if (!prevEl && nextEl) {
+        topPx = nextEl.getBoundingClientRect().top - contTop - 18;
+      } else if (prevEl && !nextEl) {
+        topPx = prevEl.getBoundingClientRect().bottom - contTop + 4;
+      } else if (prevEl && nextEl) {
+        const pBot  = prevEl.getBoundingClientRect().bottom - contTop;
+        const nTop  = nextEl.getBoundingClientRect().top    - contTop;
+        const ratio = (nowMin - prevE) / (nextS - prevE);
+        topPx = pBot + ratio * (nTop - pBot);
+      } else {
+        topPx = Math.max(0, items[0].getBoundingClientRect().top - contTop - 18);
+      }
+    }
+
+    bar.style.top = `${Math.max(0, topPx)}px`;
+  });
+}
+
 async function renderTimelineInto(containerId, lectures, showNowBar) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -267,15 +368,7 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
 
   const now    = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  const nowStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
-  const nowBar = () => `
-    <div style="display:flex;align-items:center;gap:12px;margin:12px 0 12px 90px;">
-      <div style="border-top:2px dashed #2563c4;width:40px;"></div>
-      <span style="color:#2563c4;font-weight:bold;font-size:0.85rem;">현재 ${nowStr}</span>
-    </div>`;
-
-  let nowInserted = false;
   const parts = [];
 
   // ── Home departure node ──────────────────────────────
@@ -314,38 +407,9 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
 
   // ── Lecture loop ─────────────────────────────────────
   for (let idx = 0; idx < lectures.length; idx++) {
-    const lec      = lectures[idx];
-    const color    = getLectureColor(lec);
-    const itemMin  = timeToMin(lec.timeStart);
-    const nextMin  = lectures[idx + 1] ? timeToMin(lectures[idx + 1].timeStart) : Infinity;
-    const isDone   = showNowBar && timeToMin(lec.timeEnd) < nowMin;
-
-    const nodeStyle       = isDone ? 'background:#9ca3af;border-color:#9ca3af;' : `background:${color};border-color:${color};`;
-    const cardBorderStyle = isDone ? 'border-left:3px solid #9ca3af;opacity:0.7;' : `border-left:3px solid ${color};`;
-
-    let barBefore = '';
-    let barAfter  = '';
-    if (showNowBar) {
-      if (idx === 0 && nowMin < itemMin) {
-        nowInserted = true; barBefore = nowBar();
-      } else if (!nowInserted && nowMin >= itemMin && nowMin < nextMin) {
-        nowInserted = true; barAfter = nowBar();
-      }
-    }
-
-    parts.push(`
-      ${barBefore}
-      <div class="timeline-item">
-        <div class="tl-time-col"><div class="tl-time">${lec.timeStart}</div></div>
-        <div class="tl-track"><div class="tl-node" style="${nodeStyle}"></div></div>
-        <div class="tl-content">
-          <div class="tl-card ${isDone ? 'tl-card--done' : 'tl-card--lecture'}" style="${cardBorderStyle}">
-            <div class="tl-card-title">${escapeHtml(lec.title)}</div>
-            <div class="tl-card-sub">${escapeHtml(lec.place || lec.client)} · ${lec.timeStart}~${lec.timeEnd}</div>
-          </div>
-        </div>
-      </div>
-      ${barAfter}`);
+    const lec    = lectures[idx];
+    const isDone = showNowBar && timeToMin(lec.timeEnd) < nowMin;
+    parts.push(_createTimelineCard(lec, isDone));
 
     // Gap row between consecutive lectures
     if (idx < lectures.length - 1) {
@@ -418,7 +482,8 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
       </div>`);
   }
 
-  container.innerHTML = parts.join('') + (showNowBar && !nowInserted ? nowBar() : '');
+  container.innerHTML = parts.join('');
+  if (showNowBar) _injectNowBar(container, nowMin);
 }
 
 function renderTimeline()         { renderTimelineInto('timeline-list',          todayLectures,    true);  }
@@ -524,6 +589,8 @@ function initLectures(uid) {
     renderTomorrowTimeline();
     renderWeekly();
     updateNavBadge();
+    // Refresh todo list so lecture-linked badges reflect current lecture data
+    if (todos.length) renderTodoList(document.getElementById('todo-list'), todos, allLectures, getTopicTags());
   }, err => {
     console.error('[강비서] 강의 구독 오류:', err);
   });
@@ -570,84 +637,40 @@ function initLectures(uid) {
 })();
 
 /* ════════════════════════════════════════
-   To-do List — Firestore 실시간 연동
+   To-do List — todoService + todoComponent 위임
 ════════════════════════════════════════ */
-function renderTodoList() {
-  const list    = document.getElementById('todo-list');
-  const countEl = document.getElementById('todo-count');
-  if (!list) return;
-
-  if (todos.length === 0) {
-    list.innerHTML = `<div class="todo-empty">등록된 할 일이 없어요 ✓</div>`;
-  } else {
-    list.innerHTML = todos.map(todo => `
-      <div class="todo-item ${todo.isDone ? 'done' : ''}" data-id="${todo.id}">
-        <div class="todo-checkbox ${todo.isDone ? 'checked' : ''}"
-          role="checkbox" aria-checked="${todo.isDone}" tabindex="0">
-          ${todo.isDone ? '✓' : ''}
-        </div>
-        <span class="todo-text">${escapeHtml(todo.text)}</span>
-        <button class="todo-delete-btn" aria-label="삭제">✕</button>
-      </div>
-    `).join('');
-  }
-
-  const doneCount = todos.filter(t => t.isDone).length;
-  if (countEl) countEl.textContent = `완료 ${doneCount} / 전체 ${todos.length}`;
-
-  list.querySelectorAll('.todo-checkbox').forEach(cb => {
-    const getId = () => cb.closest('.todo-item').dataset.id;
-    cb.addEventListener('click',   () => todoToggle(getId()));
-    cb.addEventListener('keydown', e => {
-      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); todoToggle(getId()); }
-    });
-  });
-  list.querySelectorAll('.todo-text').forEach(txt => {
-    txt.addEventListener('click', () => todoToggle(txt.closest('.todo-item').dataset.id));
-  });
-  list.querySelectorAll('.todo-delete-btn').forEach(btn => {
-    btn.addEventListener('click', e => { e.stopPropagation(); todoDelete(btn.closest('.todo-item').dataset.id); });
-  });
-}
-
 function initTodos(uid) {
   if (unsubscribeTodos) unsubscribeTodos();
-  const q = query(collection(db, 'todos'), where('uid', '==', uid));
-  unsubscribeTodos = onSnapshot(q, snapshot => {
-    todos = snapshot.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0));
-    renderTodoList();
-  }, err => { console.error('[강비서] Todo 구독 오류:', err); });
+  const listEl  = document.getElementById('todo-list');
+  const countEl = document.getElementById('todo-count');
+
+  unsubscribeTodos = subscribeTodos(uid, updated => {
+    todos = updated;
+    renderTodoList(listEl, todos, allLectures, getTopicTags());
+    const done = todos.filter(t => t.isDone).length;
+    if (countEl) countEl.textContent = `완료 ${done} / 전체 ${todos.length}`;
+  }, err => console.error('[강비서] Todo 구독 오류:', err));
 }
 
 async function todoAdd() {
   const input = document.getElementById('todo-input');
   const text  = input?.value.trim();
   if (!text || !currentUser) return;
-  try {
-    await addDoc(collection(db, 'todos'), { uid: currentUser.uid, text, isDone: false, createdAt: serverTimestamp() });
-    input.value = '';
-  } catch (err) { console.error('[강비서] Todo 추가 오류:', err); }
-}
-
-async function todoToggle(id) {
-  const todo = todos.find(t => t.id === id);
-  if (!todo) return;
-  try { await updateDoc(doc(db, 'todos', id), { isDone: !todo.isDone }); }
-  catch (err) { console.error('[강비서] Todo 토글 오류:', err); }
-}
-
-async function todoDelete(id) {
-  try { await deleteDoc(doc(db, 'todos', id)); }
-  catch (err) { console.error('[강비서] Todo 삭제 오류:', err); }
+  try { await addTodo(currentUser.uid, text, null); input.value = ''; }
+  catch (err) { console.error('[강비서] Todo 추가 오류:', err); }
 }
 
 async function todoClearDone() {
-  const done = todos.filter(t => t.isDone);
-  if (done.length === 0) return;
-  try { await Promise.all(done.map(t => deleteDoc(doc(db, 'todos', t.id)))); }
+  try { await clearDoneTodos(todos); }
   catch (err) { console.error('[강비서] 완료 항목 삭제 오류:', err); }
+}
+
+async function todoPostponeAll() {
+  try {
+    const count = await postponeAllTodayTodos(todos);
+    if (count > 0) window.showToast?.(`${count}개의 할 일을 내일로 미뤘어요.`, 'success');
+    else window.showToast?.('오늘 마감 할 일이 없어요.', 'info');
+  } catch (err) { console.error('[강비서] 일괄 미루기 오류:', err); }
 }
 
 /* ════════════════════════════════════════
@@ -656,6 +679,9 @@ async function todoClearDone() {
 document.getElementById('todo-add-btn')?.addEventListener('click', todoAdd);
 document.getElementById('todo-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') todoAdd(); });
 document.getElementById('todo-clear-done')?.addEventListener('click', todoClearDone);
+document.getElementById('todo-postpone-all')?.addEventListener('click', todoPostponeAll);
+// Event delegation bound once — survives renderTodoList innerHTML replacements
+bindTodoEvents(document.getElementById('todo-list'), () => todos);
 
 /* ════════════════════════════════════════
    초기 렌더 (빈 상태 — 데이터 로딩 전)
@@ -666,7 +692,7 @@ renderBriefingCards();
 renderTimeline();
 renderTomorrowTimeline();
 renderWeekly();
-renderTodoList();
+renderTodoList(document.getElementById('todo-list'), todos, allLectures, getTopicTags());
 
 /* ════════════════════════════════════════
    인증 상태 감지 — 권한 가드 + 구독 시작

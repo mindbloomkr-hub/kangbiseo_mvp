@@ -561,7 +561,8 @@ function _openBatchModal() {
             <option value="unit">회당 금액</option>
           </select>
         </div>
-        <div class="bm-field"><label class="bm-label" for="bm-feeAmount">강사료 금액 (원)</label><input class="bm-input" type="number" id="bm-feeAmount" placeholder="숫자만 입력" /></div>
+        <div class="bm-field"><label class="bm-label" for="bm-feeAmount">강사료 총 금액 (만원)</label><input class="bm-input" type="number" id="bm-feeAmount" placeholder="숫자만 입력" /></div>
+        <div class="bm-field"><label class="bm-label" for="bm-fee">회차별 강사료 (만원)</label><input class="bm-input" type="number" id="bm-fee" placeholder="숫자만 입력" /></div>
         <div class="bm-field">
           <label class="bm-label" for="bm-settlementCycle">정산 주기</label>
           <select class="bm-select" id="bm-settlementCycle">
@@ -572,7 +573,6 @@ function _openBatchModal() {
           </select>
         </div>
         <div class="bm-field"><label class="bm-label" for="bm-classroom">강의장</label><input class="bm-input" type="text" id="bm-classroom" placeholder="강의장 입력" /></div>
-        <div class="bm-field"><label class="bm-label" for="bm-fee">강사료 (만원)</label><input class="bm-input" type="number" id="bm-fee" placeholder="숫자만 입력" /></div>
         <div class="bm-field">
           <label class="bm-label" for="bm-progress">진행 상태</label>
           <select class="bm-select" id="bm-progress">

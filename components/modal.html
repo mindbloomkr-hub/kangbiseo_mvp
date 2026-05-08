@@ -91,6 +91,16 @@
           <div class="modal-section-title">메모 · 특이사항</div>
           <div class="view-memo" id="v-memo"></div>
         </div>
+        <div class="modal-section">
+          <div class="modal-section-title">강의 할 일</div>
+          <div class="v-todo-add-row">
+            <input class="v-todo-input" type="text" id="v-todo-input"
+                   placeholder="이 강의 관련 할 일 추가..." maxlength="80" />
+            <button class="v-todo-add-btn" id="v-todo-add-btn" aria-label="추가">+</button>
+          </div>
+          <div class="todo-list todo-list--modal" id="v-todo-list" role="list"
+               aria-label="강의 관련 할 일 목록"></div>
+        </div>
       </div><!-- /#view-panel -->
 
       <!-- 입력 폼 패널 -->
@@ -139,7 +149,7 @@
               </div>
               <div class="add-form-grid" style="margin-top:var(--space-3)">
                 <div class="add-form-field"><label class="add-form-label" for="af-client">고객사 <span class="required">*</span></label><input class="add-form-input" type="text" id="af-client" placeholder="예) 삼성SDS" required /></div>
-                <div class="add-form-field"><label class="add-form-label" for="af-fee">강사료 (만원) </label><input class="add-form-input" type="number" id="af-fee" placeholder="예) 50" min="0" required /></div>
+                <div class="add-form-field"><label class="add-form-label" for="af-fee">(당 회차) 강사료 (만원)</label><input class="add-form-input" type="number" id="af-fee" placeholder="예) 50" min="0" required /></div>
               </div>
               <div class="add-form-field" style="margin-top:var(--space-3)">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -214,6 +224,17 @@
                 <textarea class="add-form-input add-form-textarea" id="af-memo"
                   placeholder="특이사항, 요청사항 등을 자유롭게 기록하세요." rows="3"></textarea>
               </div>
+            </div>
+            <div>
+              <div class="add-form-section-title">강의 할 일</div>
+              <p style="font-size:11px;color:var(--color-text-muted);margin:4px 0 8px;">강의 저장 후 오늘 마감으로 자동 등록됩니다.</p>
+              <div class="v-todo-add-row" style="margin-bottom:var(--space-2)">
+                <input class="v-todo-input" type="text" id="af-todo-input"
+                       placeholder="이 강의 관련 할 일 추가..." maxlength="80" />
+                <button type="button" class="v-todo-add-btn" id="af-todo-add-btn" aria-label="추가">+</button>
+              </div>
+              <div class="todo-list todo-list--modal" id="af-todo-list" role="list"
+                   aria-label="등록 예정 할 일 목록"></div>
             </div>
           </div>
         </form>

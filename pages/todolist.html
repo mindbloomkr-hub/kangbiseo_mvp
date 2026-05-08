@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<!-- pages/todolist.html — 강비서 할 일 관리 (컨트롤 타워) -->
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>할 일 관리 | 강비서</title>
+  <link rel="stylesheet" href="../css/reset.css" />
+  <link rel="stylesheet" href="../css/variables.css" />
+  <link rel="stylesheet" href="../css/common.css" />
+  <link rel="stylesheet" href="../css/layout.css" />
+  <link rel="stylesheet" href="../css/home.css" />
+  <link rel="stylesheet" href="../css/todolist.css" />
+</head>
+<body>
+
+  <div class="app-shell">
+    <!-- 사이드바: authGuard → loadSidebar() 에서 동적 주입 -->
+
+    <div class="app-main" id="app-main">
+
+      <header class="topbar">
+        <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="메뉴 열기">☰</button>
+        <nav class="topbar-breadcrumb" aria-label="현재 위치">
+          <span>강비서</span><span>›</span><span class="current">할 일 관리</span>
+        </nav>
+        <div class="topbar-right">
+          <span class="topbar-date" id="topbar-date"></span>
+        </div>
+      </header>
+
+      <main class="page-content">
+
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">✅ 할 일 관리</h1>
+            <p class="page-subtitle">전체 할 일을 한 곳에서 관리하는 컨트롤 타워.</p>
+          </div>
+        </div>
+
+        <!-- ① 통계 카드 -->
+        <div class="tl-stat-bar" id="tl-stat-bar" aria-label="할 일 현황 통계"></div>
+
+        <!-- ② 필터 & 검색 패널 -->
+        <section class="panel tl-filter-panel" aria-label="필터 및 검색">
+          <div class="panel-header">
+            <h2 class="panel-title"><span class="panel-title-icon">🔍</span>필터 &amp; 검색</h2>
+            <button class="panel-action" id="tl-filter-reset">초기화</button>
+          </div>
+          <div class="panel-body">
+            <div class="tl-filter-row">
+
+              <!-- 텍스트 검색 -->
+              <div class="tl-search-wrap">
+                <span class="tl-search-icon" aria-hidden="true">🔍</span>
+                <input type="text" id="tl-search" class="tl-search-input"
+                       placeholder="할 일 내용 검색..." aria-label="할 일 내용 검색" />
+              </div>
+
+              <!-- 날짜 범위 -->
+              <div class="tl-date-wrap">
+                <input type="date" id="tl-date-from" class="tl-date-input" aria-label="시작일" />
+                <span class="tl-date-sep" aria-hidden="true">~</span>
+                <input type="date" id="tl-date-to" class="tl-date-input" aria-label="종료일" />
+              </div>
+
+              <!-- 상태 버튼 그룹 -->
+              <div class="tl-status-group" id="tl-status-group"
+                   role="group" aria-label="완료 상태 필터">
+                <button class="tl-status-btn active" data-status="all">전체</button>
+                <button class="tl-status-btn" data-status="active">미완료</button>
+                <button class="tl-status-btn" data-status="done">완료</button>
+              </div>
+
+              <!-- 카테고리 피커 (커스텀 드롭다운) -->
+              <div class="tl-cat-picker" id="tl-cat-picker">
+                <button type="button" class="tl-cat-trigger" id="tl-cat-trigger"
+                        aria-expanded="false" aria-haspopup="listbox">
+                  <span class="tl-cat-swatch" id="tl-cat-swatch" aria-hidden="true"></span>
+                  <span id="tl-cat-label">전체 카테고리</span>
+                  <span class="lm-tag-caret" aria-hidden="true">▾</span>
+                </button>
+                <div class="lm-tag-panel tl-cat-panel" id="tl-cat-panel" role="listbox" hidden>
+                  <div class="lm-tag-option-list" id="tl-cat-option-list"></div>
+                </div>
+              </div>
+
+            </div><!-- /.tl-filter-row -->
+
+            <!-- 일괄 작업 바 -->
+            <div class="tl-bulk-row">
+              <span class="tl-result-label" id="tl-result-count" aria-live="polite">— 건</span>
+              <div class="tl-bulk-btns">
+                <button class="btn--secondary tl-bulk-btn" id="tl-clear-done">
+                  ✅ 완료 삭제
+                </button>
+                <button class="btn--secondary tl-bulk-btn" id="tl-postpone-all">
+                  ⏭ 오늘 전체 내일로
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ③ 할 일 추가 인풋 -->
+        <section class="panel tl-add-panel" aria-label="할 일 추가">
+          <div class="panel-body">
+            <div class="todo-input-row">
+              <input class="todo-input" type="text" id="tl-todo-input"
+                     placeholder="새 할 일을 입력하세요... (Enter 또는 + 클릭)"
+                     maxlength="80" aria-label="새 할 일 입력" />
+              <button class="todo-add-btn" id="tl-todo-add-btn" aria-label="할 일 추가">+</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ④ 할 일 목록 -->
+        <section class="panel" aria-labelledby="tl-list-heading">
+          <div class="panel-header">
+            <h2 class="panel-title" id="tl-list-heading">
+              <span class="panel-title-icon">📋</span>할 일 목록
+            </h2>
+          </div>
+          <div class="panel-body">
+            <div class="todo-list tl-full-list" id="tl-todo-list"
+                 role="list" aria-labelledby="tl-list-heading"></div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- 모달: authGuard(withModal:true) → loadModal() 에서 동적 주입 -->
+
+  <script src="../js/common.js"></script>
+  <script type="module" src="../js/pages/todolist.js"></script>
+</body>
+</html>
