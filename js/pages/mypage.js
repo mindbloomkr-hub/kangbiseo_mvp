@@ -784,7 +784,7 @@ async function deleteUserLectures() {
   const user = window.auth?.currentUser;
   if (!user) return window.showToast?.('로그인이 필요합니다.', 'error');
 
-  if (!confirm("⚠️ 정말로 본인이 등록한 모든 강의를 삭제하시겠습니까?")) return;
+  if (!confirm("⚠️ 정말로 본인이 등록한 모든 강의 및 투두리스트 등을 삭제하시겠습니까?")) return;
   if (!confirm("🚨 삭제된 데이터는 절대로 복구할 수 없습니다. 진행할까요?")) return;
 
   const getTools = () => {
@@ -808,27 +808,39 @@ async function deleteUserLectures() {
         return window.showToast?.('시스템 로딩 중입니다. 잠시 후 다시 클릭해주세요.', 'error');
     }
 
-    if (!confirm("⚠️ 정말로 본인이 등록한 모든 강의를 삭제하시겠습니까?")) return;
+    if (!confirm("⚠️ 정말로 본인이 등록한 모든 데이터를 삭제하시겠습니까?")) return;
     if (!confirm("🚨 삭제된 데이터는 절대로 복구할 수 없습니다. 진행할까요?")) return;
 
     try {
         const db = window._temp_db;
         const col = window._temp_collection;
 
-        console.log("[강비서] 삭제 프로세스 시작...");
-        const q = FStore.query(col(db, 'lectures'), FStore.where('uid', '==', user.uid));
-        const querySnapshot = await FStore.getDocs(q);
+        console.log("[강비서] 전체 삭제 프로세스 시작...");
+        const qLectures = FStore.query(col(db, 'lectures'), FStore.where('uid', '==', user.uid));
+        const qTodos = FStore.query(col(db, 'todos'), FStore.where('uid', '==', user.uid));
 
-        if (querySnapshot.empty) {
+        const [snapLectures, snapTodos] = await Promise.all([
+            FStore.getDocs(qLectures),
+            FStore.getDocs(qTodos)
+        ]);
+
+        const totalCount = snapLectures.size + snapTodos.size;
+
+        if (totalCount === 0) {
             return window.showToast?.('삭제할 데이터가 없습니다.', 'info');
         }
 
-        const deletePromises = querySnapshot.docs.map(document => 
-            FStore.deleteDoc(FStore.doc(db, 'lectures', document.id))
-        );
+        // 2. 삭제할 약속(Promise)들을 하나의 배열로 합침
+        const deletePromises = [
+            ...snapLectures.docs.map(d => FStore.deleteDoc(FStore.doc(db, 'lectures', d.id))),
+            ...snapTodos.docs.map(d => FStore.deleteDoc(FStore.doc(db, 'todos', d.id)))
+        ];
         
+        // 3. 모든 데이터 삭제 실행
         await Promise.all(deletePromises);
-        window.showToast?.(`${querySnapshot.size}건 삭제 완료!`, 'success');
+
+        window.showToast?.(`총 ${totalCount}건(강의/투두) 삭제 완료!`, 'success');
+
         setTimeout(() => location.reload(), 1000);
     } catch (err) {
         console.error('[강비서] 삭제 오류:', err);

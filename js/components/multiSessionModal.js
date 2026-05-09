@@ -4,7 +4,11 @@ import { db } from '../api.js';
 import {
   collection, writeBatch, doc, getDoc, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
-import { buildTimeOptions, initAllDateWithDay, checkScheduleConflict, formatDateKo, getTodayString } from '../utils.js';
+import {
+  buildTimeOptions, initAllDateWithDay, checkScheduleConflict,
+  formatDateKo, getTodayString, escapeHtml, timeToMin, formatDateString,
+} from '../utils.js';
+import { openKakaoAddress } from '../services/kakaoAddressService.js';
 import { getTopicTags, registerMsBulkTagUpdate, refreshMsTagPicker, bindMsTagPickerEvents } from './lectureModal.js';
 import { addTodo } from '../services/todoService.js';
 import { renderTodoUI } from './todoComponent.js';
@@ -12,19 +16,17 @@ import { renderTodoUI } from './todoComponent.js';
 /* ════════════════════════════════════════
    한국 공휴일
 ════════════════════════════════════════ */
-// 고정 양력 공휴일 (MM-DD)
 const _SOLAR = new Set([
   '01-01', '03-01', '05-05', '06-06',
   '08-15', '10-03', '10-09', '12-25',
 ]);
 
-// 음력·대체 공휴일 (연도별 YYYY-MM-DD)
 const _LUNAR_RAW = {
   2025: ['2025-01-28','2025-01-29','2025-01-30',
-         '2025-05-06',                             // 어린이날 대체
-         '2025-10-05','2025-10-06','2025-10-07','2025-10-08'], // 추석+대체
+         '2025-05-06',
+         '2025-10-05','2025-10-06','2025-10-07','2025-10-08'],
   2026: ['2026-02-16','2026-02-17','2026-02-18',
-         '2026-05-25',                             // 부처님오신날
+         '2026-05-25',
          '2026-09-24','2026-09-25','2026-09-26'],
   2027: ['2027-02-05','2027-02-06','2027-02-07',
          '2027-10-14','2027-10-15','2027-10-16'],
@@ -34,65 +36,39 @@ const _LUNAR = Object.fromEntries(
 );
 
 export function isKRHoliday(date) {
-  const d = date instanceof Date ? date : new Date(date + 'T00:00:00');
-  const y    = d.getFullYear();
-  const mm   = String(d.getMonth() + 1).padStart(2, '0');
-  const dd   = String(d.getDate()).padStart(2, '0');
+  const d  = date instanceof Date ? date : new Date(date + 'T00:00:00');
+  const y  = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
   return _SOLAR.has(`${mm}-${dd}`) || (_LUNAR[y]?.has(`${y}-${mm}-${dd}`) ?? false);
 }
 
 /* ════════════════════════════════════════
    날짜 유틸
 ════════════════════════════════════════ */
-function _fmt(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-
-// 공휴일이면 다음 평일로 이동 (연속 공휴일 처리)
 function _skipHoliday(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   while (isKRHoliday(d)) d.setDate(d.getDate() + 1);
-  return _fmt(d);
+  return formatDateString(d);
 }
 
-// 요일 한글 한 글자: 0=일 1=월 … 6=토
-const _KR_DAYS = ['일','월','화','수','목','금','토'];
-function _krDayChar(dateStr) {
-  if (!dateStr) return '';
-  return _KR_DAYS[new Date(dateStr + 'T00:00:00').getDay()];
-}
-
-// N일 뒤 날짜 문자열 (YYYY-MM-DD)
 function _offsetDateStr(dateStr, days) {
-const d = new Date(dateStr + 'T00:00:00');
+  const d = new Date(dateStr + 'T00:00:00');
   d.setDate(d.getDate() + days);
-  return _fmt(d);
+  return formatDateString(d);
 }
 
-// 시작일의 요일에 맞춰 DOW 필 자동 선택 (0=Mon 기준)
 function _applyDowFromDate(dateStr) {
   if (!dateStr) return;
   const dow = (new Date(dateStr + 'T00:00:00').getDay() + 6) % 7;
   _selDow = new Set([dow]);
   document.querySelectorAll('.ms-dow-pill').forEach(p =>
-  p.classList.toggle('active', parseInt(p.dataset.dow) === dow)
+    p.classList.toggle('active', parseInt(p.dataset.dow) === dow)
   );
 }
 
 /* ════════════════════════════════════════
    일정 생성 엔진
-   params {
-     startDate: 'YYYY-MM-DD',
-     total: number,
-     recurrence: 'daily' | 'weekly' | 'monthly',
-     dayInterval: number,          // daily
-     weekInterval: number,         // weekly
-     weekDays: number[],           // weekly  0=Mon…6=Sun
-     monthInterval: number,        // monthly
-     monthMode: 'same'|'nth'|'specific',
-     specificDays: number[],       // monthly-specific  1-31
-     skipHolidays: boolean,
-   }
 ════════════════════════════════════════ */
 export function generateSessions(params) {
   const {
@@ -109,20 +85,17 @@ export function generateSessions(params) {
     sessions.push({ date, wasShifted: date !== raw, originalDate: raw });
   };
 
-  /* ── Daily ── */
   if (recurrence === 'daily') {
     const cur = new Date(startDate + 'T00:00:00');
     while (sessions.length < total) {
-      push(_fmt(cur));
+      push(formatDateString(cur));
       cur.setDate(cur.getDate() + dayInterval);
     }
 
-  /* ── Weekly ── */
   } else if (recurrence === 'weekly') {
     if (!weekDays.length) return [];
     const sorted = [...weekDays].sort((a, b) => a - b);
     const start  = new Date(startDate + 'T00:00:00');
-    // Monday of start week (0=Mon)
     const dow0   = (start.getDay() + 6) % 7;
     const monday = new Date(start);
     monday.setDate(start.getDate() - dow0);
@@ -133,39 +106,33 @@ export function generateSessions(params) {
         if (sessions.length >= total) break outer;
         const c = new Date(monday);
         c.setDate(monday.getDate() + cycle * weekInterval * 7 + dow);
-        if (c >= start) push(_fmt(c));
+        if (c >= start) push(formatDateString(c));
       }
       cycle++;
       if (cycle > 2000) break;
     }
 
-  /* ── Monthly ── */
   } else if (recurrence === 'monthly') {
     const start    = new Date(startDate + 'T00:00:00');
     const startDay = start.getDate();
-    const startDow = start.getDay();                       // 0=Sun for nth calc
+    const startDow = start.getDay();
 
-    // Which Nth occurrence is the start day?
     let nthOccurrence = 0;
     for (let d = 1; d <= startDay; d++) {
       if (new Date(start.getFullYear(), start.getMonth(), d).getDay() === startDow)
         nthOccurrence++;
     }
 
-    // Helper: calendar date of month m (0-based) of year y
-    const monthDate = (y, m) => new Date(y, m, 1);
-
     let cycle = 0;
     while (sessions.length < total) {
-      // total months from epoch-month
-      const totalM = start.getMonth() + cycle * monthInterval;
-      const yr     = start.getFullYear() + Math.floor(totalM / 12);
-      const mo     = ((totalM % 12) + 12) % 12;
+      const totalM     = start.getMonth() + cycle * monthInterval;
+      const yr         = start.getFullYear() + Math.floor(totalM / 12);
+      const mo         = ((totalM % 12) + 12) % 12;
       const daysInMonth = new Date(yr, mo + 1, 0).getDate();
 
       if (monthMode === 'same') {
-        const day  = Math.min(startDay, daysInMonth);
-        const raw  = `${yr}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const day = Math.min(startDay, daysInMonth);
+        const raw = `${yr}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
         if (raw >= startDate) push(raw);
 
       } else if (monthMode === 'nth') {
@@ -176,7 +143,6 @@ export function generateSessions(params) {
             if (count === nthOccurrence) { found = d; break; }
           }
         }
-        // Fallback: last occurrence of weekday if month is shorter
         if (!found) {
           for (let d = daysInMonth; d >= 1; d--) {
             if (new Date(yr, mo, d).getDay() === startDow) { found = d; break; }
@@ -218,51 +184,82 @@ function _injectStyleLink() {
 }
 
 /* ════════════════════════════════════════
+   HTML — components/multiSessionModal.html에서 지연 로드
+   import.meta.url 기준으로 경로를 해석하므로 페이지 URL에 독립적.
+════════════════════════════════════════ */
+const _HTML_URL = new URL('../../components/multiSessionModal.html', import.meta.url).href;
+let _htmlReady   = null; // Promise | null — resolved when HTML is in DOM
+let _eventsBound = false;
+
+function _ensureHTML() {
+  if (_htmlReady) return _htmlReady;
+  _htmlReady = fetch(_HTML_URL)
+    .then(r => {
+      if (!r.ok) throw new Error(`multiSessionModal.html 로드 실패 (${r.status})`);
+      return r.text();
+    })
+    .then(html => {
+      if (!document.getElementById('ms-bd')) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html.trim();
+        while (tmp.firstElementChild) document.body.appendChild(tmp.firstElementChild);
+      }
+      if (!_eventsBound) { _bindEvents(); _eventsBound = true; }
+    })
+    .catch(err => {
+      console.error('[강비서]', err);
+      _htmlReady = null; // allow retry on next open
+      throw err;
+    });
+  return _htmlReady;
+}
+
+/* ════════════════════════════════════════
    모듈 상태
 ════════════════════════════════════════ */
-let _sessions          = [];   // generated sessions
-let _skipHol           = false;
-let _isOnline          = false;
-let _selDow            = new Set([0]);  // 0=Mon default
-let _selDays           = new Set();     // specific month days
-let _getCtx            = null;
-let _htmlLoaded        = false;
-let _msTagId           = null;          // selected topicTagId for ms-modal
-// Firestore에서 로드한 스케줄러 기본값 — localStorage 비의존
-let _schedulerDefaults = { setupTime: 0, wrapupTime: 0, bufferTime: 30, originAddress: '' };
-// Pending todos staged before the group is created
-let _msPendingTodos    = [];
+let _sessions           = [];
+let _skipHol            = false;
+let _isOnline           = false;
+let _selDow             = new Set([0]);
+let _selDays            = new Set();
+let _getCtx             = null;
+let _msTagId            = null;
+let _schedulerDefaults  = { setupTime: 0, wrapupTime: 0, bufferTime: 30, originAddress: '' };
+let _msPendingTodos     = [];
 let _msRefreshPendingUI = null;
+let _feeLastEdited      = 'fee'; // 'fee' | 'fee-total'
 
 /* ════════════════════════════════════════
    공개 API
 ════════════════════════════════════════ */
+
+/**
+ * initMultiSessionModal(getCtx)
+ * 페이지 초기화 시 한 번만 호출 — CSS를 미리 주입하고 컨텍스트를 저장한다.
+ * HTML은 openAddModal() 첫 호출 시 지연 로드된다.
+ */
 export function initMultiSessionModal(getCtx) {
   _getCtx = getCtx;
   _injectStyleLink();
 }
 
-export async function openMultiSessionModal(startDate) {
-  // HTML을 처음 열 때만 fetch → inject → bind
-  if (!_htmlLoaded) {
-    try {
-      const res  = await fetch('../components/multiSessionModal.html');
-      const html = await res.text();
-      const tmp  = document.createElement('div');
-      tmp.innerHTML = html.trim();
-      document.body.appendChild(tmp.firstElementChild);
-      _bindEvents();
-      _htmlLoaded = true;
-    } catch (err) {
-      console.error('[강비서] 연속 강의 모달 HTML 로드 실패:', err);
-      window.showToast?.('모달을 불러오는 데 실패했습니다.', 'error');
-      return;
-    }
+/**
+ * openAddModal(startDate?)
+ * lectureModal의 openAddModal()과 동일한 네이밍 패턴.
+ * 최초 호출 시 HTML을 fetch하여 DOM에 삽입하고 이벤트를 바인딩한다.
+ */
+export async function openAddModal(startDate) {
+  try {
+    await _ensureHTML();
+  } catch {
+    window.showToast?.('모달을 불러올 수 없습니다.', 'error');
+    return;
   }
 
   _reset();
+
   const bd = document.getElementById('ms-bd');
-  requestAnimationFrame(() => bd.classList.add('open'));
+  requestAnimationFrame(() => bd?.classList.add('open'));
   document.body.style.overflow = 'hidden';
 
   if (startDate) {
@@ -276,6 +273,12 @@ export async function openMultiSessionModal(startDate) {
   document.getElementById('ms-title')?.focus();
 }
 
+// 하위 호환 alias — 기존 import를 모두 교체할 필요 없이 동작한다.
+export { openAddModal as openMultiSessionModal };
+
+/* ════════════════════════════════════════
+   스케줄러 기본값 로드
+════════════════════════════════════════ */
 async function _loadSchedulerSettings(uid) {
   try {
     const snap = await getDoc(doc(db, 'users', uid));
@@ -286,7 +289,6 @@ async function _loadSchedulerSettings(uid) {
       if (d.bufferTime    != null) _schedulerDefaults.bufferTime    = Number(d.bufferTime);
       if (d.originAddress != null) _schedulerDefaults.originAddress = d.originAddress;
     }
-
     const setupEl  = document.getElementById('ms-setup-time');
     const wrapupEl = document.getElementById('ms-wrapup-time');
     const bufferEl = document.getElementById('ms-buffer-time');
@@ -298,6 +300,31 @@ async function _loadSchedulerSettings(uid) {
   }
 }
 
+/* ════════════════════════════════════════
+   강사료 양방향 계산
+   source: 'fee' | 'fee-total' | 'total'
+════════════════════════════════════════ */
+function _syncFee(source) {
+  const feeEl      = document.getElementById('ms-fee');
+  const feeTotalEl = document.getElementById('ms-fee-total');
+  const total      = parseInt(document.getElementById('ms-total')?.value);
+
+  if (!feeEl || !feeTotalEl) return;
+
+  if (source === 'fee' || source === 'fee-total') _feeLastEdited = source;
+
+  if (!total || total <= 0) return;
+
+  const active = source === 'total' ? _feeLastEdited : source;
+
+  if (active === 'fee') {
+    const fee = parseFloat(feeEl.value);
+    feeTotalEl.value = (fee >= 0 && !isNaN(fee)) ? +(fee * total).toFixed(2) : '';
+  } else {
+    const feeTotal = parseFloat(feeTotalEl.value);
+    feeEl.value = (feeTotal >= 0 && !isNaN(feeTotal)) ? +(feeTotal / total).toFixed(2) : '';
+  }
+}
 
 /* ════════════════════════════════════════
    닫기
@@ -308,7 +335,7 @@ function _close() {
 }
 
 /* ════════════════════════════════════════
-   초기화
+   초기화 (열 때마다)
 ════════════════════════════════════════ */
 function _reset() {
   _sessions = [];
@@ -317,17 +344,21 @@ function _reset() {
   _selDow   = new Set([0]);
   _selDays  = new Set();
 
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-
   const $ = id => document.getElementById(id);
-  $('ms-title').value   = '';
-  $('ms-client').value  = '';
-  $('ms-fee').value     = '';
+
+  $('ms-title').value            = '';
+  $('ms-client').value           = '';
+  $('ms-fee').value              = '';
+  $('ms-fee-total').value        = '';
+  $('ms-settlement-cycle').value = '';
+  _feeLastEdited                 = 'fee';
+
   const onlineCb = $('ms-online');
   if (onlineCb) onlineCb.checked = false;
+
   const placeEl = $('ms-place');
   if (placeEl) { placeEl.disabled = false; placeEl.value = ''; placeEl.placeholder = '강의장 주소'; }
+
   $('ms-classroom').value     = '';
   $('ms-parking').value       = '';
   $('ms-setup-time').value    = '';
@@ -339,24 +370,27 @@ function _reset() {
   $('ms-manager-name').value  = '';
   $('ms-manager-phone').value = '';
   $('ms-manager-email').value = '';
-  $('ms-start').value   = today;
-  $('ms-total').value   = '';
-  $('ms-rec').value     = 'weekly';
-  $('ms-week-n').value  = '1';
-  $('ms-day-n').value   = '1';
-  $('ms-month-n').value = '1';
-  $('ms-progress').value = 'scheduled';
+  $('ms-total').value         = '';
+  $('ms-rec').value           = 'weekly';
+  $('ms-week-n').value        = '1';
+  $('ms-day-n').value         = '1';
+  $('ms-month-n').value       = '1';
+  $('ms-progress').value      = 'scheduled';
+
+  // Start date defaults to today
+  $('ms-start').value = formatDateString(new Date());
 
   // Time selects
   const tsOpts = buildTimeOptions();
-  $('ms-ts').innerHTML = tsOpts;  $('ms-ts').value = '09:00';
-  $('ms-te').innerHTML = tsOpts;  $('ms-te').value = '10:00';
+  $('ms-ts').innerHTML = tsOpts; $('ms-ts').value = '09:00';
+  $('ms-te').innerHTML = tsOpts; $('ms-te').value = '10:00';
 
   // Holiday toggle
   const tog = $('ms-hol-toggle');
-  tog.classList.remove('on'); tog.setAttribute('aria-checked','false');
+  tog.classList.remove('on');
+  tog.setAttribute('aria-checked', 'false');
 
-  // DOW pills
+  // DOW pills — reset to Monday (dow=0)
   document.querySelectorAll('.ms-dow-pill').forEach(p =>
     p.classList.toggle('active', parseInt(p.dataset.dow) === 0)
   );
@@ -376,51 +410,24 @@ function _reset() {
   refreshMsTagPicker(null);
 
   // Pending todo reset
-  _msPendingTodos    = [];
+  _msPendingTodos     = [];
   _msRefreshPendingUI = null;
-  const todoListEl = $('ms-todo-list');
+  const todoListEl    = $('ms-todo-list');
   if (todoListEl) {
     _msRefreshPendingUI = renderTodoUI(todoListEl, null, {
-      getPendingTodos:  () => _msPendingTodos,
-      onPendingChange:  updated => { _msPendingTodos = updated; },
+      getPendingTodos: () => _msPendingTodos,
+      onPendingChange: updated => { _msPendingTodos = updated; },
     });
   }
 
   // Hide preview + disable save
   $('ms-preview').style.display = 'none';
-  $('ms-save').disabled  = true;
-  $('ms-save').textContent = '저장하기';
+  $('ms-save').disabled         = true;
+  $('ms-save').textContent      = '저장하기';
 }
 
 /* ════════════════════════════════════════
-   카카오 주소 검색
-════════════════════════════════════════ */
-function _openKakaoAddress() {
-  const load = () => new Promise((resolve, reject) => {
-    if (window.daum?.Postcode) { resolve(); return; }
-    const s = document.createElement('script');
-    s.src = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
-    s.onload  = resolve;
-    s.onerror = reject;
-    document.head.appendChild(s);
-  });
-
-  load().then(() => {
-    new daum.Postcode({
-      oncomplete(data) {
-        const addr = data.roadAddress || data.jibunAddress;
-        const el = document.getElementById('ms-place');
-        if (el) { el.value = addr; el.focus(); }
-      },
-    }).open();
-  }).catch(() => {
-    window.showToast?.('주소 검색 서비스를 불러올 수 없습니다.', 'error');
-  });
-}
-
-
-/* ════════════════════════════════════════
-   이벤트 바인딩
+   이벤트 바인딩 — _ensureHTML에서 한 번만 호출
 ════════════════════════════════════════ */
 function _bindEvents() {
   const $ = id => document.getElementById(id);
@@ -443,7 +450,7 @@ function _bindEvents() {
   // Recurrence switch
   $('ms-rec').addEventListener('change', e => _syncRec(e.target.value));
 
-  // Auto-select matching DOW pill when start date is picked
+  // Auto-select DOW pill when start date changes
   $('ms-start').addEventListener('change', e => {
     if ($('ms-rec').value === 'weekly') _applyDowFromDate(e.target.value);
   });
@@ -483,9 +490,9 @@ function _bindEvents() {
   });
 
   // Online toggle
-  document.getElementById('ms-online')?.addEventListener('change', e => {
+  $('ms-online').addEventListener('change', e => {
     _isOnline = e.target.checked;
-    const placeEl = document.getElementById('ms-place');
+    const placeEl = $('ms-place');
     if (!placeEl) return;
     if (_isOnline) {
       placeEl.disabled    = true;
@@ -498,16 +505,21 @@ function _bindEvents() {
     }
   });
 
-  // Generate
+  // Generate preview
   $('ms-gen').addEventListener('click', _handleGenerate);
 
   // Save
   $('ms-save').addEventListener('click', _handleSave);
 
-  // Kakao address search
-  $('ms-addr-search')?.addEventListener('click', _openKakaoAddress);
+  // Fee bidirectional sync
+  $('ms-fee').addEventListener('input',       () => _syncFee('fee'));
+  $('ms-fee-total').addEventListener('input', () => _syncFee('fee-total'));
+  $('ms-total').addEventListener('input',     () => _syncFee('total'));
 
-  // Preview table — delegated input sync (single listener, survives re-renders)
+  // Kakao address search
+  $('ms-addr-search').addEventListener('click', () => openKakaoAddress('ms-place'));
+
+  // Preview table — delegated input sync
   $('ms-tbody').addEventListener('input', e => {
     const inp = e.target.closest('.ms-p-input');
     if (!inp) return;
@@ -515,22 +527,18 @@ function _bindEvents() {
     const field = inp.dataset.f;
     if (isNaN(idx) || !field || !_sessions[idx]) return;
     _sessions[idx][field] = inp.value;
-    
-    // Note: date display (YYYY-MM-DD(요)) is kept in sync by initDateWithDay's
-    // 'change' listener on the native input — no manual tag update needed here.
   });
 
-  // Preview table — delegated row add / delete
+  // Preview table — row add / delete
   $('ms-tbody').addEventListener('click', e => {
     const del = e.target.closest('.ms-row-del');
     if (del) { _deleteRow(parseInt(del.dataset.idx)); return; }
     const add = e.target.closest('.ms-row-add');
-    if (add) { _insertRowAfter(parseInt(add.dataset.idx));
-    return; }
+    if (add) { _insertRowAfter(parseInt(add.dataset.idx)); return; }
   });
 
   // Tag picker — shared logic from lectureModal.js
-  registerMsBulkTagUpdate((tagId) => {
+  registerMsBulkTagUpdate(tagId => {
     _msTagId = tagId;
     _sessions.forEach(s => { s.topicTagId = tagId; });
     if ($('ms-tbody')) _reRenderTableBody();
@@ -538,28 +546,31 @@ function _bindEvents() {
   bindMsTagPickerEvents();
 
   // Pending todo — add button & Enter key
-  $('ms-todo-add-btn')?.addEventListener('click', () => {
+  $('ms-todo-add-btn').addEventListener('click', () => {
     const input = $('ms-todo-input');
     const text  = input?.value.trim();
     if (!text) return;
     _msPendingTodos = [
       ..._msPendingTodos,
-      { id: `p_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, text, isDone: false, postponeCount: 0, deadline: getTodayString(), lectureId: null, groupId: null },
+      {
+        id: `p_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        text, isDone: false, postponeCount: 0,
+        deadline: getTodayString(), lectureId: null, groupId: null,
+      },
     ];
     _msRefreshPendingUI?.();
     input.value = '';
   });
 
-  $('ms-todo-input')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); $('ms-todo-add-btn')?.click(); }
+  $('ms-todo-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); $('ms-todo-add-btn').click(); }
   });
-
 }
 
 function _syncRec(val) {
-  document.getElementById('ms-opt-daily').style.display= val === 'daily'   ? 'block' : 'none';
-  document.getElementById('ms-opt-weekly').style.display= val === 'weekly'  ? 'block' : 'none';
-  document.getElementById('ms-opt-monthly').style.display= val === 'monthly' ? 'block' : 'none';
+  document.getElementById('ms-opt-daily').style.display   = val === 'daily'   ? 'block' : 'none';
+  document.getElementById('ms-opt-weekly').style.display  = val === 'weekly'  ? 'block' : 'none';
+  document.getElementById('ms-opt-monthly').style.display = val === 'monthly' ? 'block' : 'none';
 }
 
 /* ════════════════════════════════════════
@@ -571,9 +582,9 @@ function _handleGenerate() {
   const total     = parseInt($('ms-total').value);
   const rec       = $('ms-rec').value;
 
-  if (!startDate)        { window.showToast?.('시작일을 선택하세요.', 'warn'); return; }
-  if (!total || total < 1) { window.showToast?.('총 회차 수를 입력하세요.', 'warn'); return; }
-  if (total > 200)       { window.showToast?.('최대 200회차까지 지원합니다.', 'warn'); return; }
+  if (!startDate)           { window.showToast?.('시작일을 선택하세요.', 'warn'); return; }
+  if (!total || total < 1)  { window.showToast?.('총 회차 수를 입력하세요.', 'warn'); return; }
+  if (total > 200)          { window.showToast?.('최대 200회차까지 지원합니다.', 'warn'); return; }
 
   const monthMode = document.querySelector('input[name="ms-mm"]:checked')?.value ?? 'same';
 
@@ -587,14 +598,14 @@ function _handleGenerate() {
   _sessions = generateSessions({
     startDate,
     total,
-    recurrence:   rec,
-    dayInterval:  parseInt($('ms-day-n').value)   || 1,
-    weekInterval: parseInt($('ms-week-n').value)  || 1,
-    weekDays:     [..._selDow],
-    monthInterval:parseInt($('ms-month-n').value) || 1,
+    recurrence:    rec,
+    dayInterval:   parseInt($('ms-day-n').value)   || 1,
+    weekInterval:  parseInt($('ms-week-n').value)  || 1,
+    weekDays:      [..._selDow],
+    monthInterval: parseInt($('ms-month-n').value) || 1,
     monthMode,
-    specificDays: [..._selDays],
-    skipHolidays: _skipHol,
+    specificDays:  [..._selDays],
+    skipHolidays:  _skipHol,
   });
 
   if (_sessions.length === 0) {
@@ -612,28 +623,27 @@ function _renderPreview() {
   const defStart = $('ms-ts').value || '09:00';
   const defEnd   = $('ms-te').value || '10:00';
 
-  // Initialize missing fields only — preserves edits across re-renders
   _sessions.forEach(s => {
     if (s.timeStart === undefined) s.timeStart = defStart;
     if (s.timeEnd   === undefined) s.timeEnd   = defEnd;
     if (s.topic     === undefined) s.topic     = '';
   });
 
-    _reRenderTableBody();
-    $('ms-preview').style.display = '';
-    $('ms-save').disabled  = false;
-    $('ms-save').textContent = `저장하기 (${_sessions.length}회차)`;
-    $('ms-preview').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-    // Pure DOM update — called by _renderPreview and all CRUD operations
-  function _reRenderTableBody() {
+  _reRenderTableBody();
+  $('ms-preview').style.display = '';
+  $('ms-save').disabled         = false;
+  $('ms-save').textContent      = `저장하기 (${_sessions.length}회차)`;
+  $('ms-preview').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function _reRenderTableBody() {
   const $ = id => document.getElementById(id);
 
   const hasShifted = _sessions.some(s => s.wasShifted);
-  $('ms-hbadge').style.display  = hasShifted ? '' : 'none';
-  $('ms-obadge').style.display  = _isOnline  ? '' : 'none';
-  $('ms-pcount').textContent    = `${_sessions.length}회차 생성됨`;
-  $('ms-save').textContent      = `저장하기 (${_sessions.length}회차)`;
+  $('ms-hbadge').style.display = hasShifted ? '' : 'none';
+  $('ms-obadge').style.display = _isOnline  ? '' : 'none';
+  $('ms-pcount').textContent   = `${_sessions.length}회차 생성됨`;
+  $('ms-save').textContent     = `저장하기 (${_sessions.length}회차)`;
 
   $('ms-tbody').innerHTML = _sessions.map((s, i) => {
     const shifted  = s.wasShifted;
@@ -657,14 +667,14 @@ function _renderPreview() {
         </td>
       </tr>`;
   }).join('');
-  // Apply date+day overlay to every freshly rendered date input
+
   initAllDateWithDay(document.getElementById('ms-tbody'));
 }
 
 function _resequence() {
-  _sessions.forEach((s, i) => { s.sessionCurrent = i + 1;
-  });
+  _sessions.forEach((s, i) => { s.sessionCurrent = i + 1; });
 }
+
 function _deleteRow(idx) {
   if (_sessions.length <= 1) {
     window.showToast?.('최소 1개 이상의 세션이 필요합니다.', 'warn'); return;
@@ -678,13 +688,13 @@ function _insertRowAfter(idx) {
   const ref     = _sessions[idx];
   const newDate = _offsetDateStr(ref.date, 7);
   _sessions.splice(idx + 1, 0, {
-    date:         newDate,
-    timeStart:    ref.timeStart,
-    timeEnd:      ref.timeEnd,
-    topic:        '',
-    wasShifted:   false,
-    originalDate: newDate,
-    sessionCurrent: 0, // _resequence will set this
+    date:           newDate,
+    timeStart:      ref.timeStart,
+    timeEnd:        ref.timeEnd,
+    topic:          '',
+    wasShifted:     false,
+    originalDate:   newDate,
+    sessionCurrent: 0,
   });
   _resequence();
   _reRenderTableBody();
@@ -693,31 +703,23 @@ function _insertRowAfter(idx) {
 /* ════════════════════════════════════════
    충돌 검사 유틸
 ════════════════════════════════════════ */
-function _esc(str) {
-  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function _tMin(t) {
-  const [h = 0, m = 0] = (t || '00:00').split(':').map(Number);
-  return h * 60 + m;
-}
-
 function _findConflictLec(newLec, sameDayRaw, check) {
   if (!sameDayRaw.length) return null;
-  const nS = _tMin(newLec.startTime);
-  const nE = _tMin(newLec.endTime);
+  const nS = timeToMin(newLec.startTime);
+  const nE = timeToMin(newLec.endTime);
   const lf = (l, w) => w === 's'
     ? (l.startTime ?? l.timeStart ?? '')
     : (l.endTime   ?? l.timeEnd   ?? '');
+
   if (check.step === 1) {
     return sameDayRaw.find(l => {
-      const s = _tMin(lf(l,'s')), e = _tMin(lf(l,'e'));
+      const s = timeToMin(lf(l,'s')), e = timeToMin(lf(l,'e'));
       return Math.max(nS, s) < Math.min(nE, e);
     }) ?? sameDayRaw[0];
   }
   return sameDayRaw.reduce((best, l) => {
-    const s  = _tMin(lf(l,'s')),    e  = _tMin(lf(l,'e'));
-    const bs = _tMin(lf(best,'s')), be = _tMin(lf(best,'e'));
+    const s  = timeToMin(lf(l,'s')),    e  = timeToMin(lf(l,'e'));
+    const bs = timeToMin(lf(best,'s')), be = timeToMin(lf(best,'e'));
     const dist     = nS >= e  ? nS - e  : s  - nE;
     const bestDist = nS >= be ? nS - be : bs - nE;
     return Math.abs(dist) < Math.abs(bestDist) ? l : best;
@@ -725,7 +727,7 @@ function _findConflictLec(newLec, sameDayRaw, check) {
 }
 
 /* ════════════════════════════════════════
-   Firestore 배치 저장 (공용)
+   Firestore 배치 저장
 ════════════════════════════════════════ */
 async function _commitBatch(commonData, sessionTotal) {
   const saveBtn = document.getElementById('ms-save');
@@ -747,7 +749,6 @@ async function _commitBatch(commonData, sessionTotal) {
     }
     await batch.commit();
 
-    // Flush pending todos linked to the new groupId
     if (_msPendingTodos.length > 0) {
       const uid = _getCtx?.()?.currentUser?.uid;
       if (uid && commonData.groupId) {
@@ -794,7 +795,7 @@ function _openConflictModal({ session, check, conflictLec, common, sessionTotal 
       <div class="ms-cf-head">
         <div>
           <p class="ms-cf-title">⚠️ 일정 충돌 감지</p>
-          <p class="ms-cf-sub">${_esc(stepLabel)}</p>
+          <p class="ms-cf-sub">${escapeHtml(stepLabel)}</p>
         </div>
         <button class="ms-cf-x" id="ms-cf-x" aria-label="닫기">✕</button>
       </div>
@@ -802,21 +803,21 @@ function _openConflictModal({ session, check, conflictLec, common, sessionTotal 
         <p class="ms-cf-section-label">충돌 발생 세션</p>
         <div class="ms-cf-card ms-cf-card--new">
           <span class="ms-cf-badge">${session.sessionCurrent}회차</span>
-          <p class="ms-cf-date">${_esc(dateFull)}</p>
-          <p class="ms-cf-time">${_esc(session.timeStart || '?')} ~ ${_esc(session.timeEnd || '?')}</p>
-          <p class="ms-cf-place">📍 ${_esc(common.place || '—')}</p>
+          <p class="ms-cf-date">${escapeHtml(dateFull)}</p>
+          <p class="ms-cf-time">${escapeHtml(session.timeStart || '?')} ~ ${escapeHtml(session.timeEnd || '?')}</p>
+          <p class="ms-cf-place">📍 ${escapeHtml(common.place || '—')}</p>
         </div>
         <p class="ms-cf-vs">VS</p>
         <p class="ms-cf-section-label">기존 강의</p>
         <div class="ms-cf-card ms-cf-card--ext">
-          <p class="ms-cf-lec-title">${_esc(cTitle)}</p>
-          <p class="ms-cf-time">${_esc(cStart)} ~ ${_esc(cEnd)}</p>
-          <p class="ms-cf-client">🏢 ${_esc(cClient)}</p>
-          <p class="ms-cf-place">📍 ${_esc(cPlace)}</p>
+          <p class="ms-cf-lec-title">${escapeHtml(cTitle)}</p>
+          <p class="ms-cf-time">${escapeHtml(cStart)} ~ ${escapeHtml(cEnd)}</p>
+          <p class="ms-cf-client">🏢 ${escapeHtml(cClient)}</p>
+          <p class="ms-cf-place">📍 ${escapeHtml(cPlace)}</p>
         </div>
       </div>
       <div class="ms-cf-foot">
-        <button class="ms-cf-btn ms-cf-btn--back" id="ms-cf-back">← 수정하기</button>
+        <button class="ms-cf-btn ms-cf-btn--back"    id="ms-cf-back">← 수정하기</button>
         <button class="ms-cf-btn ms-cf-btn--pending" id="ms-cf-pending">보류로 저장</button>
       </div>
     </div>`;
@@ -858,10 +859,10 @@ async function _handleSave() {
 
   const $ = id => document.getElementById(id);
   const saveBtn = $('ms-save');
-  saveBtn.disabled = true;
+  saveBtn.disabled    = true;
   saveBtn.textContent = '저장 중...';
 
-  // Flush any pending DOM edits (belt-and-suspenders)
+  // Flush any pending DOM edits
   $('ms-tbody').querySelectorAll('.ms-p-input').forEach(inp => {
     const idx   = parseInt(inp.dataset.idx);
     const field = inp.dataset.f;
@@ -870,55 +871,53 @@ async function _handleSave() {
   });
 
   const _restoreBtn = () => {
-    saveBtn.disabled = false;
+    saveBtn.disabled    = false;
     saveBtn.textContent = `저장하기 (${_sessions.length}회차)`;
   };
 
-  // ── Required field validation ──────────────────────
   const title = $('ms-title').value.trim();
-  if (!title) { window.showToast?.('강의명을 입력하세요.', 'warn'); _restoreBtn(); return; }
+  if (!title)  { window.showToast?.('강의명을 입력하세요.', 'warn'); _restoreBtn(); return; }
 
   const client = $('ms-client').value.trim();
   if (!client) { window.showToast?.('고객사를 입력하세요.', 'warn'); _restoreBtn(); return; }
 
   const place = $('ms-place').value.trim();
-  if (!place) { window.showToast?.('강의장 주소를 입력하세요.', 'warn'); _restoreBtn(); return; }
+  if (!place)  { window.showToast?.('강의장 주소를 입력하세요.', 'warn'); _restoreBtn(); return; }
 
   const groupId      = `grp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const sessionTotal = _sessions.length;
   const common = {
-    uid:             currentUser.uid,
+    uid:              currentUser.uid,
     groupId,
     title,
     client,
     place,
-    fee:             Number($('ms-fee').value) || 0,
-    progressStatus:  $('ms-progress').value || 'scheduled',
-    topicTagId:      _msTagId,
+    fee:              Number($('ms-fee').value) || 0,
+    feeTotal:         Number($('ms-fee-total').value) || 0,
+    settlementCycle:  $('ms-settlement-cycle').value || '',
+    progressStatus:   $('ms-progress').value || 'scheduled',
+    topicTagId:       _msTagId,
     sessionTotal,
-    isPaid:          false,
-    isDocumented:    false,
-    classroom:       $('ms-classroom').value.trim(),
-    parking:         $('ms-parking').value.trim(),
-    setupTime:       $('ms-setup-time').value.trim(),
-    wrapupTime:      $('ms-wrapup-time').value.trim(),
-    participants:    Number($('ms-participants').value) || 0,
-    groupInfo:       $('ms-group-info').value.trim(),
-    supplies:        $('ms-supplies').value.trim(),
-    managerName:     $('ms-manager-name').value.trim(),
-    managerPhone:    $('ms-manager-phone').value.trim(),
-    managerEmail:    $('ms-manager-email').value.trim(),
+    isPaid:           false,
+    isDocumented:     false,
+    classroom:        $('ms-classroom').value.trim(),
+    parking:          $('ms-parking').value.trim(),
+    setupTime:        $('ms-setup-time').value.trim(),
+    wrapupTime:       $('ms-wrapup-time').value.trim(),
+    participants:     Number($('ms-participants').value) || 0,
+    groupInfo:        $('ms-group-info').value.trim(),
+    supplies:         $('ms-supplies').value.trim(),
+    managerName:      $('ms-manager-name').value.trim(),
+    managerPhone:     $('ms-manager-phone').value.trim(),
+    managerEmail:     $('ms-manager-email').value.trim(),
   };
 
-  // ── Conflict validation loop ───────────────────────
   const { allLectures = [] } = ctx;
   const setupMin    = parseInt(common.setupTime)  || 0;
   const wrapupMin   = parseInt(common.wrapupTime) || 0;
-  const bufferInput = parseInt(document.getElementById('ms-buffer-time')?.value);
+  const bufferInput = parseInt($('ms-buffer-time')?.value);
   const settings    = {
-    bufferTime: (!isNaN(bufferInput) && bufferInput > 0)
-      ? bufferInput
-      : _schedulerDefaults.bufferTime,
+    bufferTime: (!isNaN(bufferInput) && bufferInput > 0) ? bufferInput : _schedulerDefaults.bufferTime,
     setupTime:  setupMin,
     wrapupTime: wrapupMin,
   };
@@ -947,7 +946,6 @@ async function _handleSave() {
       setupTime:  setupMin,
       wrapupTime: wrapupMin,
     };
-    console.log(`[Session ${i + 1}/${sessionTotal}] newLec:`, newLec, '| sameDayRaw count:', sameDayRaw.length);
 
     let check;
     try {
@@ -959,8 +957,6 @@ async function _handleSave() {
       return;
     }
 
-    console.log(`[Session Check] Date: ${s.date}, Status: ${check.status}`, check);
-
     if (check.status !== 'safe') {
       const conflictLec = _findConflictLec(newLec, sameDayRaw, check);
       _restoreBtn();
@@ -969,6 +965,5 @@ async function _handleSave() {
     }
   }
 
-  // ── All clear — commit ─────────────────────────────
   await _commitBatch(common, sessionTotal);
 }

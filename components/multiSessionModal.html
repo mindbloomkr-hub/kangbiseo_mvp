@@ -1,4 +1,19 @@
+<!DOCTYPE html>
 <!-- components/multiSessionModal.html — 연속 강의 일괄 등록 모달 -->
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>나의 강의 리스트 | 강비서</title>
+  <link rel="stylesheet" href="../css/reset.css" />
+  <link rel="stylesheet" href="../css/variables.css" />
+  <link rel="stylesheet" href="../css/common.css" />
+  <link rel="stylesheet" href="../css/layout.css" />
+  <link rel="stylesheet" href="../css/lectures.css" />
+  <link rel="stylesheet" href="../css/home.css" />
+</head>
+
+
 <div class="ms-bd" id="ms-bd" role="dialog" aria-modal="true" aria-label="연속 강의 일괄 등록">
   <div class="ms-modal">
 
@@ -54,7 +69,6 @@
           </div>
         </div>
 
-        <!-- 반복 유형 -->
         <div class="ms-field" style="margin-top:12px">
           <label class="ms-label" for="ms-rec">반복 유형</label>
           <select class="ms-select" id="ms-rec">
@@ -64,7 +78,7 @@
           </select>
         </div>
 
-        <!-- Daily sub -->
+        <!-- Daily -->
         <div id="ms-opt-daily" class="ms-sub" style="display:none">
           <div class="ms-field" style="max-width:160px">
             <label class="ms-label" for="ms-day-n">N일 마다</label>
@@ -72,7 +86,7 @@
           </div>
         </div>
 
-        <!-- Weekly sub -->
+        <!-- Weekly -->
         <div id="ms-opt-weekly" class="ms-sub">
           <div class="ms-grid" style="grid-template-columns:140px 1fr;align-items:start">
             <div class="ms-field">
@@ -94,7 +108,7 @@
           </div>
         </div>
 
-        <!-- Monthly sub -->
+        <!-- Monthly -->
         <div id="ms-opt-monthly" class="ms-sub" style="display:none">
           <div class="ms-field" style="max-width:160px;margin-bottom:12px">
             <label class="ms-label" for="ms-month-n">N개월 마다</label>
@@ -194,13 +208,28 @@
             <input class="ms-input" type="number" id="ms-fee" placeholder="0" min="0" />
           </div>
           <div class="ms-field">
+            <label class="ms-label" for="ms-fee-total">강사료 총 금액 (만원)</label>
+            <input class="ms-input" type="number" id="ms-fee-total" placeholder="0" min="0" />
+          </div>
+          <div class="ms-field">
+            <label class="ms-label" for="ms-settlement-cycle">정산 주기</label>
+            <select class="ms-select" id="ms-settlement-cycle">
+              <option value="">선택 안 함</option>
+              <option value="per-session">회차별 정산</option>
+              <option value="monthly">월 정산</option>
+              <option value="quarterly">분기 정산</option>
+              <option value="after-completion">완강 후 정산</option>
+              <option value="other">기타</option>
+            </select>
+          </div>
+          <div class="ms-field">
             <label class="ms-label" for="ms-progress">진행 상태</label>
             <select class="ms-select" id="ms-progress">
               <option value="scheduled">📅 강의 예정</option>
               <option value="discussing">💬 논의 중</option>
               <option value="onhold">⏸ 보류 중</option>
             </select>
-          </div>          
+          </div>
         </div>
       </div>
 
@@ -282,10 +311,10 @@
              role="list" aria-label="등록 예정 할 일 목록"></div>
       </div>
 
-      <!-- 생성 미리보기 -->
+      <!-- 생성 미리보기 버튼 -->
       <button class="ms-gen-btn" id="ms-gen">생성 미리보기 →</button>
 
-      <!-- 미리보기 결과 (JS로 표시) -->
+      <!-- 미리보기 결과 -->
       <div id="ms-preview" style="display:none">
         <hr class="ms-divider" />
         <div class="ms-preview-header">

@@ -10,7 +10,7 @@
  *   • rrule.js – https://cdn.jsdelivr.net/npm/rrule@2.8.1/dist/es5/rrule.min.js
  */
 
-'use strict';
+import { escapeHtml } from './utils.js';
 
 // ── CDN globals ───────────────────────────────────────────────────────────────
 // rrule@2.8.x UMD build exposes everything under window.rrule (not as bare globals).
@@ -299,14 +299,6 @@ function buildLecture(event, vevent, uid, isRecurring, startJS, endJS, isAllDay)
 
 // ── UI rendering ──────────────────────────────────────────────────────────────
 
-function escHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 function renderTable(events) {
   const tbody = document.getElementById('eventsBody');
   tbody.innerHTML = '';
@@ -319,11 +311,11 @@ function renderTable(events) {
       <td class="col-check">
         <input type="checkbox" class="row-check" data-id="${ev.id}" checked>
       </td>
-      <td title="${escHtml(ev.title)}">${escHtml(ev.title)}</td>
+      <td title="${escapeHtml(ev.title)}">${escapeHtml(ev.title)}</td>
       <td>${ev.date}</td>
       <td>${ev.timeStart || '—'}</td>
       <td>${ev.timeEnd  || '—'}</td>
-      <td title="${escHtml(ev.location)}">${escHtml(ev.location) || '—'}</td>
+      <td title="${escapeHtml(ev.location)}">${escapeHtml(ev.location) || '—'}</td>
       <td>${ev.groupId ? '<span class="badge-recurring">Recurring</span>' : '—'}</td>
     `;
     tbody.appendChild(tr);

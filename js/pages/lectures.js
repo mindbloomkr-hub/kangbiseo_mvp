@@ -3,8 +3,9 @@
 import { subscribeLectures, authGuard, db } from '../api.js';
 import { writeBatch, doc } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
 import { TODAY, STATUS_META, escapeHtml, formatDateKo, classifyStatus, positionPanel } from '../utils.js';
+import { openKakaoAddress } from '../services/kakaoAddressService.js';
 import { initLectureModal, openModal, getTopicTags } from '../components/lectureModal.js';
-import { initMultiSessionModal, openMultiSessionModal } from '../components/multiSessionModal.js';
+import { initMultiSessionModal, openAddModal as openMultiSessionModal } from '../components/multiSessionModal.js';
 
 /* ════════════════════════════════════════
    상태
@@ -499,35 +500,6 @@ async function _runSeqOnly() {
 }
 
 /* ════════════════════════════════════════
-   카카오 주소 검색 (배치 모달용)
-════════════════════════════════════════ */
-function _openKakaoAddress() {
-  const load = () => new Promise((resolve, reject) => {
-    if (window.daum?.Postcode) { resolve(); return; }
-    const s = document.createElement('script');
-    s.src = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
-    s.onload  = resolve;
-    s.onerror = reject;
-    document.head.appendChild(s);
-  });
-  load().then(() => {
-    new daum.Postcode({
-      oncomplete(data) {
-        const addr = data.roadAddress || data.jibunAddress;
-        const el = document.getElementById('bm-place');
-        if (el) {
-          el.value = addr;
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          el.focus();
-        }
-      },
-    }).open();
-  }).catch(() => {
-    window.showToast?.('주소 검색 서비스를 불러올 수 없습니다.', 'error');
-  });
-}
-
-/* ════════════════════════════════════════
    일괄 처리 — 수정 모달
 ════════════════════════════════════════ */
 function _openBatchModal() {
@@ -627,7 +599,7 @@ function _openBatchModal() {
   document.getElementById('bm-x').addEventListener('click', _closeBatchModal);
   document.getElementById('bm-cancel').addEventListener('click', _closeBatchModal);
   bd.addEventListener('click', e => { if (e.target === bd) _closeBatchModal(); });
-  document.getElementById('bm-addr-search').addEventListener('click', _openKakaoAddress);
+  document.getElementById('bm-addr-search').addEventListener('click', () => openKakaoAddress('bm-place'));
 
   document.getElementById('bm-apply').addEventListener('click', async () => {
     const applyBtn = document.getElementById('bm-apply');

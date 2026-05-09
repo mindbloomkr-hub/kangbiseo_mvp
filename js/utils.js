@@ -51,6 +51,10 @@ export function getTodayString() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
+export function formatDateString(date) {
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+
 /* 항상 { main, day, full } 객체를 반환한다. */
 export function formatDateKo(dateStr) {
   const d = parseDate(dateStr);
@@ -68,6 +72,16 @@ export function escapeHtml(str) {
   return String(str ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+export function hexToRgba(hex, alpha) {
+  let h = (hex ?? '').replace('#', '');
+  if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return hex;
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 export function calcDuration(start, end) {
@@ -244,15 +258,16 @@ const _geocodeCache   = new Map();
 const _travelCache    = new Map();
 
 // "HH:MM" → 분(number)
-function timeToMin(t) {
+export function timeToMin(t) {
   const [h, m] = (t || '00:00').split(':').map(Number);
   return h * 60 + m;
 }
 
-// 분(number) → "HH:MM"
-function _minToTime(min) {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
+// 분(number) → "HH:MM" — wraps at 24 h, handles negative values
+export function minToTime(min) {
+  const total = ((min % 1440) + 1440) % 1440;
+  const h = Math.floor(total / 60);
+  const m = total % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
@@ -354,8 +369,8 @@ function _findSameDaySlots(date, sameDayLecs, newDur, bMin, D) {
     .filter(g => (g.end - g.start) >= required)
     .map(g => ({
       date,
-      startTime: _minToTime(g.start + overhead),
-      endTime:   _minToTime(g.start + overhead + newDur),
+      startTime: minToTime(g.start + overhead),
+      endTime:   minToTime(g.start + overhead + newDur),
     }));
 }
 
@@ -434,7 +449,7 @@ export async function checkScheduleConflict(newLec, sameDayLecs, settings, allLe
 
     // ── Step 3: API 이동시간 포함 재판단 (origin_time 적용) ───────────────
     const depMinOfDay = (prevEnd + prevWrapup) % 1440;
-    const originTime  = newLec.date ? `${newLec.date}T${_minToTime(depMinOfDay)}:00` : null;
+    const originTime  = newLec.date ? `${newLec.date}T${minToTime(depMinOfDay)}:00` : null;
     const travelMin   = await fetchTravelMin(prevPlace, nextPlace, originTime);
     const D           = travelMin ?? 60;
     if (pureGap < D + bMin) {

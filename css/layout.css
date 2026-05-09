@@ -372,7 +372,7 @@
   flex: 1;
   min-width: 0;      /* 핵심: 자식(테이블)이 커도 부모는 줄어들 수 있게 함 */
   width: 100%;
-  overflow-x: hidden; /* 혹시나 튀어나오는 놈들은 여기서 가차없이 자름 */
+  overflow-x: clip;
   padding: var(--space-8);
   box-sizing: border-box;
 }

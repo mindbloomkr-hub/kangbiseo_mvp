@@ -155,11 +155,11 @@ loginForm?.addEventListener('submit', async e => {
   const pw    = document.getElementById('login-pw').value;
 
   if (!email || !pw) {
-    showToast('이메일과 비밀번호를 입력해 주세요.', 'error');
+    window.showToast?.('이메일과 비밀번호를 입력해 주세요.', 'error');
     return;
   }
 
-  showToast('로그인 중입니다...', 'default');
+  window.showToast?.('로그인 중입니다...', 'default');
 
   try {
     await signInWithEmailAndPassword(auth, email, pw);
@@ -173,7 +173,7 @@ loginForm?.addEventListener('submit', async e => {
       'auth/invalid-credential': '이메일 또는 비밀번호를 확인해 주세요.',
       'auth/too-many-requests':  '잠시 후 다시 시도해 주세요.',
     };
-    showToast(MESSAGES[err.code] ?? '로그인에 실패했습니다.', 'error');
+    window.showToast?.(MESSAGES[err.code] ?? '로그인에 실패했습니다.', 'error');
   }
 });
 
@@ -190,12 +190,12 @@ signupForm?.addEventListener('submit', async e => {
 
   const agreeEl = document.getElementById('signup-agree');
   if (!agreeEl?.checked) {
-    showToast('이용약관 및 개인정보처리방침에 동의해 주세요.', 'error');
+    window.showToast?.('이용약관 및 개인정보처리방침에 동의해 주세요.', 'error');
     return;
   }
 
   if (results.some(v => !v)) {
-    showToast('입력 항목을 다시 확인해 주세요.', 'error');
+    window.showToast?.('입력 항목을 다시 확인해 주세요.', 'error');
     return;
   }
 
@@ -204,7 +204,7 @@ signupForm?.addEventListener('submit', async e => {
   const email = document.getElementById('signup-email').value.trim();
   const pw    = document.getElementById('signup-pw').value;
 
-  showToast('가입을 처리 중입니다...', 'default');
+  window.showToast?.('가입을 처리 중입니다...', 'default');
 
   isSigningUp = true;
   try {
@@ -217,7 +217,7 @@ signupForm?.addEventListener('submit', async e => {
       createdAt: serverTimestamp(),
     }, { merge: true });
 
-    showToast('회원가입이 완료되었습니다!', 'success');
+    window.showToast?.('회원가입이 완료되었습니다!', 'success');
     window.location.href = 'pages/home.html';
 
   } catch (err) {
@@ -228,7 +228,7 @@ signupForm?.addEventListener('submit', async e => {
       'auth/invalid-email':        '올바른 이메일 형식을 입력해 주세요.',
       'auth/weak-password':        '비밀번호가 너무 약합니다. (6자 이상)',
     };
-    showToast(MESSAGES[err.code] ?? '회원가입에 실패했습니다.', 'error');
+    window.showToast?.(MESSAGES[err.code] ?? '회원가입에 실패했습니다.', 'error');
   }
 });
 
@@ -280,7 +280,7 @@ document.getElementById('btn-google-login')?.addEventListener('click', async () 
 
 /* 카카오 로그인 (미구현) */
 document.getElementById('btn-kakao-login')?.addEventListener('click', () => {
-  showToast('카카오 로그인은 준비 중입니다.', 'default');
+  window.showToast?.('카카오 로그인은 준비 중입니다.', 'default');
 });
 
 /* ════════════════════════════════════════
@@ -307,22 +307,6 @@ document.getElementById('signup-tel')?.addEventListener('input', function () {
   else if (digits.length < 8) this.value = `${digits.slice(0,3)}-${digits.slice(3)}`;
   else                        this.value = `${digits.slice(0,3)}-${digits.slice(3,7)}-${digits.slice(7)}`;
 });
-
-/* ════════════════════════════════════════
-   Toast 알림
-════════════════════════════════════════ */
-let toastTimer = null;
-
-function showToast(message, type = 'default') {
-  const toast = document.getElementById('toast');
-  if (!toast) return;
-  toast.textContent = message;
-  toast.className   = 'toast show';
-  if (type === 'error')   toast.classList.add('toast--error');
-  if (type === 'success') toast.classList.add('toast--success');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
-}
 
 /* ════════════════════════════════════════
    비밀번호 찾기 — 모달 CSS 주입

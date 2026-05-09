@@ -22,7 +22,9 @@ import {
   escapeHtml, formatDateKo, calcDuration, classifyStatus,
   buildTimeOptions, updateDurationDisplay, syncEndTimeOptions, initTimeSelects,
   checkScheduleConflict, _geocode, positionPanel, getTodayString,
+  timeToMin, minToTime,
 } from '../utils.js';
+import { openKakaoAddress } from '../services/kakaoAddressService.js';
 
 // ---------------------------------------------------------
 // 2. [중요] window에 도구 등록 (반드시 import 문 아래에 위치!)
@@ -629,16 +631,6 @@ async function _checkIcsImport(user) {
 /* ════════════════════════════════════════
    리뷰 모달 — 유틸
 ════════════════════════════════════════ */
-function _toMin(t) {
-  const [h, m] = (t || '00:00').split(':').map(Number);
-  return h * 60 + m;
-}
-
-function _minToStr(min) {
-  const h = Math.floor(min / 60), m = min % 60;
-  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-}
-
 function _lecField(l, which) {
   return which === 's'
     ? (l.startTime ?? l.timeStart ?? '')
@@ -647,52 +639,23 @@ function _lecField(l, which) {
 
 function _findConflictLec(rawNewLec, sameDayRaw, check) {
   if (!sameDayRaw.length) return null;
-  const nS = _toMin(rawNewLec.startTime);
-  const nE = _toMin(rawNewLec.endTime);
+  const nS = timeToMin(rawNewLec.startTime);
+  const nE = timeToMin(rawNewLec.endTime);
 
   if (check.step === 1) {
     return sameDayRaw.find(l => {
-      const s = _toMin(_lecField(l,'s')), e = _toMin(_lecField(l,'e'));
+      const s = timeToMin(_lecField(l,'s')), e = timeToMin(_lecField(l,'e'));
       return Math.max(nS, s) < Math.min(nE, e);
     }) ?? sameDayRaw[0];
   }
 
   return sameDayRaw.reduce((best, l) => {
-    const s  = _toMin(_lecField(l,'s')),    e  = _toMin(_lecField(l,'e'));
-    const bs = _toMin(_lecField(best,'s')), be = _toMin(_lecField(best,'e'));
+    const s  = timeToMin(_lecField(l,'s')),    e  = timeToMin(_lecField(l,'e'));
+    const bs = timeToMin(_lecField(best,'s')), be = timeToMin(_lecField(best,'e'));
     const dist     = nS >= e  ? nS - e  : s  - nE;
     const bestDist = nS >= be ? nS - be : bs - nE;
     return Math.abs(dist) < Math.abs(bestDist) ? l : best;
   }, sameDayRaw[0]);
-}
-
-/* ════════════════════════════════════════
-   카카오 주소 검색 (공통)
-════════════════════════════════════════ */
-function _openKakaoAddress(targetId) {
-  const load = () => new Promise((resolve, reject) => {
-    if (window.daum?.Postcode) { resolve(); return; }
-    const s = document.createElement('script');
-    s.src = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
-    s.onload  = resolve;
-    s.onerror = reject;
-    document.head.appendChild(s);
-  });
-  load().then(() => {
-    new daum.Postcode({
-      oncomplete(data) {
-        const addr = data.roadAddress || data.jibunAddress;
-        const el = document.getElementById(targetId);
-        if (el) {
-          el.value = addr;
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          el.focus();
-        }
-      },
-    }).open();
-  }).catch(() => {
-    window.showToast?.('주소 검색 서비스를 불러올 수 없습니다.', 'error');
-  });
 }
 
 /* ════════════════════════════════════════
@@ -777,8 +740,8 @@ function _injectReviewStyles() {
 function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
   document.getElementById('lm-rv-backdrop')?.remove();
 
-  const nS        = _toMin(rawNewLec.startTime);
-  const cS        = _toMin(_lecField(conflictLec, 's'));
+  const nS        = timeToMin(rawNewLec.startTime);
+  const cS        = timeToMin(_lecField(conflictLec, 's'));
   const isNewFirst = nS <= cS;
 
   const prevIsNew  = isNewFirst;
@@ -803,9 +766,9 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
   const reqGap  = wrapup + travel + setup;
   const actGap  = check.pureGap != null
     ? check.pureGap
-    : _toMin(nextStart) - _toMin(prevEnd);
+    : timeToMin(nextStart) - timeToMin(prevEnd);
   const delay   = reqGap - actGap;
-  const depStr  = _minToStr(_toMin(prevEnd) + wrapup);
+  const depStr  = minToTime(timeToMin(prevEnd) + wrapup);
 
   // ── Alternatives ────────────────────────────────────
   const _alts    = check.alternatives ?? {};
@@ -1041,7 +1004,7 @@ function _bindEvents() {
     }
   });
 
-  document.getElementById('v-addr-search')?.addEventListener('click', () => _openKakaoAddress('af-place'));
+  document.getElementById('v-addr-search')?.addEventListener('click', () => openKakaoAddress('af-place'));
 
   document.getElementById('btn-form-cancel')?.addEventListener('click', () => {
     if (_editingLecId) {

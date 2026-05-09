@@ -2,7 +2,7 @@
 import { subscribeLectures, authGuard } from '../api.js';
 import { subscribeTodos, addTodo, clearDoneTodos, postponeAllTodayTodos } from '../services/todoService.js';
 import { renderTodoList, bindTodoEvents } from '../components/todoComponent.js';
-import { DAY_KO, escapeHtml, getTodayString, fetchTravelMin } from '../utils.js';
+import { DAY_KO, escapeHtml, getTodayString, fetchTravelMin, hexToRgba, timeToMin, minToTime, formatDateString } from '../utils.js';
 import { initLectureModal, openModal, getTopicTags } from '../components/lectureModal.js';
 
 /* ════════════════════════════════════════
@@ -17,19 +17,6 @@ function getLectureColor(lec) {
 }
 
 /* ════════════════════════════════════════
-   헥스 색상을 rgba()로 변환
-════════════════════════════════════════ */
-function _hexToRgba(hex, alpha) {
-  let h = hex.replace('#', '');
-  if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
-  const r = parseInt(h.substring(0, 2), 16);
-  const g = parseInt(h.substring(2, 4), 16);
-  const b = parseInt(h.substring(4, 6), 16);
-  if (isNaN(r) || isNaN(g) || isNaN(b)) return hex;
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
-/* ════════════════════════════════════════
    날짜 유틸 (home 전용)
 ════════════════════════════════════════ */
 function getWeekDateStrings() {
@@ -41,7 +28,7 @@ function getWeekDateStrings() {
   for (let i = 0; i < 7; i++) {
     const d = new Date(sun);
     d.setDate(sun.getDate() + i);
-    dates.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+    dates.push(formatDateString(d));
   }
   return dates;
 }
@@ -190,17 +177,6 @@ function renderBriefingCards() {
 /* ════════════════════════════════════════
    5. 타임스케줄 (오늘 / 내일 공용)
 ════════════════════════════════════════ */
-function timeToMin(t) {
-  if (!t) return 0;
-  const [h, m] = t.split(':').map(Number);
-  return h * 60 + m;
-}
-
-function _minToStr(min) {
-  const total = ((min % 1440) + 1440) % 1440;
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-}
-
 // Builds an ISO 8601 datetime string from a lecture date + HH:MM + optional extra minutes.
 // Handles overflow past midnight by advancing the date.
 function buildOriginTime(date, timeHHMM, extraMin = 0) {
@@ -209,10 +185,9 @@ function buildOriginTime(date, timeHHMM, extraMin = 0) {
   const minOfDay = totalMin % 1440;
   const d = new Date(date + 'T00:00:00');
   d.setDate(d.getDate() + dayOff);
-  const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const h  = String(Math.floor(minOfDay / 60)).padStart(2, '0');
-  const m  = String(minOfDay % 60).padStart(2, '0');
-  return `${ds}T${h}:${m}:00`;
+  const h = String(Math.floor(minOfDay / 60)).padStart(2, '0');
+  const m = String(minOfDay % 60).padStart(2, '0');
+  return `${formatDateString(d)}T${h}:${m}:00`;
 }
 
 function getDeviceScheduler() {
@@ -233,13 +208,13 @@ function getEffectiveBufferTime() {
 ════════════════════════════════════════ */
 function _createTimelineCard(lec, isDone) {
   const color     = getLectureColor(lec);
-  const bg        = _hexToRgba(color, isDone ? 0.1 : 0.3);
+  const bg        = hexToRgba(color, isDone ? 0.1 : 0.3);
   const nodeStyle = isDone
     ? 'background:#9ca3af;border-color:#9ca3af;'
     : `background:${color};border-color:${color};`;
   const cardStyle = [
     `background:${bg}`,
-    `border:1px solid ${_hexToRgba(color, 0.3)}`,
+    `border:1px solid ${hexToRgba(color, 0.3)}`,
     `border-left:3px solid ${color}`,
     isDone ? 'opacity:0.7;' : '',
   ].join(';');
@@ -373,7 +348,7 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
 
   // ── Home departure node ──────────────────────────────
   if (hasOrigin) {
-    const depStr = _minToStr(departureMin);
+    const depStr = minToTime(departureMin);
     parts.push(`
       <div class="timeline-item">
         <div class="tl-time-col"><div class="tl-time">${depStr}</div></div>
@@ -421,8 +396,8 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
       const reqGap     = wrapup1 + travelMin + bufferTime + setup2;
       const actGap     = timeToMin(next.timeStart) - timeToMin(lec.timeEnd);
       const arrivalMin = timeToMin(lec.timeEnd) + wrapup1 + travelMin;
-      const depStr     = _minToStr(timeToMin(lec.timeEnd) + wrapup1);
-      const arrivalStr = _minToStr(arrivalMin);
+      const depStr     = minToTime(timeToMin(lec.timeEnd) + wrapup1);
+      const arrivalStr = minToTime(arrivalMin);
       const isWarn     = actGap < reqGap;
       const travelLabel = rawTravel == null
         ? '이동 시간 미확인'
@@ -451,8 +426,8 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
   // ── Home return node ─────────────────────────────────
   if (hasOrigin) {
     const t2h      = travelToHome ?? 0;
-    const depStr   = _minToStr(timeToMin(lastLec.timeEnd) + lastWrapup);
-    const retStr   = _minToStr(returnMin);
+    const depStr   = minToTime(timeToMin(lastLec.timeEnd) + lastWrapup);
+    const retStr   = minToTime(returnMin);
 
     parts.push(`
       <div class="tl-gap-row">
@@ -573,7 +548,7 @@ function initLectures(uid) {
 
     const todayStr    = getTodayString();
     const tomorrowObj = new Date(); tomorrowObj.setDate(tomorrowObj.getDate() + 1);
-    const tomorrowStr = `${tomorrowObj.getFullYear()}-${String(tomorrowObj.getMonth()+1).padStart(2,'0')}-${String(tomorrowObj.getDate()).padStart(2,'0')}`;
+    const tomorrowStr = formatDateString(tomorrowObj);
 
     todayLectures    = allLectures
       .filter(l => l.date === todayStr)

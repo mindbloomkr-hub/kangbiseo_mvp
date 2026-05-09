@@ -7,7 +7,7 @@ import {
   parseDate, getTodayString,
 } from '../utils.js';
 import { initLectureModal, openModal, getTopicTags } from '../components/lectureModal.js';
-import { initMultiSessionModal, openMultiSessionModal } from '../components/multiSessionModal.js';
+import { initMultiSessionModal, openAddModal as openMultiSessionModal } from '../components/multiSessionModal.js';
 
 (function prepareBridge() {
   const checkInterval = setInterval(() => {

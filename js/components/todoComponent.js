@@ -1,19 +1,6 @@
 // js/components/todoComponent.js — 할 일 UI 컴포넌트 (홈 + 모달 공용)
-import { escapeHtml, getTodayString } from '../utils.js';
+import { escapeHtml, getTodayString, hexToRgba } from '../utils.js';
 import { toggleTodo, deleteTodo, postponeTodo, subscribeLectureTodos, subscribeGroupTodos } from '../services/todoService.js';
-
-/* ════════════════════════════════════════
-   내부 유틸
-════════════════════════════════════════ */
-function _hexToRgba(hex, alpha) {
-  let h = hex.replace('#', '');
-  if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
-  const r = parseInt(h.substring(0, 2), 16);
-  const g = parseInt(h.substring(2, 4), 16);
-  const b = parseInt(h.substring(4, 6), 16);
-  if (isNaN(r) || isNaN(g) || isNaN(b)) return null;
-  return `rgba(${r},${g},${b},${alpha})`;
-}
 
 /* ════════════════════════════════════════
    단일 항목 HTML 생성
@@ -34,7 +21,7 @@ export function createTodoItemHTML(todo, allLectures = [], topicTags = []) {
 
   const tag       = lecture?.topicTagId != null ? topicTags.find(t => t.id === lecture.topicTagId) : null;
   const tagColor  = tag?.color ?? null;
-  const tagBgRgba = tagColor ? _hexToRgba(tagColor, 0.04) : null;
+  const tagBgRgba = tagColor ? hexToRgba(tagColor, 0.04) : null;
 
   const styleAttrs = [
     tagBgRgba ? `--todo-tag-bg:${tagBgRgba}` : '',
