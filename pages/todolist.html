@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="../css/common.css" />
   <link rel="stylesheet" href="../css/layout.css" />
   <link rel="stylesheet" href="../css/home.css" />
+  <link rel="stylesheet" href="../css/lectures.css" />
   <link rel="stylesheet" href="../css/todolist.css" />
 </head>
 <body>
@@ -109,6 +110,9 @@
               <input class="todo-input" type="text" id="tl-todo-input"
                      placeholder="새 할 일을 입력하세요... (Enter 또는 + 클릭)"
                      maxlength="80" aria-label="새 할 일 입력" />
+              <input type="date" id="tl-todo-due-date"
+                     style="padding:7px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;color:#374151;background:#fff;cursor:pointer;flex-shrink:0;min-width:0"
+                     title="기한 날짜 선택" aria-label="기한 날짜" />
               <button class="todo-add-btn" id="tl-todo-add-btn" aria-label="할 일 추가">+</button>
             </div>
           </div>

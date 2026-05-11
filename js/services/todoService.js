@@ -39,7 +39,7 @@ export function subscribeLectureTodos(uid, lectureId, onUpdate, onError) {
 /* ════════════════════════════════════════
    CRUD
 ════════════════════════════════════════ */
-export async function addTodo(uid, text, lectureId = null, groupId = null) {
+export async function addTodo(uid, text, lectureId = null, groupId = null, dueDate = null) {
   if (!uid || !text?.trim()) throw new Error('uid와 text가 필요합니다.');
   return addDoc(collection(db, 'todos'), {
     uid,
@@ -47,11 +47,15 @@ export async function addTodo(uid, text, lectureId = null, groupId = null) {
     isDone: false,
     lectureId: lectureId ?? null,
     groupId: groupId ?? null,
-    deadline: _dateStr(0),
+    deadline: dueDate || _dateStr(0),
     createdAt: serverTimestamp(),
     completedAt: null,
     postponeCount: 0,
   });
+}
+
+export async function updateTodoDueDate(id, dateStr) {
+  return updateDoc(doc(db, 'todos', id), { deadline: dateStr });
 }
 
 export function subscribeGroupTodos(uid, groupId, onUpdate, onError) {

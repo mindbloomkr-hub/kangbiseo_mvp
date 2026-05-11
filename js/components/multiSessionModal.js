@@ -6,7 +6,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
 import {
   buildTimeOptions, initAllDateWithDay, checkScheduleConflict,
-  formatDateKo, getTodayString, escapeHtml, timeToMin, formatDateString,
+  formatDateKo, getTodayString, escapeHtml, timeToMin, formatDateString, calcPaymentDate, calcDuration,
 } from '../utils.js';
 import { openKakaoAddress } from '../services/kakaoAddressService.js';
 import { getTopicTags, registerMsBulkTagUpdate, refreshMsTagPicker, bindMsTagPickerEvents } from './lectureModal.js';
@@ -66,6 +66,19 @@ function _applyDowFromDate(dateStr) {
     p.classList.toggle('active', parseInt(p.dataset.dow) === dow)
   );
 }
+
+
+
+/* ════════════════════════════════════════
+   다회차 강의 총 강의 시간 자동 계산
+════════════════════════════════════════ */
+function _syncMsDuration() {
+  const start = document.getElementById('ms-ts')?.value;
+  const end   = document.getElementById('ms-te')?.value;
+  const el    = document.getElementById('ms-duration-computed');
+  if (el) el.value = (start && end) ? (calcDuration(start, end) || '—') : '';
+}
+
 
 /* ════════════════════════════════════════
    일정 생성 엔진
@@ -300,6 +313,35 @@ async function _loadSchedulerSettings(uid) {
   }
 }
 
+function _flashHighlight(el) {
+  if (!el) return;
+  if (!document.getElementById('date-sync-flash-style')) {
+    const s = document.createElement('style');
+    s.id = 'date-sync-flash-style';
+    s.textContent = '@keyframes _dsFlash{0%{background-color:#fef08a}to{background-color:transparent}}.date-sync-flash{animation:_dsFlash .8s ease-out}';
+    document.head.appendChild(s);
+  }
+  el.classList.remove('date-sync-flash');
+  void el.offsetWidth;
+  el.classList.add('date-sync-flash');
+}
+
+/* ════════════════════════════════════════
+   지급일 자동 계산
+════════════════════════════════════════ */
+function _syncPaymentDate() {
+  const cycle   = document.getElementById('ms-settlement-cycle')?.value;
+  const startEl = document.getElementById('ms-start');
+  const payEl   = document.getElementById('ms-payment-date');
+  if (!payEl || !startEl?.value || !cycle) return;
+
+  const lastDate = (cycle === 'after-completion' && _sessions.length > 0)
+    ? _sessions[_sessions.length - 1].date
+    : startEl.value;
+
+  payEl.value = calcPaymentDate(startEl.value, cycle, lastDate);
+}
+
 /* ════════════════════════════════════════
    강사료 양방향 계산
    source: 'fee' | 'fee-total' | 'total'
@@ -359,6 +401,12 @@ function _reset() {
   const placeEl = $('ms-place');
   if (placeEl) { placeEl.disabled = false; placeEl.value = ''; placeEl.placeholder = '강의장 주소'; }
 
+  const paidSel = $('ms-paid-status');
+  if (paidSel) paidSel.value = 'false';
+  const taxSel = $('ms-tax');
+  if (taxSel) { taxSel.value = 'income3_3'; taxSel.disabled = false; }
+  $('ms-payment-date') && ($('ms-payment-date').value = '');
+
   $('ms-classroom').value     = '';
   $('ms-parking').value       = '';
   $('ms-setup-time').value    = '';
@@ -381,9 +429,9 @@ function _reset() {
   $('ms-start').value = formatDateString(new Date());
 
   // Time selects
-  const tsOpts = buildTimeOptions();
-  $('ms-ts').innerHTML = tsOpts; $('ms-ts').value = '09:00';
-  $('ms-te').innerHTML = tsOpts; $('ms-te').value = '10:00';
+  $('ms-ts').innerHTML = buildTimeOptions(); $('ms-ts').value = '09:00';
+  $('ms-te').innerHTML = buildTimeOptions('09:00'); $('ms-te').value = '10:00';
+  _syncMsDuration();
 
   // Holiday toggle
   const tog = $('ms-hol-toggle');
@@ -450,10 +498,26 @@ function _bindEvents() {
   // Recurrence switch
   $('ms-rec').addEventListener('change', e => _syncRec(e.target.value));
 
-  // Auto-select DOW pill when start date changes
+  // Auto-select DOW pill when start date changes; also re-sync payment date
   $('ms-start').addEventListener('change', e => {
     if ($('ms-rec').value === 'weekly') _applyDowFromDate(e.target.value);
+    _syncPaymentDate();
   });
+
+  // Settlement cycle → auto-compute payment date
+  $('ms-settlement-cycle')?.addEventListener('change', _syncPaymentDate);
+
+  // Time selects → filter end-time options + auto-compute duration
+  $('ms-ts')?.addEventListener('change', e => {
+    const startVal = e.target.value;
+    const teEl     = $('ms-te');
+    if (!teEl) return;
+    const prevEnd  = teEl.value;
+    teEl.innerHTML = buildTimeOptions(startVal);
+    teEl.value     = (prevEnd && prevEnd > startVal) ? prevEnd : '';
+    _syncMsDuration();
+  });
+  $('ms-te')?.addEventListener('change', _syncMsDuration);
 
   // DOW pills
   $('ms-dow-row').addEventListener('click', e => {
@@ -487,6 +551,18 @@ function _bindEvents() {
     _skipHol = !_skipHol;
     $('ms-hol-toggle').classList.toggle('on', _skipHol);
     $('ms-hol-toggle').setAttribute('aria-checked', String(_skipHol));
+  });
+
+  // Paid-status → tax interlock
+  $('ms-paid-status')?.addEventListener('change', e => {
+    const taxSel = $('ms-tax');
+    if (!taxSel) return;
+    if (e.target.value === 'na') {
+      taxSel.value    = 'na';
+      taxSel.disabled = true;
+    } else {
+      taxSel.disabled = false;
+    }
   });
 
   // Online toggle
@@ -555,11 +631,13 @@ function _bindEvents() {
       {
         id: `p_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         text, isDone: false, postponeCount: 0,
-        deadline: getTodayString(), lectureId: null, groupId: null,
+        deadline: $('ms-todo-due-date')?.value || getTodayString(), lectureId: null, groupId: null,
       },
     ];
     _msRefreshPendingUI?.();
     input.value = '';
+    const msDueDateEl = $('ms-todo-due-date');
+    if (msDueDateEl) msDueDateEl.value = '';
   });
 
   $('ms-todo-input').addEventListener('keydown', e => {
@@ -633,6 +711,7 @@ function _renderPreview() {
   $('ms-preview').style.display = '';
   $('ms-save').disabled         = false;
   $('ms-save').textContent      = `저장하기 (${_sessions.length}회차)`;
+  _syncPaymentDate();
   $('ms-preview').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -734,13 +813,24 @@ async function _commitBatch(commonData, sessionTotal) {
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '저장 중...'; }
   try {
     const batch = writeBatch(db);
+    const commonForFs = commonData;
+    const lastSessionDate = _sessions[_sessions.length - 1]?.date ?? '';
     for (const s of _sessions) {
       const ref = doc(collection(db, 'lectures'));
+      const endDate = s.date;
+      const paymentDate = commonForFs.settlementCycle
+        ? calcPaymentDate(s.date, commonForFs.settlementCycle, lastSessionDate)
+        : (commonForFs.paymentDate || null);
+      const _sTimeStart = s.timeStart || '';
+      const _sTimeEnd   = s.timeEnd   || '';
       batch.set(ref, {
-        ...commonData,
+        ...commonForFs,
+        startDate: s.date, startTime: _sTimeStart, endDate, endTime: _sTimeEnd,
         date:              s.date,
-        timeStart:         s.timeStart || '',
-        timeEnd:           s.timeEnd   || '',
+        endDate,
+        paymentDate,
+        timeStart:         _sTimeStart,
+        timeEnd:           _sTimeEnd,
         topic:             s.topic     || '',
         sessionCurrent:    s.sessionCurrent,
         wasHolidayShifted: s.wasShifted ?? false,
@@ -752,7 +842,7 @@ async function _commitBatch(commonData, sessionTotal) {
     if (_msPendingTodos.length > 0) {
       const uid = _getCtx?.()?.currentUser?.uid;
       if (uid && commonData.groupId) {
-        await Promise.all(_msPendingTodos.map(t => addTodo(uid, t.text, null, commonData.groupId)));
+        await Promise.all(_msPendingTodos.map(t => addTodo(uid, t.text, null, commonData.groupId, t.deadline || null)));
       }
       _msPendingTodos = [];
     }
@@ -884,21 +974,39 @@ async function _handleSave() {
   const place = $('ms-place').value.trim();
   if (!place)  { window.showToast?.('강의장 주소를 입력하세요.', 'warn'); _restoreBtn(); return; }
 
-  const groupId      = `grp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-  const sessionTotal = _sessions.length;
+  const groupId        = `grp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const sessionTotal   = _sessions.length;
+  const _paidStatusVal = $('ms-paid-status')?.value ?? 'false';
+  const isPaid         = _paidStatusVal === 'true';
+  const paidStatus     = _paidStatusVal;
+  const taxType        = $('ms-tax')?.value || 'income3_3';
+  // Fee normalization: derive session fee from total if only total was entered
+  const _rawFee      = parseFloat($('ms-fee').value)       || 0;
+  const _rawFeeTotal = parseFloat($('ms-fee-total').value) || 0;
+  const feePerSession = (_rawFee === 0 && _rawFeeTotal > 0 && sessionTotal > 0)
+    ? _rawFeeTotal / sessionTotal
+    : _rawFee;
+  const feeTotalCalc = _rawFeeTotal || (feePerSession * sessionTotal);
+
+  const settlementCycle = $('ms-settlement-cycle').value || '';
+
   const common = {
     uid:              currentUser.uid,
     groupId,
     title,
     client,
     place,
-    fee:              Number($('ms-fee').value) || 0,
-    feeTotal:         Number($('ms-fee-total').value) || 0,
-    settlementCycle:  $('ms-settlement-cycle').value || '',
+    isOnline:         _isOnline,
+    fee:              feePerSession,
+    feeTotal:         feeTotalCalc,
+    settlementCycle,
     progressStatus:   $('ms-progress').value || 'scheduled',
     topicTagId:       _msTagId,
     sessionTotal,
-    isPaid:           false,
+    isPaid,
+    paidStatus,
+    taxType,
+    paymentDate:      $('ms-payment-date')?.value || null,
     isDocumented:     false,
     classroom:        $('ms-classroom').value.trim(),
     parking:          $('ms-parking').value.trim(),

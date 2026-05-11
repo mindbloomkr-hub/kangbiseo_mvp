@@ -2,7 +2,7 @@
 
 import { subscribeLectures, authGuard, db } from '../api.js';
 import { writeBatch, doc } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
-import { TODAY, STATUS_META, escapeHtml, formatDateKo, classifyStatus, positionPanel } from '../utils.js';
+import { TODAY, STATUS_META, escapeHtml, formatDateKo, classifyStatus, positionPanel, calcDuration, timeToMin, formatDateString, calcPaymentDate } from '../utils.js';
 import { openKakaoAddress } from '../services/kakaoAddressService.js';
 import { initLectureModal, openModal, getTopicTags } from '../components/lectureModal.js';
 import { initMultiSessionModal, openAddModal as openMultiSessionModal } from '../components/multiSessionModal.js';
@@ -43,8 +43,8 @@ function getFilteredLectures() {
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
     list = list.filter(l =>
-      (l.sessionTotal       || '').toLowerCase().includes(q) ||
-      (l.sessionCurrent       || '').toLowerCase().includes(q) ||
+      String(l.sessionTotal || '').toLowerCase().includes(q) ||
+      String(l.sessionCurrent || '').toLowerCase().includes(q) ||
       (l.title       || '').toLowerCase().includes(q) ||
       (l.client      || '').toLowerCase().includes(q) ||
       (l.place       || '').toLowerCase().includes(q) ||
@@ -396,6 +396,15 @@ input[type=checkbox].row-cb,input[type=checkbox]#select-all-cb{width:16px;height
 .filter-tag-picker{position:relative;display:inline-flex}
 .filter-tag-picker .lm-tag-trigger{width:160px;height:36px;font-size:13px}
 #filter-tag-panel{transform:none!important}
+.bm-section-title{font-size:11px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px;margin:16px 0 8px;padding-bottom:5px;border-bottom:1px solid #e2e8f0}
+.bm-field--cb{margin-bottom:10px}
+.bm-cb-row{display:flex;align-items:center;gap:7px;margin-bottom:4px}
+.bm-cb{width:15px;height:15px;cursor:pointer;accent-color:#2563eb;flex-shrink:0}
+.bm-field--cb .bm-label{margin-bottom:0;color:#374151;font-size:12px;font-weight:700}
+.bm-input:disabled,.bm-select:disabled{opacity:.4;cursor:not-allowed;background:#f1f5f9}
+textarea.bm-input{height:auto;padding:8px 12px;resize:vertical;min-height:60px;line-height:1.45;font-family:inherit}
+.bm-field--computed{margin-bottom:10px}
+.bm-input--computed{background:#f0f9ff!important;color:#0369a1;font-weight:700;border-color:#bae6fd;cursor:default}
   `;
   document.head.appendChild(s);
 }
@@ -510,6 +519,36 @@ async function _runSeqOnly() {
 function _openBatchModal() {
   document.getElementById('bm-backdrop')?.remove();
   const hasGroup = [...selectedIds].some(id => allLectures.find(l => l.id === id)?.groupId);
+  const tags = getTopicTags();
+
+  const _mkTagOpts = () =>
+    `<option value="">일반 강의</option>` +
+    tags.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+
+  const _mkTimeOpts = () => {
+    const opts = ['<option value="">선택</option>'];
+    for (let h = 7; h <= 22; h++) {
+      for (let m = 0; m < 60; m += 10) {
+        if (h === 22 && m > 0) break;
+        const t = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+        opts.push(`<option value="${t}">${t}</option>`);
+      }
+    }
+    return opts.join('');
+  };
+  const timeOpts = _mkTimeOpts();
+
+  const _cf = (cbId, label, inputHtml) => {
+    const inputId = cbId.replace('bm-cb-', 'bm-');
+    return `
+    <div class="bm-field bm-field--cb">
+      <div class="bm-cb-row">
+        <input type="checkbox" class="bm-cb" id="${cbId}">
+        <label class="bm-label" for="${inputId}">${label}</label>
+      </div>
+      ${inputHtml}
+    </div>`;
+  };
 
   const bd = document.createElement('div');
   bd.id = 'bm-backdrop';
@@ -521,58 +560,111 @@ function _openBatchModal() {
         <button class="bm-x" id="bm-x">✕</button>
       </div>
       <div class="bm-body">
-        <p class="bm-hint">입력하지 않은 항목은 기존 값을 유지합니다.</p>
-        <div class="bm-field"><label class="bm-label" for="bm-client">고객사</label><input class="bm-input" type="text" id="bm-client" placeholder="고객사명" /></div>
-        <div class="bm-field">
-          <label class="bm-label" for="bm-place">강의장 주소</label>
+        <p class="bm-hint">✅ 체크한 항목만 변경됩니다. 체크하지 않은 항목은 기존 값을 유지합니다.</p>
+
+        <p class="bm-section-title">강의 기본 정보</p>
+        ${_cf('bm-cb-tag', '카테고리', `<select class="bm-select" id="bm-tag" disabled>${_mkTagOpts()}</select>`)}
+        ${_cf('bm-cb-progress', '진행 상태', `<select class="bm-select" id="bm-progress" disabled>
+          <option value="discussing">논의 중</option>
+          <option value="scheduled">진행 예정</option>
+          <option value="done">진행 완료</option>
+          <option value="onhold">보류 중</option>
+          <option value="cancelled">취소/드롭</option>
+          <option value="needs_review">확인 필요</option>
+        </select>`)}
+
+        ${_cf('bm-cb-title', '강의명', `<input class="bm-input" type="text" id="bm-title" placeholder="강의명" disabled>`)}
+
+        ${_cf('bm-cb-timeStart', '시작 시간', `<select class="bm-select" id="bm-timeStart" disabled>${timeOpts}</select>`)}
+        ${_cf('bm-cb-timeEnd', '종료 시간', `<select class="bm-select" id="bm-timeEnd" disabled>${timeOpts}</select>`)}
+        <div class="bm-field bm-field--computed">
+          <label class="bm-label">강의 시간 (자동 계산)</label>
+          <input class="bm-input bm-input--computed" type="text" id="bm-duration" readonly placeholder="—">
+        </div>
+
+        <p class="bm-section-title">정산 정보</p>
+        ${_cf('bm-cb-feeType', '정산 방식', `<select class="bm-select" id="bm-feeType" disabled>
+          <option value="">선택</option>
+          <option value="fixed">고정 금액 (전체)</option>
+          <option value="unit">회당 금액</option>
+        </select>`)}
+
+        ${_cf('bm-cb-settlementCycle', '정산 주기', `<select class="bm-select" id="bm-settlementCycle" disabled>
+          <option value="per-session">회차별 정산</option>
+          <option value="monthly">월 정산</option>
+          <option value="quarterly">분기 정산</option>
+          <option value="after-completion">완강 후 정산</option>
+          <option value="other">기타</option>
+        </select>`)}        
+        ${_cf('bm-cb-fee', '회차별 강사료 (만원)', `<input class="bm-input" type="number" id="bm-fee" placeholder="숫자만 입력" disabled>`)}
+        ${_cf('bm-cb-feeAmount', '강사료 총 금액 (만원)', `<input class="bm-input" type="number" id="bm-feeAmount" placeholder="숫자만 입력" disabled>`)}
+        ${_cf('bm-cb-paid', '정산 상태', `<select class="bm-select" id="bm-paid" disabled>
+          <option value="true">✅ 입금 완료</option>
+          <option value="false">❌ 미입금</option>
+          <option value="na">— 해당없음</option>
+        </select>`)}
+
+        ${_cf('bm-cb-tax', '세금 유형', `<select class="bm-select" id="bm-tax" disabled>
+          <option value="income3_3">사업소득 3.3%</option>
+          <option value="income8_8">기타소득 8.8%</option>
+          <option value="exempt">면세</option>
+          <option value="other">기타</option>
+          <option value="na">해당없음</option>
+        </select>`)}
+
+        <p class="bm-section-title">고객 정보</p>
+
+        ${_cf('bm-cb-client', '고객사', `<input class="bm-input" type="text" id="bm-client" placeholder="고객사명" disabled>`)}
+        <p class="bm-section-title">장소</p>
+        <div class="bm-field bm-field--cb">
+          <div class="bm-cb-row" style="justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:7px">
+              <input type="checkbox" class="bm-cb" id="bm-cb-place">
+              <label class="bm-label" for="bm-place" style="margin-bottom:0">강의장 주소</label>
+            </div>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#2563eb;cursor:pointer;user-select:none">
+              <input type="checkbox" id="bm-online" style="width:14px;height:14px;accent-color:#2563eb;cursor:pointer" /> 💻 온라인 수업
+            </label>
+          </div>
           <div class="bm-addr-wrap">
-            <input class="bm-input" type="text" id="bm-place" placeholder="강의장 주소 입력" />
-            <button type="button" class="bm-addr-btn" id="bm-addr-search">🔍 주소 검색</button>
+            <input class="bm-input" type="text" id="bm-place" placeholder="강의장 주소 입력" disabled>
+            <button type="button" class="bm-addr-btn" id="bm-addr-search" disabled>🔍 주소 검색</button>
           </div>
         </div>
-        <div class="bm-field">
-          <label class="bm-label" for="bm-feeType">정산 방식</label>
-          <select class="bm-select" id="bm-feeType">
-            <option value="">변경 안 함</option>
-            <option value="fixed">고정 금액 (전체)</option>
-            <option value="unit">회당 금액</option>
-          </select>
+
+        <p class="bm-section-title">야간 강의</p>
+        <div class="bm-field bm-field--cb">
+          <div class="bm-cb-row">
+            <input type="checkbox" class="bm-cb" id="bm-cb-overnight">
+            <label class="bm-label" style="margin-bottom:0">1박 이상 (종료일 설정)</label>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#7c3aed;cursor:pointer;user-select:none">
+              <input type="checkbox" id="bm-overnight-flag" disabled style="width:14px;height:14px;accent-color:#7c3aed" /> 🌙 야간 강의로 설정
+            </label>
+            <input class="bm-input" type="date" id="bm-end-date" disabled style="max-width:180px" />
+          </div>
         </div>
-        <div class="bm-field"><label class="bm-label" for="bm-feeAmount">강사료 총 금액 (만원)</label><input class="bm-input" type="number" id="bm-feeAmount" placeholder="숫자만 입력" /></div>
-        <div class="bm-field"><label class="bm-label" for="bm-fee">회차별 강사료 (만원)</label><input class="bm-input" type="number" id="bm-fee" placeholder="숫자만 입력" /></div>
-        <div class="bm-field">
-          <label class="bm-label" for="bm-settlementCycle">정산 주기</label>
-          <select class="bm-select" id="bm-settlementCycle">
-            <option value="">변경 안 함</option>
-            <option value="session">회차별 정산</option>
-            <option value="monthly">월별 정산</option>
-            <option value="total">완료 후 일괄</option>
-          </select>
-        </div>
-        <div class="bm-field"><label class="bm-label" for="bm-classroom">강의장</label><input class="bm-input" type="text" id="bm-classroom" placeholder="강의장 입력" /></div>
-        <div class="bm-field">
-          <label class="bm-label" for="bm-progress">진행 상태</label>
-          <select class="bm-select" id="bm-progress">
-            <option value="">변경 안 함</option>
-            <option value="discussing">💬 논의 중</option>
-            <option value="scheduled">📅 강의 예정</option>
-            <option value="done">✅ 진행 완료</option>
-            <option value="onhold">⏸ 보류 중</option>
-            <option value="cancelled">❌ 취소/드롭</option>
-            <option value="needs_review">🔍 확인 필요</option>
-          </select>
-        </div>
-        <div class="bm-field">
-          <label class="bm-label" for="bm-paid">입금 상태</label>
-          <select class="bm-select" id="bm-paid">
-            <option value="">변경 안 함</option>
-            <option value="true">✅ 입금 완료</option>
-            <option value="false">❌ 미입금</option>
-          </select>
-        </div>
-        <div class="bm-field"><label class="bm-label" for="bm-mgr-name">담당자명</label><input class="bm-input" type="text" id="bm-mgr-name" placeholder="담당자 이름" /></div>
-        <div class="bm-field"><label class="bm-label" for="bm-mgr-phone">담당자 연락처</label><input class="bm-input" type="tel" id="bm-mgr-phone" placeholder="010-0000-0000" /></div>
-        <div class="bm-field"><label class="bm-label" for="bm-mgr-email">담당자 이메일</label><input class="bm-input" type="email" id="bm-mgr-email" placeholder="example@email.com" /></div>
+        ${_cf('bm-cb-classroom', '강의장 (층·호)', `<input class="bm-input" type="text" id="bm-classroom" placeholder="예) 4층 403호" disabled>`)}
+        ${_cf('bm-cb-parking', '주차 정보', `<input class="bm-input" type="text" id="bm-parking" placeholder="주차 안내" disabled>`)}
+
+        <p class="bm-section-title">강의 상세 정보</p>
+        ${_cf('bm-cb-setupTime', '현장 준비 시간 (분)', `<input class="bm-input" type="number" id="bm-setupTime" min="0" placeholder="분" disabled>`)}
+        ${_cf('bm-cb-wrapupTime', '현장 정리 시간 (분)', `<input class="bm-input" type="number" id="bm-wrapupTime" min="0" placeholder="분" disabled>`)}
+
+        ${_cf('bm-cb-participants', '수강 인원 (명)', `<input class="bm-input" type="number" id="bm-participants" min="1" placeholder="예) 20" disabled>`)}
+        ${_cf('bm-cb-groupInfo', '그룹 구성', `<input class="bm-input" type="text" id="bm-groupInfo" placeholder="예) 팀별 5인 4개조" disabled>`)}
+
+        ${_cf('bm-cb-supplies', '준비물', `<textarea class="bm-input" id="bm-supplies" placeholder="준비물" rows="2" disabled></textarea>`)}
+
+
+        <p class="bm-section-title">담당자 정보</p>
+        ${_cf('bm-cb-mgrName', '이름', `<input class="bm-input" type="text" id="bm-mgrName" placeholder="담당자 이름" disabled>`)}
+        ${_cf('bm-cb-mgrPhone', '연락처', `<input class="bm-input" type="tel" id="bm-mgrPhone" placeholder="010-0000-0000" disabled>`)}
+        ${_cf('bm-cb-mgrEmail', '이메일', `<input class="bm-input" type="email" id="bm-mgrEmail" placeholder="example@email.com" disabled>`)}
+
+        ${_cf('bm-cb-memo', '메모', `<textarea class="bm-input" id="bm-memo" placeholder="메모" rows="2" disabled></textarea>`)}
+
         ${hasGroup ? `
         <hr class="bm-divider" />
         <div class="bm-seq-row">
@@ -580,7 +672,7 @@ function _openBatchModal() {
             <span class="bm-seq-label">🔢 회차 자동 설정</span>
             <span class="bm-seq-sub">같은 그룹의 모든 강의를 날짜·시간순으로 자동 정렬합니다.</span>
           </div>
-          <input type="checkbox" id="bm-seq-cb" style="width:18px;height:18px;cursor:pointer;accent-color:#2563eb;flex-shrink:0" />
+          <input type="checkbox" id="bm-seq-cb" style="width:18px;height:18px;cursor:pointer;accent-color:#2563eb;flex-shrink:0">
         </div>` : ''}
         <hr class="bm-divider" />
         <div class="bm-group-row">
@@ -588,7 +680,7 @@ function _openBatchModal() {
             <span class="bm-group-label">🔗 그룹으로 묶기</span>
             <span class="bm-group-sub">선택한 ${selectedIds.size}건에 공유 그룹 ID를 부여합니다. 회차도 자동 설정됩니다.</span>
           </div>
-          <input type="checkbox" id="bm-group-cb" style="width:18px;height:18px;cursor:pointer;accent-color:#10b981;flex-shrink:0" />
+          <input type="checkbox" id="bm-group-cb" style="width:18px;height:18px;cursor:pointer;accent-color:#10b981;flex-shrink:0">
         </div>
       </div>
       <div class="bm-foot">
@@ -604,6 +696,62 @@ function _openBatchModal() {
   document.getElementById('bm-x').addEventListener('click', _closeBatchModal);
   document.getElementById('bm-cancel').addEventListener('click', _closeBatchModal);
   bd.addEventListener('click', e => { if (e.target === bd) _closeBatchModal(); });
+
+  // Checkbox toggles: enable/disable matching input
+  bd.querySelectorAll('.bm-cb').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const inputId = cb.id.replace('bm-cb-', 'bm-');
+      const el = document.getElementById(inputId);
+      if (el) el.disabled = !cb.checked;
+      if (cb.id === 'bm-cb-place') {
+        document.getElementById('bm-addr-search').disabled = !cb.checked;
+      }
+      if (cb.id === 'bm-cb-overnight') {
+        const flagCb  = document.getElementById('bm-overnight-flag');
+        const endDate = document.getElementById('bm-end-date');
+        if (flagCb)  flagCb.disabled  = !cb.checked;
+        if (endDate) endDate.disabled = !cb.checked;
+      }
+    });
+  });
+
+  // Online interlock within bm-modal place section
+  document.getElementById('bm-online')?.addEventListener('change', e => {
+    const placeEl   = document.getElementById('bm-place');
+    const addrBtn   = document.getElementById('bm-addr-search');
+    const placeCb   = document.getElementById('bm-cb-place');
+    if (e.target.checked) {
+      if (placeEl) { placeEl.value = ''; placeEl.disabled = true; }
+      if (addrBtn) addrBtn.disabled = true;
+    } else {
+      const enabled = placeCb?.checked ?? false;
+      if (placeEl) placeEl.disabled = !enabled;
+      if (addrBtn) addrBtn.disabled = !enabled;
+    }
+  });
+
+  // Paid-status → tax interlock in bm-modal
+  document.getElementById('bm-paid')?.addEventListener('change', e => {
+    const taxSel = document.getElementById('bm-tax');
+    if (!taxSel) return;
+    if (e.target.value === 'na') {
+      taxSel.value    = 'na';
+      taxSel.disabled = true;
+    } else {
+      if (document.getElementById('bm-cb-tax')?.checked) taxSel.disabled = false;
+    }
+  });
+
+  // Duration auto-calc when either time select changes
+  const _syncDuration = () => {
+    const s  = document.getElementById('bm-timeStart')?.value;
+    const e  = document.getElementById('bm-timeEnd')?.value;
+    const el = document.getElementById('bm-duration');
+    if (el) el.value = (s && e && s < e) ? calcDuration(s, e) : '';
+  };
+  document.getElementById('bm-timeStart')?.addEventListener('change', _syncDuration);
+  document.getElementById('bm-timeEnd')?.addEventListener('change', _syncDuration);
+
   document.getElementById('bm-addr-search').addEventListener('click', () => openKakaoAddress('bm-place'));
 
   document.getElementById('bm-apply').addEventListener('click', async () => {
@@ -611,33 +759,88 @@ function _openBatchModal() {
     applyBtn.disabled = true; applyBtn.textContent = '적용 중...';
     try {
       const payload = {};
-      const client   = document.getElementById('bm-client')?.value.trim();
-      const place    = document.getElementById('bm-place')?.value.trim();
-      const classroom = document.getElementById('bm-classroom')?.value.trim();
-      const fee      = document.getElementById('bm-fee')?.value.trim();
-      const progress = document.getElementById('bm-progress')?.value;
-      const paid     = document.getElementById('bm-paid')?.value;
-      const feeType         = document.getElementById('bm-feeType')?.value;
-      const feeAmount       = document.getElementById('bm-feeAmount')?.value.trim();
-      const settlementCycle = document.getElementById('bm-settlementCycle')?.value;
-      const mgrName  = document.getElementById('bm-mgr-name')?.value.trim();
-      const mgrPhone = document.getElementById('bm-mgr-phone')?.value.trim();
-      const mgrEmail = document.getElementById('bm-mgr-email')?.value.trim();
-      const doSeq    = document.getElementById('bm-seq-cb')?.checked ?? false;
-      const doGroup  = document.getElementById('bm-group-cb')?.checked ?? false;
+      const get     = id => document.getElementById(id)?.value ?? '';
+      const checked = id => document.getElementById(id)?.checked ?? false;
 
-      if (client)          payload.client          = client;
-      if (place)           payload.place           = place;
-      if (feeType)         payload.feeType         = feeType;
-      if (feeAmount)       payload.feeAmount       = Number(feeAmount);
-      if (settlementCycle) payload.settlementCycle = settlementCycle;
-      if (classroom)       payload.classroom       = classroom;
-      if (fee)             payload.fee             = Number(fee);
-      if (progress)   payload.progressStatus = progress;
-      if (paid)       payload.isPaid         = paid === 'true';
-      if (mgrName)    payload.managerName    = mgrName;
-      if (mgrPhone)   payload.managerPhone   = mgrPhone;
-      if (mgrEmail)   payload.managerEmail   = mgrEmail;
+      // Text / string fields
+      if (checked('bm-cb-title'))     payload.title        = get('bm-title').trim();
+      if (checked('bm-cb-memo'))      payload.memo         = get('bm-memo').trim();
+      if (checked('bm-cb-tax'))       payload.taxType      = get('bm-tax');
+      if (checked('bm-cb-timeStart')) { payload.timeStart = get('bm-timeStart'); payload.startTime = get('bm-timeStart'); }
+      if (checked('bm-cb-timeEnd'))   { payload.timeEnd   = get('bm-timeEnd');   payload.endTime   = get('bm-timeEnd'); }
+      if (checked('bm-cb-place'))     payload.place        = get('bm-place').trim();
+      if (checked('bm-cb-classroom')) payload.classroom    = get('bm-classroom').trim();
+      if (checked('bm-cb-parking'))   payload.parkingInfo  = get('bm-parking').trim();
+      if (checked('bm-cb-groupInfo')) payload.groupInfo    = get('bm-groupInfo').trim();
+      if (checked('bm-cb-client'))    payload.client       = get('bm-client').trim();
+      if (checked('bm-cb-mgrName'))   payload.managerName  = get('bm-mgrName').trim();
+      if (checked('bm-cb-mgrPhone'))  payload.managerPhone = get('bm-mgrPhone').trim();
+      if (checked('bm-cb-mgrEmail'))  payload.managerEmail = get('bm-mgrEmail').trim();
+      if (checked('bm-cb-supplies'))  payload.supplies     = get('bm-supplies').trim();
+
+
+      // Tag (empty string = no tag → null)
+      if (checked('bm-cb-tag')) {
+        const v = get('bm-tag');
+        payload.topicTagId = v === '' ? null : Number(v);
+      }
+
+      // Number fields (skip empty to avoid unintended zero)
+      if (checked('bm-cb-setupTime'))    { const v = get('bm-setupTime');    if (v !== '') payload.setupTime    = Number(v); }
+      if (checked('bm-cb-wrapupTime'))   { const v = get('bm-wrapupTime');   if (v !== '') payload.wrapupTime   = Number(v); }
+      if (checked('bm-cb-participants')) { const v = get('bm-participants'); if (v !== '') payload.participants = Number(v); }
+      if (checked('bm-cb-fee'))          { const v = get('bm-fee');          if (v !== '') payload.fee          = Number(v); }
+
+      // Select fields with an empty placeholder — skip when unselected
+      if (checked('bm-cb-feeType'))         { const v = get('bm-feeType');         if (v) payload.feeType         = v; }
+      if (checked('bm-cb-settlementCycle')) { const v = get('bm-settlementCycle'); if (v) payload.settlementCycle = v; }
+
+      // Required-value selects (all options have real values)
+      if (checked('bm-cb-progress')) payload.progressStatus = get('bm-progress');
+      if (checked('bm-cb-paid')) {
+        const _bmpv  = get('bm-paid');
+        payload.isPaid      = _bmpv === 'true';
+        payload.paidStatus  = _bmpv;
+        if (_bmpv === 'na') payload.taxType = 'na';
+      }
+
+      // Online / place
+      if (checked('bm-cb-place')) {
+        const isOnline = document.getElementById('bm-online')?.checked ?? false;
+        payload.isOnline = isOnline;
+        payload.place    = isOnline ? 'Online' : get('bm-place').trim();
+      }
+
+      // Overnight
+      if (checked('bm-cb-overnight')) {
+        const isOvernight = document.getElementById('bm-overnight-flag')?.checked ?? false;
+        payload.isOvernight = isOvernight;
+        payload.endDate     = isOvernight ? (get('bm-end-date') || null) : null;
+      }
+
+      // Time validation
+      if (payload.timeStart && payload.timeEnd && payload.timeEnd <= payload.timeStart) {
+        window.showToast?.('종료 시간은 시작 시간보다 이후여야 합니다.', 'error');
+        applyBtn.disabled = false; applyBtn.textContent = '적용하기';
+        return;
+      }
+
+      // Schedule collision check when time or location fields are changed
+      const timeOrLocChanged = checked('bm-cb-timeStart') || checked('bm-cb-timeEnd') || checked('bm-cb-place');
+      if (timeOrLocChanged) {
+        const conflicts = _detectBatchConflicts(payload.timeStart ?? null, payload.timeEnd ?? null);
+        if (conflicts.length > 0) {
+          const names = conflicts.slice(0, 3).map(l => l.title || '(제목 없음)').join(', ');
+          const more  = conflicts.length > 3 ? ` 외 ${conflicts.length - 3}건` : '';
+          if (!confirm(`⚠️ 일정 충돌 감지 (${conflicts.length}건)\n\n${names}${more}\n\n충돌을 무시하고 저장하시겠습니까?`)) {
+            applyBtn.disabled = false; applyBtn.textContent = '적용하기';
+            return;
+          }
+        }
+      }
+
+      const doSeq   = document.getElementById('bm-seq-cb')?.checked ?? false;
+      const doGroup = document.getElementById('bm-group-cb')?.checked ?? false;
 
       let seqUpdates = doSeq ? _computeSeqUpdates() : {};
 
@@ -657,6 +860,35 @@ function _openBatchModal() {
         groupedLecs.forEach((lec, i) => {
           seqUpdates[lec.id] = { ...(seqUpdates[lec.id] ?? {}), sessionTotal: total, sessionCurrent: i + 1 };
         });
+      }
+
+      // Per-lecture fee from feeTotal (bm-cb-fee takes priority if also checked)
+      if (checked('bm-cb-feeAmount')) {
+        const rawTotal = get('bm-feeAmount');
+        if (rawTotal !== '') {
+          const feeTotal = Number(rawTotal);
+          payload.feeAmount = feeTotal;
+          if (!checked('bm-cb-fee')) {
+            for (const id of selectedIds) {
+              const lec = allLectures.find(l => l.id === id);
+              const sessionTotal = lec?.sessionTotal || 1;
+              seqUpdates[id] = { ...(seqUpdates[id] ?? {}), fee: Math.floor(feeTotal / sessionTotal) };
+            }
+          }
+        }
+      }
+
+      // Per-lecture paymentDate derived from each lecture's own date and the chosen settlementCycle
+      if (checked('bm-cb-settlementCycle')) {
+        const cycle = get('bm-settlementCycle');
+        if (cycle) {
+          for (const id of selectedIds) {
+            const lec = allLectures.find(l => l.id === id);
+            if (!lec?.date) continue;
+            const paymentDate = calcPaymentDate(lec.date, cycle, lec.endDate || lec.date);
+            seqUpdates[id] = { ...(seqUpdates[id] ?? {}), paymentDate };
+          }
+        }
       }
 
       if (Object.keys(payload).length === 0 && Object.keys(seqUpdates).length === 0) {
@@ -689,6 +921,28 @@ function _closeBatchModal() {
   bd.classList.remove('open');
   setTimeout(() => bd.remove(), 200);
   document.body.style.overflow = '';
+}
+
+function _detectBatchConflicts(newStart, newEnd) {
+  const hits = [];
+  for (const id of selectedIds) {
+    const lec = allLectures.find(l => l.id === id);
+    if (!lec) continue;
+    const s = newStart || lec.timeStart;
+    const e = newEnd   || lec.timeEnd;
+    if (!s || !e) continue;
+    const nS = timeToMin(s), nE = timeToMin(e);
+    if (nE <= nS) continue;
+    const sameDay = allLectures.filter(l =>
+      l.date === lec.date && !selectedIds.has(l.id) && l.progressStatus !== 'cancelled'
+    );
+    for (const other of sameDay) {
+      if (!other.timeStart || !other.timeEnd) continue;
+      const oS = timeToMin(other.timeStart), oE = timeToMin(other.timeEnd);
+      if (Math.max(nS, oS) < Math.min(nE, oE)) { hits.push(lec); break; }
+    }
+  }
+  return hits;
 }
 
 /* ════════════════════════════════════════

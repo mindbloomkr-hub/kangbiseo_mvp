@@ -249,47 +249,30 @@ async function _postponeAll() {
 }
 
 async function _addTodo() {
-  const input = document.getElementById('tl-todo-input');
-  const text  = input?.value.trim();
+  const input   = document.getElementById('tl-todo-input');
+  const dateEl  = document.getElementById('tl-todo-due-date');
+  const text    = input?.value.trim();
+  const dueDate = dateEl?.value || null;
   if (!text || !currentUser) return;
   try {
-    await addTodo(currentUser.uid, text, null);
+    await addTodo(currentUser.uid, text, null, null, dueDate);
     input.value = '';
+    if (dateEl) dateEl.value = '';
   } catch (err) { console.error('[강비서] Todo 추가 오류:', err); }
 }
 
 /* ════════════════════════════════════════
-   6. 강의 배지 클릭 → 모달 열기
-════════════════════════════════════════ */
-function _bindLectureBadgeClick() {
-  const listEl = document.getElementById('tl-todo-list');
-  if (!listEl) return;
-  listEl.addEventListener('click', e => {
-    const badge = e.target.closest('.todo-lec-badge[data-lec-id]');
-    if (badge) {
-      e.stopPropagation();
-      openModal(badge.dataset.lecId);
-      return;
-    }
-    const groupBadge = e.target.closest('.todo-lec-badge[data-group-id]');
-    if (groupBadge) {
-      e.stopPropagation();
-      const lec = allLectures.find(l => l.groupId === groupBadge.dataset.groupId);
-      if (lec) openModal(lec.id);
-    }
-  });
-}
-
-/* ════════════════════════════════════════
-   7. 초기화
+   6. 초기화
 ════════════════════════════════════════ */
 function _init(user) {
   currentUser = user;
 
-  // 이벤트 위임 (목록 전체) — 필터링된 배열을 getter로 넘겨 toggle/delete/postpone 처리
+  // 이벤트 위임 (목록 전체) — 배지 클릭 포함, 필터링된 배열을 getter로 전달
   const listEl = document.getElementById('tl-todo-list');
-  bindTodoEvents(listEl, () => _applyFilters(allTodos));
-  _bindLectureBadgeClick();
+  bindTodoEvents(listEl, () => _applyFilters(allTodos), {
+    getAllLectures: () => allLectures,
+    openModal,
+  });
 
   // 필터 & 피커
   _bindFilterEvents();

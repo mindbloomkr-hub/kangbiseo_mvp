@@ -163,7 +163,7 @@ export async function openAddModal() {
   const paidSel = document.getElementById('af-paid-status');
   if (paidSel) paidSel.value = 'false';
   const taxSel = document.getElementById('af-tax');
-  if (taxSel) taxSel.value = 'income3_3';
+  if (taxSel) { taxSel.value = 'income3_3'; taxSel.disabled = false; }
 
   const sched    = JSON.parse(localStorage.getItem('kangbiseo_device') ?? 'null')?.scheduler ?? {};
   const setupEl  = document.getElementById('af-setup-time');
@@ -175,6 +175,18 @@ export async function openAddModal() {
 
   const placeEl = document.getElementById('af-place');
   if (placeEl) { placeEl.disabled = false; placeEl.placeholder = '예) 서울 강남구 SSDC 4F'; }
+
+  const endDateEl = document.getElementById('af-end-date');
+  if (endDateEl && af) endDateEl.value = af.value;
+
+  const sessionCurrentEl = document.getElementById('af-session-current');
+  if (sessionCurrentEl) sessionCurrentEl.value = '';
+  const sessionTotalEl2 = document.getElementById('af-session-total');
+  if (sessionTotalEl2) sessionTotalEl2.value = '';
+  const feeTotalWrapEl2 = document.getElementById('af-fee-total-wrap');
+  if (feeTotalWrapEl2) feeTotalWrapEl2.style.display = 'none';
+  const feeTotalInputEl = document.getElementById('af-fee-total');
+  if (feeTotalInputEl) feeTotalInputEl.value = '';
 
   // Pending todo UI for new lecture
   _pendingTodos = [];
@@ -228,24 +240,77 @@ function _switchMode(mode) {
   if (formSubtitle) formSubtitle.style.display = isView ? 'none' : '';
 }
 
+function _syncFeeTotalForm() {
+  const fee          = parseFloat(document.getElementById('af-fee')?.value) || 0;
+  const sessionTotal = parseInt(document.getElementById('af-session-total')?.value) || 0;
+  const wrap         = document.getElementById('af-fee-total-wrap');
+  const feeTotalEl   = document.getElementById('af-fee-total');
+  if (!wrap || !feeTotalEl) return;
+  if (sessionTotal > 1) {
+    wrap.style.display = '';
+    feeTotalEl.value   = fee > 0 ? String(fee * sessionTotal) : '';
+  } else {
+    wrap.style.display = 'none';
+    feeTotalEl.value   = '';
+  }
+}
+
 function _populateView(lec) {
   if (!lec) return;
   const status = _classifyFn(lec);
   const meta   = _statusMeta[status] || { label: status, cls: '' };
-  const { full } = formatDateKo(lec.date);
+
+  const startDate  = lec.startDate ?? lec.date;
+  const endDate    = lec.endDate   ?? lec.date;
+  const timeStart  = lec.startTime ?? lec.timeStart ?? '';
+  const timeEnd    = lec.endTime   ?? lec.timeEnd   ?? '';
+  const isCrossDay = startDate !== endDate;
+  const { full: startFull } = formatDateKo(startDate);
+  const endFull = isCrossDay ? formatDateKo(endDate).full : '';
 
   document.getElementById('modal-title').textContent       = lec.title || '(제목 없음)';
   document.getElementById('modal-badge').className         = `lec-badge ${meta.cls}`;
   document.getElementById('modal-badge').textContent       = meta.label;
-  document.getElementById('modal-date-meta').textContent   = `${full} · ${lec.timeStart}~${lec.timeEnd}`;
+  document.getElementById('modal-date-meta').textContent   = isCrossDay
+    ? `${startFull} ${timeStart} ~ ${endFull} ${timeEnd}`
+    : `${startFull} · ${timeStart}~${timeEnd}`;
   document.getElementById('modal-client-meta').textContent = lec.client || '—';
 
-  document.getElementById('v-date').textContent           = full;
-  document.getElementById('v-time').textContent           = `${lec.timeStart} ~ ${lec.timeEnd}`;
-  document.getElementById('v-total-duration').textContent = calcDuration(lec.timeStart, lec.timeEnd);
+  const vDatetimeWrap = document.getElementById('v-datetime-wrap');
+  const vDatetimeEl   = document.getElementById('v-datetime-display');
+  const vDateItem     = document.getElementById('v-date-item');
+  const vTimeItem     = document.getElementById('v-time-item');
+
+  if (isCrossDay) {
+    if (vDatetimeWrap) vDatetimeWrap.style.display = '';
+    if (vDateItem)     vDateItem.style.display     = 'none';
+    if (vTimeItem)     vTimeItem.style.display     = 'none';
+    if (vDatetimeEl)   vDatetimeEl.textContent     = `${startFull} ${timeStart} ~ ${endFull} ${timeEnd}`;
+  } else {
+    if (vDatetimeWrap) vDatetimeWrap.style.display = 'none';
+    if (vDateItem)     vDateItem.style.display     = '';
+    if (vTimeItem)     vTimeItem.style.display     = '';
+    document.getElementById('v-date').textContent = startFull;
+    document.getElementById('v-time').textContent = `${timeStart} ~ ${timeEnd}`;
+  }
+  document.getElementById('v-total-duration').textContent = calcDuration(startDate, timeStart, endDate, timeEnd);
   document.getElementById('v-title').textContent          = lec.title  || '—';
   document.getElementById('v-client').textContent         = lec.client || '—';
   document.getElementById('v-fee').textContent            = `₩${(Number(lec.fee)*10000 || 0).toLocaleString()}`;
+
+  const _feeTotalWrap = document.getElementById('v-fee-total-wrap');
+  const _feeTotalEl   = document.getElementById('v-fee-total');
+  if (_feeTotalWrap) {
+    if ((lec.sessionTotal || 0) > 1) {
+      _feeTotalWrap.style.display = '';
+      if (_feeTotalEl) {
+        const feeTotal = lec.feeAmount != null ? lec.feeAmount : ((lec.fee || 0) * (lec.sessionTotal || 1));
+        _feeTotalEl.textContent = `₩${(Number(feeTotal) * 10000 || 0).toLocaleString()}`;
+      }
+    } else {
+      _feeTotalWrap.style.display = 'none';
+    }
+  }
 
   document.getElementById('v-session-current').textContent = lec.sessionCurrent ? `${lec.sessionCurrent}회` : '—';
   document.getElementById('v-session-total').textContent   = lec.sessionTotal   ? `${lec.sessionTotal}회`   : '—';
@@ -287,8 +352,17 @@ function _populateView(lec) {
 
   document.getElementById('v-progress').textContent     = PROGRESS_LABEL[lec.progressStatus || 'scheduled'] || '—';
   const paidEl = document.getElementById('v-paid-status');
-  paidEl.textContent = lec.isPaid ? '✅ 입금 완료' : '❌ 미입금';
-  paidEl.className   = `modal-info-value paid-badge${lec.isPaid ? ' paid-badge--paid' : ' paid-badge--unpaid'}`;
+  const _paidStatus = lec.paidStatus ?? (lec.isPaid ? 'true' : 'false');
+  if (_paidStatus === 'na') {
+    paidEl.textContent = '— 해당없음';
+    paidEl.className   = 'modal-info-value paid-badge paid-badge--na';
+  } else if (_paidStatus === 'true') {
+    paidEl.textContent = '✅ 입금 완료';
+    paidEl.className   = 'modal-info-value paid-badge paid-badge--paid';
+  } else {
+    paidEl.textContent = '❌ 미입금';
+    paidEl.className   = 'modal-info-value paid-badge paid-badge--unpaid';
+  }
   document.getElementById('v-payment-date').textContent = lec.paymentDate || '미정';
   document.getElementById('v-tax').textContent          = TAX_LABEL[lec.taxType] || '—';
 
@@ -299,7 +373,7 @@ function _populateView(lec) {
 
 function _populateForm(lec) {
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
-  set('af-date',            lec.date);
+  set('af-date',     lec.startDate ?? lec.date);
   set('af-title',           lec.title);
   set('af-client',          lec.client);
   set('af-fee',             lec.fee);
@@ -317,9 +391,11 @@ function _populateForm(lec) {
   if (onlineCb) onlineCb.checked = lec.isOnline ?? false;
   if (placeEl) {
     placeEl.disabled    = lec.isOnline ?? false;
-    placeEl.value       = lec.isOnline ? 'Online' : (lec.place ?? '');
+    placeEl.value       = lec.isOnline ? '' : (lec.place ?? '');
     placeEl.placeholder = lec.isOnline ? '' : '예) 서울 강남구 SSDC 4F';
   }
+  set('af-end-date', lec.endDate ?? lec.date ?? '');
+
   set('af-classroom',       lec.classroom);
   set('af-parking',         lec.parkingInfo);
   set('af-manager-name',    lec.managerName);
@@ -329,14 +405,30 @@ function _populateForm(lec) {
   set('af-payment-date',    lec.paymentDate);
   set('af-memo',            lec.memo);
 
+  const _startDate  = lec.startDate ?? lec.date ?? '';
+  const _endDate    = lec.endDate   ?? lec.date ?? '';
+  const _timeStart  = lec.startTime ?? lec.timeStart ?? '';
+  const _timeEnd    = lec.endTime   ?? lec.timeEnd   ?? '';
+  const _isCrossDay = _startDate !== _endDate;
   const startSel = document.getElementById('af-time-start');
-  if (startSel) { startSel.innerHTML = buildTimeOptions(); startSel.value = lec.timeStart || ''; syncEndTimeOptions(lec.timeEnd || ''); }
+  if (startSel) { startSel.innerHTML = buildTimeOptions(); startSel.value = _timeStart; }
+  syncEndTimeOptions(_timeEnd, _isCrossDay);
   updateDurationDisplay();
+  _syncFeeTotalForm();
 
   const paidSel = document.getElementById('af-paid-status');
-  if (paidSel) paidSel.value = lec.isPaid ? 'true' : 'false';
+  const paidStatusVal = lec.paidStatus ?? (lec.isPaid ? 'true' : 'false');
+  if (paidSel) paidSel.value = paidStatusVal;
   const taxSel = document.getElementById('af-tax');
-  if (taxSel) taxSel.value = lec.taxType || 'income3_3';
+  if (taxSel) {
+    if (paidStatusVal === 'na') {
+      taxSel.value    = 'na';
+      taxSel.disabled = true;
+    } else {
+      taxSel.value    = lec.taxType || 'income3_3';
+      taxSel.disabled = false;
+    }
+  }
 }
 
 /* ════════════════════════════════════════
@@ -429,17 +521,25 @@ function _applyTagTrigger(tagId, prefix = 'lm') {
   if (prefix === 'ms') _msBulkTagUpdate?.(tagId);
 }
 
+let _tagPanelAbortCtrl = null;
+
 function _openTagPanel(prefix = 'lm') {
   const trigger = document.getElementById(`${prefix}-tag-trigger`);
   const panel   = document.getElementById(`${prefix}-tag-panel`);
   if (!panel || !trigger) return;
+
+  _tagPanelAbortCtrl?.abort();
+  _tagPanelAbortCtrl = new AbortController();
+  const { signal } = _tagPanelAbortCtrl;
+
   positionPanel(trigger, panel);
-  if (prefix === 'lm') {
-    const currentTop = parseInt(panel.style.top);
-    panel.style.top = `${currentTop - 60}px`; // 숫자를 키울수록 더 올라갑니다!
-  }
   panel.hidden = false;
   trigger.setAttribute('aria-expanded', 'true');
+
+  // Close if the user scrolls (modal body or page) or resizes the window
+  const close = () => _closeTagPanel(prefix);
+  window.addEventListener('resize', close, { signal });
+  document.addEventListener('scroll', close, { capture: true, signal });
 }
 
 function _closeTagPanel(prefix = 'lm') {
@@ -448,6 +548,8 @@ function _closeTagPanel(prefix = 'lm') {
   if (!panel) return;
   panel.hidden = true;
   trigger?.setAttribute('aria-expanded', 'false');
+  _tagPanelAbortCtrl?.abort();
+  _tagPanelAbortCtrl = null;
 }
 
 function _resetNewTagColorPicker(prefix = 'lm') {
@@ -950,6 +1052,19 @@ function _applyAlternative(option) {
   updateDurationDisplay();
 }
 
+function _flashHighlight(el) {
+  if (!el) return;
+  if (!document.getElementById('date-sync-flash-style')) {
+    const s = document.createElement('style');
+    s.id = 'date-sync-flash-style';
+    s.textContent = '@keyframes _dsFlash{0%{background-color:#fef08a}to{background-color:transparent}}.date-sync-flash{animation:_dsFlash .8s ease-out}';
+    document.head.appendChild(s);
+  }
+  el.classList.remove('date-sync-flash');
+  void el.offsetWidth; // restart animation
+  el.classList.add('date-sync-flash');
+}
+
 /* ════════════════════════════════════════
    이벤트 바인딩
 ════════════════════════════════════════ */
@@ -991,7 +1106,7 @@ function _bindEvents() {
     if (!placeEl) return;
     if (e.target.checked) {
       placeEl.disabled    = true;
-      placeEl.value       = 'Online';
+      placeEl.value       = '';
       placeEl.placeholder = '';
       if (required) required.style.display = 'none';
       if (addrBtn)  addrBtn.disabled = true;
@@ -1002,6 +1117,30 @@ function _bindEvents() {
       if (required) required.style.display = '';
       if (addrBtn)  addrBtn.disabled = false;
     }
+  });
+
+  document.getElementById('af-paid-status')?.addEventListener('change', e => {
+    const taxSel = document.getElementById('af-tax');
+    if (!taxSel) return;
+    if (e.target.value === 'na') {
+      taxSel.value    = 'na';
+      taxSel.disabled = true;
+    } else {
+      taxSel.disabled = false;
+    }
+  });
+
+  document.getElementById('af-fee')?.addEventListener('input', _syncFeeTotalForm);
+  document.getElementById('af-session-total')?.addEventListener('input', _syncFeeTotalForm);
+
+  document.getElementById('af-date')?.addEventListener('change', () => {
+    const startEl = document.getElementById('af-date');
+    const endEl   = document.getElementById('af-end-date');
+    if (!startEl || !endEl) return;
+    endEl.value = startEl.value;
+    _flashHighlight(endEl);
+    syncEndTimeOptions('', false); // reset to same-day end-time options
+    updateDurationDisplay();
   });
 
   document.getElementById('v-addr-search')?.addEventListener('click', () => openKakaoAddress('af-place'));
@@ -1029,12 +1168,14 @@ function _bindEvents() {
     const isOnline  = document.getElementById('af-online')?.checked ?? false;
     const place     = isOnline ? 'Online' : get('af-place');
     const feeRaw    = get('af-fee');
+    const endDate   = get('af-end-date') || date;
+    const isOvernight = endDate !== date;
 
     if (!date || !timeStart || !timeEnd || !title || !client || (!isOnline && !place)) {
       window.showToast?.('날짜, 시간, 강의명, 고객사, 강의장소는 필수 입력 항목이에요.', 'error');
       return;
     }
-    if (timeEnd <= timeStart) {
+    if (!isOvernight && timeEnd <= timeStart) {
       window.showToast?.('종료 시간은 시작 시간보다 이후여야 합니다.', 'error');
       return;
     }
@@ -1076,12 +1217,16 @@ function _bindEvents() {
       wrapupTime: l.wrapupTime ?? 0,
     }));
 
-    const isPaid  = document.getElementById('af-paid-status')?.value === 'true';
-    const taxType = document.getElementById('af-tax')?.value || 'income3_3';
+    const _paidStatusVal = document.getElementById('af-paid-status')?.value ?? 'false';
+    const isPaid         = _paidStatusVal === 'true';
+    const paidStatus     = _paidStatusVal;
+    const taxType        = document.getElementById('af-tax')?.value || 'income3_3';
 
     const payload = {
+      startDate: date, startTime: timeStart, endDate, endTime: timeEnd,
       date, timeStart, timeEnd, title, client,
       fee:            Number(feeRaw),
+      feeAmount:      Number(document.getElementById('af-fee-total')?.value) || null,
       sessionCurrent: Number(get('af-session-current')) || null,
       sessionTotal:   Number(get('af-session-total'))   || null,
       participants:   Number(get('af-participants'))     || null,
@@ -1099,7 +1244,8 @@ function _bindEvents() {
       managerPhone:   get('af-manager-phone'),
       managerEmail:   get('af-manager-email'),
       progressStatus: get('af-progress') || 'scheduled',
-      isPaid, paymentDate: get('af-payment-date'), taxType,
+      isPaid, paidStatus, paymentDate: get('af-payment-date'), taxType,
+      isOvernight, endDate,
       memo:           get('af-memo'),
     };
 
@@ -1169,10 +1315,13 @@ function _bindEvents() {
     const { currentUser, allLectures } = _getCtx?.() ?? {};
     if (!currentUser) return;
     try {
-      const lec = allLectures?.find(l => l.id === _activeModalId);
-      const gId = lec?.groupId ?? null;
-      await addTodo(currentUser.uid, text, gId ? null : _activeModalId, gId);
+      const lec       = allLectures?.find(l => l.id === _activeModalId);
+      const gId       = lec?.groupId ?? null;
+      const dueDateEl = document.getElementById('v-todo-due-date');
+      const dueDate   = dueDateEl?.value || null;
+      await addTodo(currentUser.uid, text, gId ? null : _activeModalId, gId, dueDate);
       input.value = '';
+      if (dueDateEl) dueDateEl.value = '';
     } catch (err) { console.error('[강비서] 모달 Todo 추가 오류:', err); }
   });
 
@@ -1187,10 +1336,12 @@ function _bindEvents() {
     if (!text) return;
     _pendingTodos = [
       ..._pendingTodos,
-      { id: `p_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, text, isDone: false, postponeCount: 0, deadline: getTodayString(), lectureId: null },
+      { id: `p_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, text, isDone: false, postponeCount: 0, deadline: document.getElementById('af-todo-due-date')?.value || getTodayString(), lectureId: null },
     ];
     _refreshPendingUI?.();
     input.value = '';
+    const afDueDateEl = document.getElementById('af-todo-due-date');
+    if (afDueDateEl) afDueDateEl.value = '';
   });
 
   document.getElementById('af-todo-input')?.addEventListener('keydown', e => {

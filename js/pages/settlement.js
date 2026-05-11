@@ -1,0 +1,400 @@
+// js/pages/settlement.js — 정산 관리 페이지
+import { subscribeLectures, authGuard, db } from '../api.js';
+import {
+  calcPaymentDate, getTodayString, escapeHtml, formatDateKo,
+} from '../utils.js';
+import {
+  doc, updateDoc,
+} from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
+
+/* ════════════════════════════════════════
+   상태
+════════════════════════════════════════ */
+let allLectures  = [];
+let currentUser  = null;
+let _unsub       = null;
+
+const _filters = {
+  dateFrom: '',
+  dateTo:   '',
+  tab:      'all',   // 'all' | 'paid' | 'pending' | 'overdue'
+  search:   '',
+};
+
+/* ════════════════════════════════════════
+   결제 상태 계산
+════════════════════════════════════════ */
+function _paymentDeadline(lec) {
+  const baseDate = lec.endDate ?? lec.date ?? '';
+  return baseDate ? calcPaymentDate(baseDate, lec.settlementCycle || '', null) : null;
+}
+
+function _paymentStatus(lec, today) {
+  if (lec.paidStatus === 'true' || lec.isPaid === true) return 'paid';
+  const deadline = _paymentDeadline(lec);
+  if (!deadline) return 'pending';
+  return today >= deadline ? 'overdue' : 'pending';
+}
+
+/* ════════════════════════════════════════
+   D-day 계산
+════════════════════════════════════════ */
+function _dday(deadline, today) {
+  if (!deadline) return null;
+  const d0 = new Date(today + 'T00:00:00');
+  const d1 = new Date(deadline + 'T00:00:00');
+  return Math.round((d1 - d0) / 86400000);
+}
+
+function _ddayHtml(deadline, today, status) {
+  if (status === 'paid') return '';
+  const diff = _dday(deadline, today);
+  if (diff === null) return '';
+  if (diff > 0) {
+    const cls = diff <= 3 ? 'sl-dday--warning' : 'sl-dday--safe';
+    return `<span class="sl-dday ${cls}">D-${diff}</span>`;
+  }
+  if (diff === 0) return `<span class="sl-dday sl-dday--warning">D-Day</span>`;
+  return `<span class="sl-dday sl-dday--late">D+${Math.abs(diff)} 연체</span>`;
+}
+
+/* ════════════════════════════════════════
+   날짜 프리셋
+════════════════════════════════════════ */
+function _applyPreset(preset) {
+  const now   = new Date();
+  const y     = now.getFullYear();
+  const m     = now.getMonth();
+  const pad   = n => String(n).padStart(2, '0');
+  const fmt   = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+  let from = '', to = '';
+
+  if (preset === 'this-month') {
+    from = `${y}-${pad(m+1)}-01`;
+    to   = fmt(new Date(y, m+1, 0));
+  } else if (preset === 'last-month') {
+    from = `${y}-${pad(m === 0 ? 12 : m)}-01`;
+    const lm = m === 0 ? new Date(y-1, 12, 0) : new Date(y, m, 0);
+    to   = fmt(lm);
+    if (m === 0) from = `${y-1}-12-01`;
+  } else if (preset === 'quarter') {
+    const qStart = Math.floor(m / 3) * 3;
+    from = `${y}-${pad(qStart+1)}-01`;
+    to   = fmt(new Date(y, qStart+3, 0));
+  } else {
+    from = '';
+    to   = '';
+  }
+
+  _filters.dateFrom = from;
+  _filters.dateTo   = to;
+
+  const fromEl = document.getElementById('sl-date-from');
+  const toEl   = document.getElementById('sl-date-to');
+  if (fromEl) fromEl.value = from;
+  if (toEl)   toEl.value   = to;
+}
+
+/* ════════════════════════════════════════
+   필터링
+════════════════════════════════════════ */
+function _filtered() {
+  const today = getTodayString();
+  return allLectures.filter(l => {
+    const lDate  = l.date ?? '';
+    if (_filters.dateFrom && lDate < _filters.dateFrom) return false;
+    if (_filters.dateTo   && lDate > _filters.dateTo)   return false;
+
+    const status = _paymentStatus(l, today);
+    if (_filters.tab !== 'all' && status !== _filters.tab) return false;
+
+    if (_filters.search) {
+      const q = _filters.search.toLowerCase();
+      if (!l.title?.toLowerCase().includes(q) && !l.client?.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  }).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+}
+
+/* ════════════════════════════════════════
+   요약 카드 렌더링
+════════════════════════════════════════ */
+function renderStats() {
+  const bar = document.getElementById('sl-stat-bar');
+  if (!bar) return;
+
+  const today = getTodayString();
+  const all   = allLectures;
+
+  let totalAmt = 0, paidAmt = 0, pendingAmt = 0, overdueAmt = 0;
+  let paidCnt  = 0, pendingCnt = 0, overdueCnt = 0;
+
+  for (const l of all) {
+    const fee    = Number(l.fee) || 0;
+    const status = _paymentStatus(l, today);
+    totalAmt += fee;
+    if (status === 'paid')    { paidAmt    += fee; paidCnt++;    }
+    if (status === 'pending') { pendingAmt += fee; pendingCnt++; }
+    if (status === 'overdue') { overdueAmt += fee; overdueCnt++; }
+  }
+
+  const fmt = n => n > 0 ? `₩${(n * 10000).toLocaleString()}` : '₩0';
+
+  bar.innerHTML = `
+    <div class="sl-stat-card">
+      <div class="sl-stat-icon sl-stat-icon--blue">📊</div>
+      <div class="sl-stat-body">
+        <div class="sl-stat-value">${fmt(totalAmt)}</div>
+        <div class="sl-stat-label">전체 강의 수익 (${all.length}건)</div>
+      </div>
+    </div>
+    <div class="sl-stat-card">
+      <div class="sl-stat-icon sl-stat-icon--green">✅</div>
+      <div class="sl-stat-body">
+        <div class="sl-stat-value">${fmt(paidAmt)}</div>
+        <div class="sl-stat-label">입금 완료 (${paidCnt}건)</div>
+      </div>
+    </div>
+    <div class="sl-stat-card">
+      <div class="sl-stat-icon sl-stat-icon--yellow">⏳</div>
+      <div class="sl-stat-body">
+        <div class="sl-stat-value">${fmt(pendingAmt)}</div>
+        <div class="sl-stat-label">입금 대기 (${pendingCnt}건)</div>
+      </div>
+    </div>
+    <div class="sl-stat-card${overdueCnt > 0 ? ' sl-stat-card--overdue' : ''}">
+      <div class="sl-stat-icon sl-stat-icon--red">🚨</div>
+      <div class="sl-stat-body">
+        <div class="sl-stat-value">${fmt(overdueAmt)}</div>
+        <div class="sl-stat-label">미입금 / 연체 (${overdueCnt}건)</div>
+      </div>
+    </div>`;
+}
+
+/* ════════════════════════════════════════
+   테이블 렌더링
+════════════════════════════════════════ */
+function renderTable() {
+  const tbody   = document.getElementById('sl-table-body');
+  const countEl = document.getElementById('sl-result-count');
+  if (!tbody) return;
+
+  const today = getTodayString();
+  const rows  = _filtered();
+
+  if (countEl) countEl.textContent = `${rows.length}건 표시`;
+
+  if (rows.length === 0) {
+    tbody.innerHTML = `
+      <tr><td colspan="7">
+        <div class="sl-empty">
+          <div class="sl-empty-icon">🔍</div>
+          <p>조건에 맞는 강의가 없어요.</p>
+        </div>
+      </td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(l => {
+    const status   = _paymentStatus(l, today);
+    const deadline = _paymentDeadline(l);
+    const dateStr  = l.date ? formatDateKo(l.date).main : '—';
+    const feeStr   = Number(l.fee) > 0 ? `₩${(Number(l.fee) * 10000).toLocaleString()}` : '—';
+    const ddHtml   = _ddayHtml(deadline, today, status);
+
+    const statusBadge = status === 'paid'
+      ? `<span class="sl-status-badge sl-status-badge--paid">✓ 입금 완료</span>`
+      : status === 'overdue'
+        ? `<span class="sl-status-badge sl-status-badge--overdue">🚨 연체${ddHtml}</span>`
+        : `<span class="sl-status-badge sl-status-badge--pending">⏳ 입금 대기${ddHtml}</span>`;
+
+    const isPaid     = status === 'paid';
+    const rowCls     = status === 'overdue' ? ' class="sl-row--overdue"' : '';
+
+    return `
+      <tr${rowCls} data-id="${escapeHtml(l.id)}">
+        <td class="sl-cell-date">${dateStr}</td>
+        <td><div class="sl-cell-title" title="${escapeHtml(l.title)}">${escapeHtml(l.title)}</div></td>
+        <td><div class="sl-cell-client" title="${escapeHtml(l.client || '')}">${escapeHtml(l.client || '—')}</div></td>
+        <td class="sl-cell-amount">${feeStr}</td>
+        <td class="sl-cell-date">${deadline || '—'}</td>
+        <td>${statusBadge}</td>
+        <td>
+          <div class="sl-actions">
+            <button class="sl-btn sl-btn--pay" data-id="${escapeHtml(l.id)}"
+                    ${isPaid ? 'disabled' : ''}>
+              ${isPaid ? '완료' : '입금 확인'}
+            </button>
+            <button class="sl-btn sl-btn--invoice" data-invoice-id="${escapeHtml(l.id)}">
+              청구서
+            </button>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+function render() {
+  renderStats();
+  renderTable();
+}
+
+/* ════════════════════════════════════════
+   입금 확인 처리
+════════════════════════════════════════ */
+async function _confirmPayment(id) {
+  const lec = allLectures.find(l => l.id === id);
+  if (!lec || lec.isPaid) return;
+  try {
+    await updateDoc(doc(db, 'lectures', id), { isPaid: true, paidStatus: 'true' });
+    window.showToast?.('입금 확인 처리되었습니다.', 'success');
+  } catch (err) {
+    console.error('[강비서] 입금 확인 오류:', err);
+    window.showToast?.('처리 중 오류가 발생했습니다.', 'error');
+  }
+}
+
+/* ════════════════════════════════════════
+   청구서 생성 (Print/PDF)
+════════════════════════════════════════ */
+function _generateInvoice(id) {
+  const lec = allLectures.find(l => l.id === id);
+  if (!lec) return;
+
+  const deadline = _paymentDeadline(lec) || '—';
+  const fee      = Number(lec.fee) > 0 ? `₩${(Number(lec.fee) * 10000).toLocaleString()}` : '—';
+  const dateStr  = lec.date ? formatDateKo(lec.date).full : '—';
+
+  const win = window.open('', '_blank', 'width=700,height=900');
+  if (!win) { window.showToast?.('팝업 차단을 해제해 주세요.', 'error'); return; }
+
+  win.document.write(`<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <title>청구서 — ${escapeHtml(lec.title)}</title>
+  <style>
+    body { font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; margin: 40px; color: #1f2937; }
+    h1   { font-size: 1.6rem; margin-bottom: 4px; }
+    .subtitle { color: #6b7280; font-size: 0.9rem; margin-bottom: 32px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 24px; }
+    th, td { padding: 12px 16px; border: 1px solid #e5e7eb; text-align: left; }
+    th  { background: #f9fafb; font-weight: 700; font-size: 0.8rem; text-transform: uppercase; color: #6b7280; }
+    .total-row td { font-weight: 700; font-size: 1.05rem; background: #f0f6ff; }
+    .footer { margin-top: 40px; font-size: 0.8rem; color: #9ca3af; }
+    @media print { body { margin: 20px; } }
+  </style>
+</head>
+<body>
+  <h1>강의 청구서</h1>
+  <p class="subtitle">강비서 자동 생성 · ${new Date().toLocaleDateString('ko-KR')}</p>
+  <table>
+    <tr><th>항목</th><th>내용</th></tr>
+    <tr><td>강의명</td><td>${escapeHtml(lec.title)}</td></tr>
+    <tr><td>기관명</td><td>${escapeHtml(lec.client || '—')}</td></tr>
+    <tr><td>강의 일자</td><td>${dateStr}</td></tr>
+    <tr><td>정산 예정일</td><td>${deadline}</td></tr>
+    <tr class="total-row"><td>청구 금액</td><td>${fee}</td></tr>
+  </table>
+  <p class="footer">본 청구서는 강비서에서 자동 생성되었습니다.</p>
+  <script>window.onload = () => window.print();<\/script>
+</body>
+</html>`);
+  win.document.close();
+}
+
+/* ════════════════════════════════════════
+   이벤트 바인딩
+════════════════════════════════════════ */
+function _bindEvents() {
+  // Date presets
+  document.getElementById('sl-date-preset')?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-preset]');
+    if (!btn) return;
+    document.querySelectorAll('.sl-preset-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    _applyPreset(btn.dataset.preset);
+    renderTable();
+  });
+
+  // Manual date range
+  document.getElementById('sl-date-from')?.addEventListener('change', e => {
+    _filters.dateFrom = e.target.value;
+    document.querySelectorAll('.sl-preset-btn').forEach(b => b.classList.remove('active'));
+    renderTable();
+  });
+
+  document.getElementById('sl-date-to')?.addEventListener('change', e => {
+    _filters.dateTo = e.target.value;
+    document.querySelectorAll('.sl-preset-btn').forEach(b => b.classList.remove('active'));
+    renderTable();
+  });
+
+  // Status tabs
+  document.getElementById('sl-tab-group')?.addEventListener('click', e => {
+    const tab = e.target.closest('[data-tab]');
+    if (!tab) return;
+    _filters.tab = tab.dataset.tab;
+    document.querySelectorAll('.sl-tab').forEach(t => {
+      t.classList.remove('active', 'active--paid', 'active--pending', 'active--overdue');
+    });
+    tab.classList.add('active');
+    if (_filters.tab !== 'all') tab.classList.add(`active--${_filters.tab}`);
+    renderTable();
+  });
+
+  // Search
+  document.getElementById('sl-search')?.addEventListener('input', e => {
+    _filters.search = e.target.value.trim();
+    renderTable();
+  });
+
+  // Table action buttons (event delegation)
+  document.getElementById('sl-table-body')?.addEventListener('click', async e => {
+    const payBtn     = e.target.closest('.sl-btn--pay');
+    const invoiceBtn = e.target.closest('.sl-btn--invoice');
+
+    if (payBtn && !payBtn.disabled) {
+      await _confirmPayment(payBtn.dataset.id);
+    } else if (invoiceBtn) {
+      _generateInvoice(invoiceBtn.dataset.invoiceId);
+    }
+  });
+}
+
+/* ════════════════════════════════════════
+   초기화 — URL 파라미터 처리
+════════════════════════════════════════ */
+function _applyUrlParams() {
+  const params = new URLSearchParams(location.search);
+  const filter = params.get('filter');
+  if (filter === 'overdue' || filter === 'pending' || filter === 'paid') {
+    _filters.tab = filter;
+    document.querySelectorAll('.sl-tab').forEach(t => {
+      t.classList.remove('active', 'active--paid', 'active--pending', 'active--overdue');
+      if (t.dataset.tab === filter) {
+        t.classList.add('active', `active--${filter}`);
+      }
+    });
+  }
+}
+
+/* ════════════════════════════════════════
+   인증 가드 + Firestore 구독
+════════════════════════════════════════ */
+_bindEvents();
+
+authGuard(user => {
+  currentUser = user;
+
+  _applyUrlParams();
+
+  _unsub = subscribeLectures(user.uid, snap => {
+    allLectures = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    render();
+  }, err => console.error('[강비서] 정산 구독 오류:', err));
+}, {
+  withModal: false,
+  cleanupFn: () => { _unsub?.(); },
+});

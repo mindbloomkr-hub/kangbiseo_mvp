@@ -201,7 +201,7 @@
           </div>
           <div class="ms-field">
             <label class="ms-label">총 강의 시간</label>
-          <input class="ms-input ms-input--readonly" type="text" id="ms-duration-computed" readonly placeholder="자동 계산" />
+            <input class="ms-input ms-input--readonly" type="text" id="ms-duration-computed" readonly placeholder="자동 계산" />
           </div>
         </div>
 
@@ -231,7 +231,7 @@
         <div class="ms-grid ms-grid--3" style="margin-top:var(--space-4)">
           <div class="ms-field">
             <label class="ms-label" for="ms-paid-status">정산 상태</label>
-            <select class="ms-input" id="ms-paid-status"><option value="false">미입금</option><option value="true">입금 완료</option></select>
+            <select class="ms-input" id="ms-paid-status"><option value="false">미입금</option><option value="true">입금 완료</option><option value="na">해당없음</option></select>
           </div>
           <div class="ms-field"><label class="ms-label" for="ms-payment-date">예상 지급일</label><input class="ms-input" type="date" id="ms-payment-date" /></div>
             <div class="ms-field">
@@ -241,6 +241,7 @@
                 <option value="income8_8">기타소득 8.8%</option>
                 <option value="exempt">면세</option>
                 <option value="other">기타</option>
+                <option value="na">해당없음</option>
               </select>
             </div>
         </div>
@@ -326,6 +327,9 @@
         <div class="v-todo-add-row" style="margin-bottom:8px">
           <input class="v-todo-input" type="text" id="ms-todo-input"
                  placeholder="이 강의 시리즈 관련 할 일 추가..." maxlength="80" />
+          <input type="date" id="ms-todo-due-date"
+                 style="padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:7px;font-size:12px;color:#374151;background:#fff;cursor:pointer;flex-shrink:0"
+                 title="기한 날짜" aria-label="기한 날짜" />
           <button type="button" class="v-todo-add-btn" id="ms-todo-add-btn" aria-label="추가">+</button>
         </div>
         <div class="todo-list todo-list--modal" id="ms-todo-list"

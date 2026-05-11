@@ -14,6 +14,7 @@ export const TAX_LABEL = {
   income8_8: '기타소득 8.8%',
   exempt:    '면세',
   other:     '기타',
+  na:        '해당없음',
 };
 
 export const PROGRESS_LABEL = {
@@ -55,6 +56,36 @@ export function formatDateString(date) {
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 }
 
+export function calcPaymentDate(date, cycle, lastDate) {
+  const d = new Date(date + 'T00:00:00');
+  switch (cycle) {
+    case 'per-session': {
+      d.setDate(d.getDate() + 14);
+      return formatDateString(d);
+    }
+    case 'monthly': {
+      const lastOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      lastOfMonth.setDate(lastOfMonth.getDate() + 30);
+      return formatDateString(lastOfMonth);
+    }
+    case 'quarterly': {
+      const qEndMonth = Math.floor(d.getMonth() / 3) * 3 + 2;
+      const lastOfQ   = new Date(d.getFullYear(), qEndMonth + 1, 0);
+      lastOfQ.setDate(lastOfQ.getDate() + 30);
+      return formatDateString(lastOfQ);
+    }
+    case 'after-completion': {
+      const last = new Date((lastDate || date) + 'T00:00:00');
+      last.setDate(last.getDate() + 14);
+      return formatDateString(last);
+    }
+    default: {
+      d.setDate(d.getDate() + 30);
+      return formatDateString(d);
+    }
+  }
+}
+
 /* 항상 { main, day, full } 객체를 반환한다. */
 export function formatDateKo(dateStr) {
   const d = parseDate(dateStr);
@@ -84,17 +115,39 @@ export function hexToRgba(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-export function calcDuration(start, end) {
-  if (!start || !end) return '—';
-  const [sh, sm] = start.split(':').map(Number);
-  const [eh, em] = end.split(':').map(Number);
+function _formatDuration(totalMin) {
+  const days = Math.floor(totalMin / 1440);
+  const h    = Math.floor((totalMin % 1440) / 60);
+  const m    = totalMin % 60;
+  const parts = [];
+  if (days > 0) parts.push(`${days}일`);
+  if (h    > 0) parts.push(`${h}시간`);
+  if (m    > 0) parts.push(`${m}분`);
+  return parts.length ? parts.join(' ') : '—';
+}
+
+function _calcMultiDayDuration(startDate, startTime, endDate, endTime) {
+  const [sy, smo, sd] = (startDate || '').split('-').map(Number);
+  const [sh, smm]     = (startTime  || '').split(':').map(Number);
+  const [ey, emo, ed] = (endDate   || '').split('-').map(Number);
+  const [eh, emm]     = (endTime   || '').split(':').map(Number);
+  if ([sy, smo, sd, sh, smm, ey, emo, ed, eh, emm].some(v => isNaN(v))) return '—';
+  const start = new Date(sy, smo - 1, sd, sh, smm);
+  const end   = new Date(ey, emo - 1, ed, eh, emm);
+  const totalMin = Math.round((end - start) / 60000);
+  return totalMin > 0 ? _formatDuration(totalMin) : '—';
+}
+
+/* 2-param form: calcDuration(startTime, endTime) — same-day
+   4-param form: calcDuration(startDate, startTime, endDate, endTime) — multi-day */
+export function calcDuration(p1, p2, endDate, endTime) {
+  if (endDate !== undefined) return _calcMultiDayDuration(p1, p2, endDate, endTime);
+  if (!p1 || !p2) return '—';
+  const [sh, sm] = p1.split(':').map(Number);
+  const [eh, em] = p2.split(':').map(Number);
+  if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return '—';
   const total = (eh * 60 + em) - (sh * 60 + sm);
-  if (total <= 0) return '—';
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  if (h > 0 && m > 0) return `${h}시간 ${m}분`;
-  if (h > 0) return `${h}시간`;
-  return `${m}분`;
+  return total > 0 ? _formatDuration(total) : '—';
 }
 
 /* ════════════════════════════════════════
@@ -135,19 +188,34 @@ export function buildTimeOptions(minAfter = '') {
   return opts.join('');
 }
 
-export function updateDurationDisplay() {
-  const start = document.getElementById('af-time-start')?.value;
-  const end   = document.getElementById('af-time-end')?.value;
-  const el    = document.getElementById('af-duration-computed');
-  if (el) el.value = (start && end) ? calcDuration(start, end) : '';
+export function buildAllTimeOptions() {
+  const opts = ['<option value="">시간 선택</option>'];
+  for (let h = 0; h <= 23; h++) {
+    for (let m = 0; m < 60; m += 10) {
+      const t = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      opts.push(`<option value="${t}">${t}</option>`);
+    }
+  }
+  return opts.join('');
 }
 
-export function syncEndTimeOptions(keepValue = '') {
+export function updateDurationDisplay() {
+  const start     = document.getElementById('af-time-start')?.value;
+  const end       = document.getElementById('af-time-end')?.value;
+  const startDate = document.getElementById('af-date')?.value;
+  const endDate   = document.getElementById('af-end-date')?.value;
+  const el        = document.getElementById('af-duration-computed');
+  if (!el || !start || !end) { if (el) el.value = ''; return; }
+  const crossDay = !!(startDate && endDate && startDate !== endDate);
+  el.value = crossDay ? calcDuration(startDate, start, endDate, end) : calcDuration(start, end);
+}
+
+export function syncEndTimeOptions(keepValue = '', crossDay = false) {
   const startSel = document.getElementById('af-time-start');
   const endSel   = document.getElementById('af-time-end');
   if (!startSel || !endSel) return;
   const prev = keepValue || endSel.value;
-  endSel.innerHTML = buildTimeOptions(startSel.value);
+  endSel.innerHTML = crossDay ? buildAllTimeOptions() : buildTimeOptions(startSel.value);
   if (prev) endSel.value = prev;
   updateDurationDisplay();
 }
@@ -157,8 +225,17 @@ export function initTimeSelects() {
   const endSel   = document.getElementById('af-time-end');
   if (startSel) startSel.innerHTML = buildTimeOptions();
   if (endSel)   endSel.innerHTML   = buildTimeOptions();
-  startSel?.addEventListener('change', () => syncEndTimeOptions());
+  const _crossDay = () => {
+    const d1 = document.getElementById('af-date')?.value;
+    const d2 = document.getElementById('af-end-date')?.value;
+    return !!(d1 && d2 && d1 !== d2);
+  };
+  startSel?.addEventListener('change', () => syncEndTimeOptions('', _crossDay()));
   endSel?.addEventListener('change',   updateDurationDisplay);
+  document.getElementById('af-date')?.addEventListener('change',
+    () => syncEndTimeOptions(endSel?.value || '', _crossDay()));
+  document.getElementById('af-end-date')?.addEventListener('change',
+    () => syncEndTimeOptions(endSel?.value || '', _crossDay()));
 }
 
 /* ════════════════════════════════════════
@@ -588,18 +665,49 @@ export function initAllDateWithDay(root = document) {
 ════════════════════════════════════════ */
 export function positionPanel(triggerEl, panelEl, { alignLeft = false } = {}) {
   const rect = triggerEl.getBoundingClientRect();
-  panelEl.style.position = 'fixed';
-  panelEl.style.top      = `${rect.bottom + window.scrollY + 4}px`;
-  panelEl.style.bottom   = '';
-  if (alignLeft) {
-    panelEl.style.left      = `${rect.left}px`;
-    panelEl.style.width     = `${rect.width}px`;
-    panelEl.style.transform = 'none';
-  } else {
-    panelEl.style.left      = '50%';
-    panelEl.style.width     = '';
-    panelEl.style.transform = 'translateX(-50%)';
+  const vw   = window.innerWidth;
+  const vh   = window.innerHeight;
+  const GAP  = 6;
+
+  // Measure actual panel dimensions while invisible (visibility:hidden keeps layout)
+  const wasHidden = panelEl.hidden;
+  panelEl.style.visibility = 'hidden';
+  panelEl.hidden = false;
+  const panelW = panelEl.offsetWidth  || 220;
+  const panelH = panelEl.offsetHeight || 260;
+  if (wasHidden) panelEl.hidden = true;
+  panelEl.style.visibility = '';
+
+  panelEl.style.position  = 'fixed';
+  panelEl.style.transform = 'none';
+  panelEl.style.width     = alignLeft ? `${rect.width}px` : '';
+
+  // ── Vertical: prefer downward, flip upward only when there's more room above
+  const spaceBelow = vh - rect.bottom - GAP;
+  const spaceAbove = rect.top - GAP;
+  const openDown   = spaceBelow >= panelH || spaceBelow >= spaceAbove;
+
+  panelEl.style.top    = openDown
+    ? `${rect.bottom + GAP}px`
+    : `${Math.max(GAP, rect.top - panelH - GAP)}px`;
+  panelEl.style.bottom = '';
+
+  // Dynamically cap the option list height to available vertical space
+  const optList = panelEl.querySelector('.lm-tag-option-list');
+  if (optList) {
+    const available = Math.max(80, openDown ? spaceBelow : spaceAbove);
+    optList.style.maxHeight = `${Math.min(190, Math.max(60, available - 44))}px`;
+    optList.style.overflowY = 'auto';
   }
+
+  // ── Horizontal: align to trigger edge, clamp so panel stays inside viewport
+  let left = alignLeft
+    ? rect.left
+    : rect.left + (rect.width - panelW) / 2;
+  left = Math.max(GAP, Math.min(left, vw - panelW - GAP));
+
+  panelEl.style.left  = `${left}px`;
+  panelEl.style.right = '';
 }
 
 /* ════════════════════════════════════════

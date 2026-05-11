@@ -25,6 +25,44 @@ import { initMultiSessionModal, openAddModal as openMultiSessionModal } from '..
 
 
 /* ════════════════════════════════════════
+   멀티데이 CSS — 1회 주입
+════════════════════════════════════════ */
+(function _injectMultiDayCSS() {
+  if (document.getElementById('fc-multiday-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'fc-multiday-styles';
+  s.textContent = [
+    /* Remove default radius so segments look like a continuous bar */
+    '.fc-multiday-lec.fc-daygrid-event{border-radius:0!important}',
+    '.fc-multiday-lec.fc-daygrid-event.fc-event-start{border-top-left-radius:4px!important;border-bottom-left-radius:4px!important}',
+    '.fc-multiday-lec.fc-daygrid-event.fc-event-end{border-top-right-radius:4px!important;border-bottom-right-radius:4px!important}',
+    /* Intermediate segments: hide left border so bar looks seamless */
+    '.fc-multiday-lec.fc-daygrid-event:not(.fc-event-start){border-left:none!important}',
+  ].join('');
+  document.head.appendChild(s);
+})();
+
+/* ════════════════════════════════════════
+   진행 상태별 CSS — 1회 주입
+════════════════════════════════════════ */
+(function _injectStatusCSS() {
+  if (document.getElementById('fc-status-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'fc-status-styles';
+  s.textContent = [
+    /* discussing — dashed border */
+    '.cal-event--discussing{border-style:dashed!important}',
+    /* onhold — dimmed */
+    '.cal-event--onhold{opacity:.65!important}',
+    /* cancelled — dimmed + dashed + strikethrough title */
+    '.cal-event--cancelled{opacity:.5!important;border-style:dashed!important}',
+    '.cal-event--cancelled .fc-event-title,',
+    '.cal-event--cancelled .fc-list-event-title{text-decoration:line-through!important}',
+  ].join('');
+  document.head.appendChild(s);
+})();
+
+/* ════════════════════════════════════════
    calendar.js 전용 확장
    — doc(서류 미비) 상태 추가 → classifyStatus + STATUS_META 로컬 오버라이드
 ════════════════════════════════════════ */
@@ -34,12 +72,12 @@ function classifyStatus(lec) {
   // Priority 1: cancelled always wins
   if (prog === 'cancelled') return 'cancelled';
 
-  const d = parseDate(lec.date);
+  const d = parseDate(lec.startDate ?? lec.date);
 
   // Priority 2: unpaid alert
   if (!lec.isPaid && (d < TODAY || prog === 'done')) return 'unpaid';
 
-  // Priority 3: urgent alert — scheduled lecture within 7 days
+  // Priority 3: urgent alert — scheduled within 7 days
   if (prog === 'scheduled' && d >= TODAY && d <= IN_7DAYS) return 'urgent';
 
   // Calendar-specific: past scheduled lectures — check documentation status
@@ -68,7 +106,7 @@ let unsubLectures = null;
 ════════════════════════════════════════ */
 function getEventColor(lec) {
   const prog = lec.progressStatus || 'scheduled';
-  const d    = parseDate(lec.date);
+  const d    = parseDate(lec.startDate ?? lec.date);
 
   if (prog === 'cancelled')  return { bg: '#f9fafb', border: '#d1d5db', text: '#9ca3af' };
   if (prog === 'onhold')     return { bg: '#f3f4f6', border: '#9ca3af', text: '#6b7280' };
@@ -100,12 +138,18 @@ function calcDynamicSlotRange(lectures) {
   let maxH = 21;
 
   lectures.forEach(lec => {
-    if (lec.timeStart) {
-      const h = parseInt(lec.timeStart.split(':')[0], 10);
+    const startDate = lec.startDate ?? lec.date ?? '';
+    const endDate   = lec.endDate   ?? lec.date ?? '';
+    // Skip multi-day lectures — their times belong to different days
+    if (startDate !== endDate) return;
+    const timeStart = lec.startTime ?? lec.timeStart ?? '';
+    const timeEnd   = lec.endTime   ?? lec.timeEnd   ?? '';
+    if (timeStart) {
+      const h = parseInt(timeStart.split(':')[0], 10);
       if (h < minH) minH = h;
     }
-    if (lec.timeEnd) {
-      const [h, m] = lec.timeEnd.split(':').map(Number);
+    if (timeEnd) {
+      const [h, m] = timeEnd.split(':').map(Number);
       const endH = m > 0 ? h + 1 : h;
       if (endH > maxH) maxH = endH;
     }
@@ -122,19 +166,42 @@ function calcDynamicSlotRange(lectures) {
 ════════════════════════════════════════ */
 function toFcEvents(lectures) {
   return lectures
-    .filter(lec => lec.date && lec.timeStart && lec.timeEnd)
+    .filter(lec => {
+      const startDate = lec.startDate ?? lec.date;
+      const timeStart = lec.startTime ?? lec.timeStart;
+      const timeEnd   = lec.endTime   ?? lec.timeEnd;
+      return startDate && timeStart && timeEnd;
+    })
     .map(lec => {
+      const startDate  = lec.startDate ?? lec.date;
+      const endDate    = lec.endDate   ?? lec.date;
+      const timeStart  = lec.startTime ?? lec.timeStart;
+      const timeEnd    = lec.endTime   ?? lec.timeEnd;
+      const isMultiDay = startDate !== endDate;
+      const prog = lec.progressStatus || 'scheduled';
       const { bg, border, text } = getEventColor(lec);
+      const classNames = [];
+      if (prog === 'discussing') classNames.push('cal-event--discussing');
+      if (prog === 'onhold')     classNames.push('cal-event--onhold');
+      if (prog === 'cancelled')  classNames.push('cal-event--cancelled');
+      if (isMultiDay)            classNames.push('fc-multiday-lec');
       return {
         id:              lec.id,
         title:           lec.title || '(제목 없음)',
-        start:           `${lec.date}T${lec.timeStart}:00`,
-        end:             `${lec.date}T${lec.timeEnd}:00`,
+        start:           `${startDate}T${timeStart}:00`,
+        end:             `${endDate}T${timeEnd}:00`,
         backgroundColor: bg,
         borderColor:     border,
         textColor:       text,
-        classNames:      (lec.progressStatus || '') === 'cancelled' ? ['fc-cancelled-lec'] : [],
-        extendedProps:   lec,
+        classNames,
+        extendedProps: {
+          ...lec,
+          _startDate:  startDate,
+          _endDate:    endDate,
+          _timeStart:  timeStart,
+          _timeEnd:    timeEnd,
+          _isMultiDay: isMultiDay,
+        },
       };
     });
 }
@@ -164,12 +231,32 @@ function initCalendar() {
     displayEventTime: false,
 
     eventContent: (arg) => {
-      const t   = arg.event.extendedProps.timeStart || '';
-      const isMobile = window.matchMedia('(max-width: 768px)').matches;
-      const fmt = isMobile ? t.trim().split(':')[0] : t.slice(0, 5);
-      const el  = document.createElement('span');
+      const lec        = arg.event.extendedProps;
+      const prog       = lec.progressStatus || 'scheduled';
+      const t          = lec._timeStart ?? lec.timeStart ?? '';
+      const isMultiDay = lec._isMultiDay ?? false;
+      const isMobile   = window.matchMedia('(max-width: 768px)').matches;
+      const fmt        = isMobile ? t.trim().split(':')[0] : t.slice(0, 5);
+      const title      = arg.event.title;
+
+      const STATUS_ICONS = { discussing: '💬', onhold: '⏸', cancelled: '🚫' };
+      const icon = STATUS_ICONS[prog];
+
+      let text;
+      if (icon) {
+        // Status-priority: icon + optional multiday marker + title (no time prefix)
+        text = `${icon}${isMultiDay ? ' 🌙' : ''} ${title}`;
+      } else if (isMultiDay && !arg.isStart) {
+        text = `🌙 ${title}`;
+      } else if (isMultiDay) {
+        text = `${fmt} 🌙 ${title}`;
+      } else {
+        text = `${fmt} ${title}`;
+      }
+
+      const el = document.createElement('span');
       el.className   = 'fc-event-title';
-      el.textContent = `${fmt} ${arg.event.title}`;
+      el.textContent = text;
       return { domNodes: [el] };
     },
 
@@ -179,22 +266,26 @@ function initCalendar() {
       const lec  = event.extendedProps;
       const prog = lec.progressStatus || 'scheduled';
 
+      const timeStart  = lec._timeStart ?? lec.timeStart ?? '';
+      const timeEnd    = lec._timeEnd   ?? lec.timeEnd   ?? '';
+      const startDate  = lec._startDate ?? lec.date ?? '';
+      const endDate    = lec._endDate   ?? lec.date ?? '';
+      const isMultiDay = lec._isMultiDay ?? false;
+      const timeRange  = isMultiDay
+        ? `${startDate} ${timeStart} ~ ${endDate} ${timeEnd}`
+        : `${timeStart}~${timeEnd}`;
+
+      const STATUS_HINTS = { discussing: '[논의 중] ', onhold: '[보류 중] ', cancelled: '[취소/드롭] ' };
       const paidMark   = lec.isPaid ? '' : '[미입금] ';
-      const statusHint = prog === 'cancelled' ? '[취소/드롭] ' : '';
+      const statusHint = STATUS_HINTS[prog] || '';
       evEl.setAttribute('title',
-        `${statusHint}${paidMark}${lec.title || ''}\n${lec.timeStart}~${lec.timeEnd}  ${lec.client || ''}`
+        `${statusHint}${paidMark}${lec.title || ''}\n${timeRange}  ${lec.client || ''}`
       );
 
-      if (prog === 'cancelled') {
-        evEl.style.opacity = '0.6';
-        evEl.style.borderStyle = 'dashed';
-        const titleEl = evEl.querySelector('.fc-event-title, .fc-list-event-title');
-        if (titleEl) titleEl.style.textDecoration = 'line-through';
-      }
-      if (prog === 'onhold') {
-        evEl.style.opacity = '0.7';
-      }
-      if (!lec.isPaid && (parseDate(lec.date) < TODAY || prog === 'done')) {
+      // Visual effects for discussing/onhold/cancelled are handled by CSS classes.
+      // Unpaid red border applies only to scheduled/done events (status events have their own identity).
+      const isStatusEvent = prog === 'discussing' || prog === 'onhold' || prog === 'cancelled';
+      if (!isStatusEvent && !lec.isPaid && (parseDate(startDate) < TODAY || prog === 'done')) {
         evEl.style.borderLeft = '3px solid #ef4444';
       }
     },

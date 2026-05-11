@@ -25,10 +25,16 @@
           <div>
             
           </div>
+          <div id="v-datetime-wrap" style="display:none;margin-bottom:var(--space-3)">
+            <div class="modal-info-item">
+              <div class="modal-info-label">강의 일정</div>
+              <div class="modal-info-value" id="v-datetime-display" style="font-weight:700;font-size:1.05em"></div>
+            </div>
+          </div>
           <div class="modal-info-grid modal-info-grid--4">
             <div class="modal-info-value"><div class="modal-info-label">회차 정보</div><span id="v-session-current"></span> / <span id="v-session-total"></span></div>
-            <div class="modal-info-item"><div class="modal-info-label">날짜</div><div class="modal-info-value" id="v-date"></div></div>
-            <div class="modal-info-item"><div class="modal-info-label">강의 시간</div><div class="modal-info-value" id="v-time"></div></div>
+            <div class="modal-info-item" id="v-date-item"><div class="modal-info-label">날짜</div><div class="modal-info-value" id="v-date"></div></div>
+            <div class="modal-info-item" id="v-time-item"><div class="modal-info-label">강의 시간</div><div class="modal-info-value" id="v-time"></div></div>
             <div class="modal-info-item"><div class="modal-info-label">총 강의 시간</div><div class="modal-info-value" id="v-total-duration"></div></div>
           </div>
           <div class="modal-info-iten" style="margin-top:var(--space-3)">
@@ -41,9 +47,7 @@
           <div class="modal-info-grid modal-info-grid--4" style="margin-top:var(--space-3)">
             <div class="modal-info-item" style="grid-column:1/3"><div class="modal-info-label">고객사</div><div class="modal-info-value" id="v-client"></div></div>
             <div class="modal-info-item"><div class="modal-info-label">당 회차 강사료</div><div class="modal-info-value fee" id="v-fee"></div></div>
-            <div class="modal-info-item"><div class="modal-info-label">전체 회차 강사료 총 금액</div><div><p>'fee-total들어가야함'</p></div>
-            <!-- <div class="modal-info-value fee" id="v-fee-total"></div> -->
-            </div>
+            <div class="modal-info-item" id="v-fee-total-wrap" style="display:none"><div class="modal-info-label">전체 강사료 총액</div><div class="modal-info-value fee" id="v-fee-total"></div></div>
           </div>
           <div class="modal-info-grid" style="margin-top:var(--space-3)">
             <div class="modal-info-item" style="grid-column:1/-1"><div class="modal-info-label">강의장 주소</div><div class="modal-info-value" id="v-place"></div></div>
@@ -59,7 +63,7 @@
             <div class="modal-info-item"><div class="modal-info-label">현장 준비 시간</div><div class="modal-info-value" id="v-setup-time"></div></div>
             <div class="modal-info-item"><div class="modal-info-label">현장 정리 시간</div><div class="modal-info-value" id="v-wrapup-time"></div></div>
             <div class="modal-info-item"><div class="modal-info-label">수강 인원</div><div class="modal-info-value" id="v-participants"></div></div>
-            <div class="modal-info-item"><div class="modal-info-label">조 편성</div><div class="modal-info-value" id="v-group-info"></div></div>            
+            <div class="modal-info-item"><div class="modal-info-label">조 편성</div><div class="modal-info-value" id="v-group-info"></div></div>
           </div>
           <div class="modal-info-grid" style="margin-top:var(--space-3)">
             <div class="modal-info-item" style="grid-column:1/-1"><div class="modal-info-label">준비물</div><div class="modal-info-value" id="v-supplies"></div></div>
@@ -99,6 +103,9 @@
           <div class="v-todo-add-row">
             <input class="v-todo-input" type="text" id="v-todo-input"
                    placeholder="이 강의 관련 할 일 추가[홈에서 강의상세보기]..." maxlength="80" />
+            <input type="date" id="v-todo-due-date"
+                   style="padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:7px;font-size:12px;color:#374151;background:#fff;cursor:pointer;flex-shrink:0"
+                   title="기한 날짜" aria-label="기한 날짜" />
             <button class="v-todo-add-btn" id="v-todo-add-btn" aria-label="추가">+</button>
           </div>
           <div class="todo-list todo-list--modal" id="v-todo-list" role="list" aria-label="강의 관련 할 일 목록"></div>
@@ -148,8 +155,11 @@
                   </select>
                 </div>
               </div>
-              <div class="add-form-grid add-form-grid--4"  style="margin-top:var(--space-3)">
-                <div class="add-form-field"><label class="add-form-label" for="af-date">날짜 <span class="required">*</span></label><input class="add-form-input" type="date" id="af-date" required /></div>
+              <div class="add-form-grid add-form-grid--2" style="margin-top:var(--space-3)">
+                <div class="add-form-field"><label class="add-form-label" for="af-date">시작 날짜 <span class="required">*</span></label><input class="add-form-input" type="date" id="af-date" required /></div>
+                <div class="add-form-field"><label class="add-form-label" for="af-end-date">종료 날짜</label><input class="add-form-input" type="date" id="af-end-date" /></div>
+              </div>
+              <div class="add-form-grid add-form-grid--3" style="margin-top:var(--space-2)">
                 <div class="add-form-field"><label class="add-form-label" for="af-time-start">시작 시간 <span class="required">*</span></label><select class="add-form-input" id="af-time-start" required></select></div>
                 <div class="add-form-field"><label class="add-form-label" for="af-time-end">종료 시간 <span class="required">*</span></label><select class="add-form-input" id="af-time-end" required></select></div>
                 <div class="add-form-field"><label class="add-form-label">총 강의 시간</label><input class="add-form-input add-form-input--readonly" type="text" id="af-duration-computed" readonly placeholder="자동 계산" /></div>
@@ -179,6 +189,11 @@
               <div class="add-form-grid" style="margin-top:var(--space-3)">
                 <div class="add-form-field"><label class="add-form-label" for="af-client">고객사 <span class="required">*</span></label><input class="add-form-input" type="text" id="af-client" placeholder="예) 삼성SDS" required /></div>
                 <div class="add-form-field"><label class="add-form-label" for="af-fee">(당 회차) 강사료 (만원)</label><input class="add-form-input" type="number" id="af-fee" placeholder="예) 50" min="0" required /></div>
+              </div>
+              <div class="add-form-grid add-form-grid--3" style="margin-top:var(--space-2)">
+                <div class="add-form-field"><label class="add-form-label" for="af-session-current">현재 회차</label><input class="add-form-input" type="number" id="af-session-current" placeholder="예) 1" min="1" /></div>
+                <div class="add-form-field"><label class="add-form-label" for="af-session-total">총 회차</label><input class="add-form-input" type="number" id="af-session-total" placeholder="예) 4" min="1" /></div>
+                <div class="add-form-field" id="af-fee-total-wrap" style="display:none"><label class="add-form-label">총 강사료 (자동계산)</label><input class="add-form-input add-form-input--readonly" type="text" id="af-fee-total" readonly placeholder="자동 계산" /></div>
               </div>
               <div class="add-form-field" style="margin-top:var(--space-3)">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -221,7 +236,7 @@
               <div class="add-form-grid add-form-grid--3" style="margin-top:var(--space-3)">
                 <div class="add-form-field">
                   <label class="add-form-label" for="af-paid-status">정산 상태</label>
-                  <select class="add-form-input" id="af-paid-status"><option value="false">미입금</option><option value="true">입금 완료</option></select>
+                  <select class="add-form-input" id="af-paid-status"><option value="false">미입금</option><option value="true">입금 완료</option><option value="na">해당없음</option></select>
                 </div>
                 <div class="add-form-field"><label class="add-form-label" for="af-payment-date">예상 지급일</label><input class="add-form-input" type="date" id="af-payment-date" /></div>
                 <div class="add-form-field">
@@ -231,6 +246,7 @@
                     <option value="income8_8">기타소득 8.8%</option>
                     <option value="exempt">면세</option>
                     <option value="other">기타</option>
+                    <option value="na">해당없음</option>
                   </select>
                 </div>
               </div>
@@ -246,6 +262,9 @@
               <p style="font-size:11px;color:var(--color-text-muted);margin:4px 0 8px;">강의 저장 후 오늘 마감으로 자동 등록됩니다.</p>
               <div class="v-todo-add-row" style="margin-bottom:var(--space-2)">
                 <input class="v-todo-input" type="text" id="af-todo-input" placeholder="강의추가에서 이 강의 관련 할 일 추가..." maxlength="80" />
+                <input type="date" id="af-todo-due-date"
+                       style="padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:7px;font-size:12px;color:#374151;background:#fff;cursor:pointer;flex-shrink:0"
+                       title="기한 날짜" aria-label="기한 날짜" />
                 <button type="button" class="v-todo-add-btn" id="af-todo-add-btn" aria-label="추가">+</button>
               </div>
               <div class="todo-list todo-list--modal" id="af-todo-list" role="list" aria-label="등록 예정 할 일 목록"></div>

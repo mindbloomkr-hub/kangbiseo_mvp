@@ -2,8 +2,54 @@
 import { subscribeLectures, authGuard } from '../api.js';
 import { subscribeTodos, addTodo, clearDoneTodos, postponeAllTodayTodos } from '../services/todoService.js';
 import { renderTodoList, bindTodoEvents } from '../components/todoComponent.js';
-import { DAY_KO, escapeHtml, getTodayString, fetchTravelMin, hexToRgba, timeToMin, minToTime, formatDateString } from '../utils.js';
+import { DAY_KO, escapeHtml, getTodayString, fetchTravelMin, hexToRgba, timeToMin, minToTime, formatDateString, calcPaymentDate } from '../utils.js';
 import { initLectureModal, openModal, getTopicTags } from '../components/lectureModal.js';
+
+/* ════════════════════════════════════════
+   멀티데이 CSS — 1회 주입
+════════════════════════════════════════ */
+(function _initMultiDayCSS() {
+  if (document.getElementById('tl-multiday-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'tl-multiday-styles';
+  s.textContent = [
+    '.tl-multiday-badge{display:inline-flex;align-items:center;gap:2px;padding:1px 5px;border-radius:8px;',
+    'background:rgba(124,58,237,.12);color:#7c3aed;font-size:10px;font-weight:700;',
+    'margin-left:5px;vertical-align:middle;white-space:nowrap}',
+    '.tl-card--multiday{border-left-style:dashed!important}',
+  ].join('');
+  document.head.appendChild(s);
+})();
+
+/* ════════════════════════════════════════
+   멀티데이 슬라이스 — 날짜별 강의 분할
+════════════════════════════════════════ */
+function _sliceLectureForDay(lec, dayStr) {
+  const startDate  = lec.startDate ?? lec.date ?? '';
+  const endDate    = lec.endDate   ?? lec.date ?? '';
+  const timeStart  = lec.startTime ?? lec.timeStart ?? '';
+  const timeEnd    = lec.endTime   ?? lec.timeEnd   ?? '';
+  const isMultiDay = startDate !== endDate;
+
+  if (!isMultiDay) {
+    return startDate === dayStr
+      ? { ...lec, _sliceStart: timeStart, _sliceEnd: timeEnd, _isMultiDay: false, _sliceDate: dayStr }
+      : null;
+  }
+  if (dayStr < startDate || dayStr > endDate) return null;
+
+  let sliceStart, sliceEnd;
+  if      (dayStr === startDate) { sliceStart = timeStart; sliceEnd = '24:00'; }
+  else if (dayStr === endDate)   { sliceStart = '00:00';   sliceEnd = timeEnd; }
+  else                           { sliceStart = '00:00';   sliceEnd = '24:00'; }
+
+  return { ...lec, _sliceStart: sliceStart, _sliceEnd: sliceEnd, _isMultiDay: true, _sliceDate: dayStr };
+}
+
+/* 슬라이스 시간 접근자 (renderTimelineInto + _createTimelineCard 공용) */
+const _ts = lec => lec._sliceStart ?? (lec.startTime ?? lec.timeStart ?? '');
+const _te = lec => lec._sliceEnd   ?? (lec.endTime   ?? lec.timeEnd   ?? '');
+const _td = lec => lec._sliceDate  ?? lec.date ?? '';
 
 /* ════════════════════════════════════════
    강의별 색상 — topicTag 색상 우선, 없으면 중립 회색
@@ -87,39 +133,86 @@ function renderGreeting() {
 }
 
 /* ════════════════════════════════════════
+   결제 상태 헬퍼
+════════════════════════════════════════ */
+function _getPaymentDeadline(lec) {
+  if (lec.paymentDate) return lec.paymentDate;
+  const baseDate = lec.endDate ?? lec.date ?? '';
+  return baseDate ? calcPaymentDate(baseDate, lec.settlementCycle || '', null) : null;
+}
+
+function _paymentStatus(lec, todayStr) {
+  if (lec.isPaid) return 'paid';
+  const deadline = _getPaymentDeadline(lec);
+  if (!deadline) return 'pending';
+  return todayStr >= deadline ? 'overdue' : 'pending';
+}
+
+/* ════════════════════════════════════════
    3. 상단 통계 카드
 ════════════════════════════════════════ */
 function renderStatBar() {
   const container = document.getElementById('stat-bar');
   if (!container) return;
 
-  const totalFee  = todayLectures.reduce((sum, l) => sum + (Number(l.fee) || 0), 0);
-  const now0      = new Date(); now0.setHours(0,0,0,0);
-  const unpaidCnt = allLectures.filter(l => {
-    const d = new Date(l.date); d.setHours(0,0,0,0);
+  const totalFee = todayLectures.reduce((sum, l) => sum + (Number(l.fee) || 0), 0);
+  const now0     = new Date(); now0.setHours(0, 0, 0, 0);
+  const todayStr = getTodayString();
+
+  const pastUnpaid  = allLectures.filter(l => {
+    const d = new Date(l.date); d.setHours(0, 0, 0, 0);
     return !l.isPaid && d < now0;
-  }).length;
-  const unpaidAmt = allLectures
-    .filter(l => { const d = new Date(l.date); d.setHours(0,0,0,0); return !l.isPaid && d < now0; })
-    .reduce((s, l) => s + (Number(l.fee) || 0), 0);
+  });
+  const overdueLecs = pastUnpaid.filter(l => _paymentStatus(l, todayStr) === 'overdue');
+  const pendingLecs = pastUnpaid.filter(l => _paymentStatus(l, todayStr) === 'pending');
+  const overdueAmt  = overdueLecs.reduce((s, l) => s + (Number(l.fee) || 0), 0);
+  const pendingAmt  = pendingLecs.reduce((s, l) => s + (Number(l.fee) || 0), 0);
+
+  const unpaidIconCls = overdueLecs.length > 0
+    ? 'stat-icon--red'
+    : (pendingLecs.length > 0 ? 'stat-icon--yellow' : 'stat-icon--green');
 
   const stats = [
-    { icon: '📅', iconCls: 'stat-icon--blue',   value: `${todayLectures.length}건`,                               label: '오늘 강의',      delta: '' },
-    { icon: '💰', iconCls: 'stat-icon--green',  value: totalFee > 0 ? `${(totalFee).toFixed(0)}만원` : '—',       label: '오늘 예상 수익', delta: '' },
-    { icon: '⏱',  iconCls: 'stat-icon--yellow', value: todayLectures.length > 1 ? '이동 확인' : '—',               label: '이동 버퍼 타임', delta: '' },
-    { icon: '💳', iconCls: 'stat-icon--red',    value: `${unpaidCnt}건`,                                          label: '미입금 정산',    delta: unpaidAmt > 0 ? `₩${unpaidAmt.toLocaleString()} 미수` : '' },
+    { icon: '📅', iconCls: 'stat-icon--blue',   value: `${todayLectures.length}건`,                         label: '오늘 강의',      delta: '', delta2: '' },
+    { icon: '💰', iconCls: 'stat-icon--green',  value: totalFee > 0 ? `${totalFee.toFixed(0)}만원` : '—',   label: '오늘 예상 수익', delta: '', delta2: '' },
+    { icon: '⏱',  iconCls: 'stat-icon--yellow', value: todayLectures.length > 1 ? '이동 확인' : '—',         label: '이동 버퍼 타임', delta: '', delta2: '' },
+    {
+      icon: '💳', iconCls: unpaidIconCls,
+      value:  `${overdueLecs.length + pendingLecs.length}건`,
+      label:  '미입금 정산',
+      delta:  overdueAmt > 0 ? `₩${(overdueAmt * 10000).toLocaleString()} 연체` : '',
+      delta2: pendingAmt > 0 ? `₩${(pendingAmt * 10000).toLocaleString()} 대기` : '',
+    },
   ];
 
-  container.innerHTML = stats.map(s => `
-    <div class="stat-card">
+  const hasUnpaid = overdueLecs.length + pendingLecs.length > 0;
+  const filterParam = overdueLecs.length > 0 ? 'overdue' : 'pending';
+
+  container.innerHTML = stats.map((s, i) => {
+    const isUnpaid = i === 3;
+    const clickAttr = isUnpaid && hasUnpaid
+      ? ` role="button" tabindex="0" title="정산 관리 페이지로 이동 (미입금 내역 확인)" style="cursor:pointer"`
+      : '';
+    const dataAttr = isUnpaid && hasUnpaid ? ` data-unpaid-link="${filterParam}"` : '';
+    return `
+    <div class="stat-card"${clickAttr}${dataAttr}>
       <div class="stat-icon ${s.iconCls}">${s.icon}</div>
       <div class="stat-body">
         <div class="stat-value">${s.value}</div>
         <div class="stat-label">${s.label}</div>
-        ${s.delta ? `<div class="stat-delta stat-delta--down">${s.delta}</div>` : ''}
+        ${s.delta  ? `<div class="stat-delta stat-delta--down">${s.delta}</div>` : ''}
+        ${s.delta2 ? `<div class="stat-delta" style="color:#f59e0b;font-size:0.7rem">${s.delta2}</div>` : ''}
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
+
+  // Bind click/keyboard on unpaid card → settlement page
+  const unpaidCard = container.querySelector('[data-unpaid-link]');
+  if (unpaidCard) {
+    const go = () => { location.href = `settlement.html?filter=${unpaidCard.dataset.unpaidLink}`; };
+    unpaidCard.addEventListener('click', go);
+    unpaidCard.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') go(); });
+  }
 }
 
 /* ════════════════════════════════════════
@@ -138,16 +231,23 @@ function renderBriefingCards() {
     return;
   }
 
+  const todayStr = getTodayString();
   container.innerHTML = todayLectures.map((l) => {
     const color      = getLectureColor(l);
     const mgrInitial = (l.managerName || '담').charAt(0);
+    const payStatus  = _paymentStatus(l, todayStr);
+    const payChip    = !l.isPaid
+      ? payStatus === 'overdue'
+        ? `<span class="status-chip" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;margin-left:4px">연체</span>`
+        : `<span class="status-chip" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;margin-left:4px">입금 대기</span>`
+      : '';
     return `
       <div class="lecture-briefing-card" data-id="${escapeHtml(l.id)}"
            style="cursor:pointer;position:relative;border-left:4px solid ${color};">
         <div class="briefing-body" style="padding-left:8px;">
           <div class="briefing-row-top">
             <span class="briefing-time">${l.timeStart} – ${l.timeEnd}</span>
-            <span class="status-chip status-chip--scheduled">예정</span>
+            <span class="status-chip status-chip--scheduled">예정</span>${payChip}
           </div>
           <div class="briefing-title">${escapeHtml(l.title)}</div>
           <div class="briefing-meta-grid">
@@ -207,6 +307,10 @@ function getEffectiveBufferTime() {
    타임라인 강의 카드 — 오늘/내일 공용
 ════════════════════════════════════════ */
 function _createTimelineCard(lec, isDone) {
+  const sliceStart  = _ts(lec);
+  const sliceEnd    = _te(lec);
+  const isMultiDay  = lec._isMultiDay ?? false;
+
   const color     = getLectureColor(lec);
   const bg        = hexToRgba(color, isDone ? 0.1 : 0.3);
   const nodeStyle = isDone
@@ -218,14 +322,21 @@ function _createTimelineCard(lec, isDone) {
     `border-left:3px solid ${color}`,
     isDone ? 'opacity:0.7;' : '',
   ].join(';');
+
+  const multidayBadge = isMultiDay
+    ? `<span class="tl-multiday-badge">🌙 연속 일정(Multiday)</span>`
+    : '';
+
   return `
-      <div class="timeline-item" data-start-min="${timeToMin(lec.timeStart)}" data-end-min="${timeToMin(lec.timeEnd)}">
-        <div class="tl-time-col"><div class="tl-time">${lec.timeStart}</div></div>
+      <div class="timeline-item" data-start-min="${timeToMin(sliceStart)}" data-end-min="${timeToMin(sliceEnd)}">
+        <div class="tl-time-col"><div class="tl-time">${sliceStart}</div></div>
         <div class="tl-track"><div class="tl-node" style="${nodeStyle}"></div></div>
         <div class="tl-content">
-          <div class="tl-card ${isDone ? 'tl-card--done' : 'tl-card--lecture'}" style="${cardStyle}">
-            <div class="tl-card-title">${escapeHtml(lec.title)}</div>
-            <div class="tl-card-sub">${escapeHtml(lec.place || lec.client)} · ${lec.timeStart}~${lec.timeEnd}</div>
+          <div class="tl-card ${isDone ? 'tl-card--done' : 'tl-card--lecture'}${isMultiDay ? ' tl-card--multiday' : ''}"
+               ${!isDone ? `data-id="${escapeHtml(lec.id)}"` : ''}
+               style="${cardStyle}${!isDone ? 'cursor:pointer;' : ''}">
+            <div class="tl-card-title">${escapeHtml(lec.title)}${multidayBadge}</div>
+            <div class="tl-card-sub">${escapeHtml(lec.place || lec.client)} · ${sliceStart}~${sliceEnd}</div>
           </div>
         </div>
       </div>`;
@@ -318,7 +429,7 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
   // Inter-lecture: pass endTime + wrapupTime as originTime for time-aware routing
   const interLecPromises = lectures.slice(0, -1).map((lec, i) => {
     const wrapup     = Number(lec.wrapupTime ?? sched.wrapupTime ?? 15);
-    const originTime = buildOriginTime(lec.date, lec.timeEnd, wrapup);
+    const originTime = buildOriginTime(_td(lec), _te(lec), wrapup);
     return fetchTravelMin(lec.place, lectures[i + 1].place, originTime);
   });
   const homePromises = hasOrigin
@@ -335,19 +446,31 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
   const lastWrapup  = Number(lastLec.wrapupTime   ?? sched.wrapupTime ?? 15);
   // Round departure DOWN to nearest 10-min increment (07:06 → 07:00, 08:19 → 08:10)
   const departureMin = hasOrigin
-    ? Math.floor((timeToMin(firstLec.timeStart) - (firstSetup + bufferTime + (travelToFirst ?? 0))) / 10) * 10
+    ? Math.floor((timeToMin(_ts(firstLec)) - (firstSetup + bufferTime + (travelToFirst ?? 0))) / 10) * 10
     : null;
   const returnMin = hasOrigin
-    ? timeToMin(lastLec.timeEnd) + lastWrapup + (travelToHome ?? 0)
+    ? timeToMin(_te(lastLec)) + lastWrapup + (travelToHome ?? 0)
     : null;
 
   const now    = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
 
-  const parts = [];
+// 1. 날짜 기준점 설정
+const firstStartDate   = firstLec.startDate ?? firstLec.date ?? '';
+const lastEndDate      = lastLec.endDate    ?? lastLec.date  ?? '';
 
-  // ── Home departure node ──────────────────────────────
-  if (hasOrigin) {
+// 2. 억제(Suppress) 로직 개선
+// 출발 정보 억제: 연속 일정(isMultiDay)이면서, 현재 날짜(_sliceDate)가 실제 시작일이 아닐 때 (즉, 중간날이나 종료일일 때)
+const suppressDeparture = firstLec._isMultiDay && firstLec._sliceDate !== firstStartDate;
+
+// 귀가 정보 억제: 연속 일정(isMultiDay)이면서, 현재 날짜(_sliceDate)가 실제 종료일이 아닐 때 (즉, 시작날이나 중간날일 때)
+const suppressReturn    = lastLec._isMultiDay  && lastLec._sliceDate !== lastEndDate;
+
+const parts = [];
+
+// ── 🏠 Home departure node (출발 정보 영역) ──────────────────────────────
+// hasOrigin이 있고, suppressDeparture가 false일 때만(즉, 첫날에만) 출력
+if (hasOrigin && !suppressDeparture) {
     const depStr = minToTime(departureMin);
     parts.push(`
       <div class="timeline-item">
@@ -361,7 +484,7 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
         </div>
       </div>`);
 
-    // Home → First lecture gap
+    // Home → First lecture gap (이동/버퍼/준비 정보)
     const t2f = travelToFirst ?? 0;
     const totalMargin = t2f + bufferTime + firstSetup;
     parts.push(`
@@ -378,12 +501,12 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
           </div>
         </div>
       </div>`);
-  }
+}
 
   // ── Lecture loop ─────────────────────────────────────
   for (let idx = 0; idx < lectures.length; idx++) {
     const lec    = lectures[idx];
-    const isDone = showNowBar && timeToMin(lec.timeEnd) < nowMin;
+    const isDone = showNowBar && timeToMin(_te(lec)) < nowMin;
     parts.push(_createTimelineCard(lec, isDone));
 
     // Gap row between consecutive lectures
@@ -394,9 +517,9 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
       const wrapup1    = Number(lec.wrapupTime  ?? sched.wrapupTime ?? 15);
       const setup2     = Number(next.setupTime  ?? sched.setupTime  ?? 20);
       const reqGap     = wrapup1 + travelMin + bufferTime + setup2;
-      const actGap     = timeToMin(next.timeStart) - timeToMin(lec.timeEnd);
-      const arrivalMin = timeToMin(lec.timeEnd) + wrapup1 + travelMin;
-      const depStr     = minToTime(timeToMin(lec.timeEnd) + wrapup1);
+      const actGap     = timeToMin(_ts(next)) - timeToMin(_te(lec));
+      const arrivalMin = timeToMin(_te(lec)) + wrapup1 + travelMin;
+      const depStr     = minToTime(timeToMin(_te(lec)) + wrapup1);
       const arrivalStr = minToTime(arrivalMin);
       const isWarn     = actGap < reqGap;
       const travelLabel = rawTravel == null
@@ -424,9 +547,9 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
   }
 
   // ── Home return node ─────────────────────────────────
-  if (hasOrigin) {
+  if (hasOrigin && !suppressReturn) {
     const t2h      = travelToHome ?? 0;
-    const depStr   = minToTime(timeToMin(lastLec.timeEnd) + lastWrapup);
+    const depStr   = minToTime(timeToMin(_te(lastLec)) + lastWrapup);
     const retStr   = minToTime(returnMin);
 
     parts.push(`
@@ -458,6 +581,9 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
   }
 
   container.innerHTML = parts.join('');
+  container.querySelectorAll('.tl-card--lecture[data-id]').forEach(card => {
+    card.addEventListener('click', () => openModal(card.dataset.id));
+  });
   if (showNowBar) _injectNowBar(container, nowMin);
 }
 
@@ -551,11 +677,13 @@ function initLectures(uid) {
     const tomorrowStr = formatDateString(tomorrowObj);
 
     todayLectures    = allLectures
-      .filter(l => l.date === todayStr)
-      .sort((a, b) => (a.timeStart || '').localeCompare(b.timeStart || ''));
+      .map(l => _sliceLectureForDay(l, todayStr))
+      .filter(Boolean)
+      .sort((a, b) => _ts(a).localeCompare(_ts(b)));
     tomorrowLectures = allLectures
-      .filter(l => l.date === tomorrowStr)
-      .sort((a, b) => (a.timeStart || '').localeCompare(b.timeStart || ''));
+      .map(l => _sliceLectureForDay(l, tomorrowStr))
+      .filter(Boolean)
+      .sort((a, b) => _ts(a).localeCompare(_ts(b)));
 
     renderGreeting();
     renderStatBar();
@@ -565,7 +693,7 @@ function initLectures(uid) {
     renderWeekly();
     updateNavBadge();
     // Refresh todo list so lecture-linked badges reflect current lecture data
-    if (todos.length) renderTodoList(document.getElementById('todo-list'), todos, allLectures, getTopicTags());
+    if (todos.length) _renderSidebarTodos();
   }, err => {
     console.error('[강비서] 강의 구독 오류:', err);
   });
@@ -614,16 +742,34 @@ function initLectures(uid) {
 /* ════════════════════════════════════════
    To-do List — todoService + todoComponent 위임
 ════════════════════════════════════════ */
-function initTodos(uid) {
-  if (unsubscribeTodos) unsubscribeTodos();
+
+// Sidebar shows only overdue + today's incomplete todos, sorted oldest-first
+function _sidebarTodos(all) {
+  const today = getTodayString();
+  return all
+    .filter(t => !t.isDone && t.deadline <= today)
+    .sort((a, b) => (a.deadline < b.deadline ? -1 : a.deadline > b.deadline ? 1 : 0));
+}
+
+function _renderSidebarTodos() {
   const listEl  = document.getElementById('todo-list');
   const countEl = document.getElementById('todo-count');
+  const visible = _sidebarTodos(todos);
+  renderTodoList(listEl, visible, allLectures, getTopicTags());
+  if (countEl) {
+    const overdue = visible.filter(t => t.deadline < getTodayString()).length;
+    const todayCount = visible.length - overdue;
+    countEl.textContent = overdue > 0
+      ? `오늘 ${todayCount}건 · 연체 ${overdue}건`
+      : `오늘 ${todayCount}건`;
+  }
+}
 
+function initTodos(uid) {
+  if (unsubscribeTodos) unsubscribeTodos();
   unsubscribeTodos = subscribeTodos(uid, updated => {
     todos = updated;
-    renderTodoList(listEl, todos, allLectures, getTopicTags());
-    const done = todos.filter(t => t.isDone).length;
-    if (countEl) countEl.textContent = `완료 ${done} / 전체 ${todos.length}`;
+    _renderSidebarTodos();
   }, err => console.error('[강비서] Todo 구독 오류:', err));
 }
 
@@ -655,8 +801,11 @@ document.getElementById('todo-add-btn')?.addEventListener('click', todoAdd);
 document.getElementById('todo-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') todoAdd(); });
 document.getElementById('todo-clear-done')?.addEventListener('click', todoClearDone);
 document.getElementById('todo-postpone-all')?.addEventListener('click', todoPostponeAll);
-// Event delegation bound once — survives renderTodoList innerHTML replacements
-bindTodoEvents(document.getElementById('todo-list'), () => todos);
+// Event delegation bound once — uses full todos so toggle/delete/postpone can find any item by id
+bindTodoEvents(document.getElementById('todo-list'), () => todos, {
+  getAllLectures: () => allLectures,
+  openModal,
+});
 
 /* ════════════════════════════════════════
    초기 렌더 (빈 상태 — 데이터 로딩 전)
@@ -667,7 +816,7 @@ renderBriefingCards();
 renderTimeline();
 renderTomorrowTimeline();
 renderWeekly();
-renderTodoList(document.getElementById('todo-list'), todos, allLectures, getTopicTags());
+_renderSidebarTodos();
 
 /* ════════════════════════════════════════
    인증 상태 감지 — 권한 가드 + 구독 시작
