@@ -55,6 +55,7 @@
 
 /* ── grid ─────────────────────────────────────── */
 .ms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ms-grid--3 { grid-template-columns: 1fr 1fr 1fr; }
 .ms-field { display: flex; flex-direction: column; gap: 4px; }
 .ms-field--full { grid-column: 1 / -1; }
 .ms-label { font-size: 12px; font-weight: 700; color: #475569; }
@@ -323,5 +324,13 @@
 
 @media (max-width: 540px) {
   .ms-grid     { grid-template-columns: 1fr; }
+  .ms-grid--3 { grid-template-columns: 1fr 1fr 1fr; }
   .ms-day-grid { grid-template-columns: repeat(7,1fr); }
+}
+
+@media (max-width: 600px) {
+  .ms-field-row {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
 }

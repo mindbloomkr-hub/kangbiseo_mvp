@@ -340,6 +340,12 @@
   font-size: var(--font-size-xs) !important;
   color: var(--color-text-secondary) !important; }
 
+
+.td-sessionInfo { 
+font-size: var(--font-size-xs) !important;
+color: var(--color-text-secondary) !important; }
+
+
 /* 장소 */
 .td-place {
   color: var(--color-text-muted) !important;
@@ -1041,7 +1047,7 @@
   border-radius: var(--radius-md);
   font-size: var(--font-size-xs);
   font-weight: 700;
-  color: #3c1e1e;
+  color: #ffffff;
   cursor: pointer;
   flex-shrink: 0;
   transition: opacity var(--transition-fast);
@@ -1144,6 +1150,15 @@
   grid-template-columns: repeat(4, 1fr);
 }
 
+
+.add-form-grid--5 {
+  display: grid;
+  /* 전체를 5등분으로 나눕니다 */
+  grid-template-columns: repeat(5, 1fr); 
+  gap: var(--space-4);
+  align-items: start;
+}
+
 /* 읽기 전용 자동계산 입력 */
 .add-form-input--readonly {
   background: var(--color-gray-100);
@@ -1241,4 +1256,13 @@
   .modal-footer { padding-block: var(--space-4); }
   .modal-title { font-size: var(--font-size-base); }
   .modal-body { gap: var(--space-4); }
+}
+
+@media (max-width: 768px) {
+  .add-form-grid--5 {
+    grid-template-columns: 1fr;
+  }
+  .add-form-grid--5 .add-form-field {
+    grid-column: span 1 !important;
+  }
 }

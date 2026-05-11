@@ -43,6 +43,8 @@ function getFilteredLectures() {
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
     list = list.filter(l =>
+      (l.sessionTotal       || '').toLowerCase().includes(q) ||
+      (l.sessionCurrent       || '').toLowerCase().includes(q) ||
       (l.title       || '').toLowerCase().includes(q) ||
       (l.client      || '').toLowerCase().includes(q) ||
       (l.place       || '').toLowerCase().includes(q) ||
@@ -152,15 +154,18 @@ function renderTable() {
       <tr class="${rowCls}" data-id="${lec.id}" tabindex="0" role="button" aria-label="${escapeHtml(lec.title)} 상세 보기">
         <td class="col-cb"><div class="row-cb-wrap"><input type="checkbox" class="row-cb" data-id="${lec.id}" ${checked} aria-label="선택" /></div></td>
         <td>
-          <div class="td-date">
-            <div class="td-date-main">${main}</div>
-            <div class="td-date-day">${day}요일</div>
+          <div class="td-sessionInfo">
+            ${lec.sessionCurrent ? `${escapeHtml(lec.sessionCurrent)}/${escapeHtml(lec.sessionTotal)}` : ''}
           </div>
         </td>
-        <td class="td-time">${lec.timeStart}~${lec.timeEnd}</td>
+        <td>
+          <div class="td-date">
+            <div class="td-date-main">${main} ${day}요일</div>
+          </div>
+          <div class="td-time" style="margin-top: 4px; font-size: 0.9em; color: var(--gray-600);">${lec.timeStart}~${lec.timeEnd}</div>
         <td>
           <div class="td-title">${escapeHtml(lec.title)}</div>
-          <div class="td-title-sub">${escapeHtml(lec.topic || lec.place || '')}</div>
+          <div class="td-title-sub">${escapeHtml(lec.topic || '')}</div>
         </td>
         <td class="td-client">${escapeHtml(lec.client)}</td>
         <td class="td-place col-place">${escapeHtml(lec.place || '')}${lec.classroom ? `<span class="td-place-room"> (${escapeHtml(lec.classroom)})</span>` : ''}</td>

@@ -27,57 +27,70 @@
 
     <div class="ms-body">
 
-      <!-- ① 일정 설정 -->
+      <!-- 다회차 입력 폼 패널 -->
       <div class="ms-section">
-        <p class="ms-section-title">일정 설정</p>
-        <div class="ms-grid">
-          <div class="ms-field ms-field--full">
-            <label class="ms-label">카테고리</label>
-            <div class="lm-tag-picker" id="ms-tag-picker">
-              <button type="button" class="lm-tag-trigger" id="ms-tag-trigger"
-                      aria-expanded="false" aria-haspopup="listbox">
-                <span class="lm-tag-swatch" id="ms-tag-swatch"></span>
-                <span id="ms-tag-trigger-label">일반 강의</span>
-                <span class="lm-tag-caret" aria-hidden="true">▾</span>
-              </button>
-              <div class="lm-tag-panel" id="ms-tag-panel" role="listbox" hidden>
-                <div class="lm-tag-option-list" id="ms-tag-option-list"></div>
-                <button type="button" class="lm-tag-new-btn" id="ms-tag-new-btn">+ 새 카테고리 추가</button>
-                <div class="lm-tag-new-form" id="ms-tag-new-form" hidden>
-                  <input class="lm-tag-new-input" type="text" id="ms-tag-new-name" placeholder="카테고리 이름" maxlength="20" />
-                  <div class="lm-tag-new-colors" id="ms-tag-new-colors"></div>
-                  <div class="lm-tag-new-actions">
-                    <button type="button" class="lm-tp-btn lm-tp-btn--cancel" id="ms-tag-new-cancel">취소</button>
-                    <button type="button" class="lm-tp-btn lm-tp-btn--save"   id="ms-tag-new-save">저장</button>
+        <p class="ms-section-title">기본 정보</p>
+        <div class="ms-field">
+          <div class="ms-grid ms-grid">
+            <div class="ms-field">
+              <label class="ms-label">카테고리</label>
+              <div class="lm-tag-picker" id="ms-tag-picker">
+                <button type="button" class="lm-tag-trigger" id="ms-tag-trigger"
+                        aria-expanded="false" aria-haspopup="listbox">
+                  <span class="lm-tag-swatch" id="ms-tag-swatch"></span>
+                  <span id="ms-tag-trigger-label">일반 강의</span>
+                  <span class="lm-tag-caret" aria-hidden="true">▾</span>
+                </button>
+                <div class="lm-tag-panel" id="ms-tag-panel" role="listbox" hidden>
+                  <div class="lm-tag-option-list" id="ms-tag-option-list"></div>
+                  <button type="button" class="lm-tag-new-btn" id="ms-tag-new-btn">+ 새 카테고리 추가</button>
+                  <div class="lm-tag-new-form" id="ms-tag-new-form" hidden>
+                    <input class="lm-tag-new-input" type="text" id="ms-tag-new-name" placeholder="카테고리 이름" maxlength="20" />
+                    <div class="lm-tag-new-colors" id="ms-tag-new-colors"></div>
+                    <div class="lm-tag-new-actions">
+                      <button type="button" class="lm-tp-btn lm-tp-btn--cancel" id="ms-tag-new-cancel">취소</button>
+                      <button type="button" class="lm-tp-btn lm-tp-btn--save"   id="ms-tag-new-save">저장</button>
+                    </div>
                   </div>
                 </div>
               </div>
+              <input type="hidden" id="ms-tag-id" />
             </div>
-            <input type="hidden" id="ms-tag-id" />
-          </div>
-          <div class="ms-field ms-field--full">
-            <label class="ms-label" for="ms-title">강의명 *</label>
-            <input class="ms-input" type="text" id="ms-title" placeholder="예) Python 기초 과정 1기" />
-          </div>
           <div class="ms-field">
-            <label class="ms-label" for="ms-start">시작일 *</label>
-            <input class="ms-input" type="date" id="ms-start" />
+            <label class="ms-label" for="ms-progress">진행 상태</label>
+            <select class="ms-select" id="ms-progress">              
+              <option value="discussing">논의 중</option>
+              <option value="scheduled" selected>강의 예정</option>
+              <option value="done">진행 완료</option>
+              <option value="onhold">보류 중</option>
+              <option value="cancelled">취소/드롭</option>
+              <option value="needs_review">확인 필요</option>
+            </select>
           </div>
-          <div class="ms-field">
-            <label class="ms-label" for="ms-total">총 회차 수 *</label>
-            <input class="ms-input" type="number" id="ms-total" min="1" max="200" placeholder="예) 8" />
+            </div>
+              <div class="ms-field ms-field--full"  style="margin-top:var(--space-4)">
+                <label class="ms-label" for="ms-title">강의명 *</label>
+                <input class="ms-input" type="text" id="ms-title" placeholder="예) Python 기초 과정 1기" />
+              </div>
+            <div class="ms-grid ms-grid--3" style="margin-top:var(--space-4)">
+              <div class="ms-field">
+                <label class="ms-label" for="ms-start">시작일 *</label>
+                <input class="ms-input" type="date" id="ms-start" />
+              </div>
+              <div class="ms-field">
+                <label class="ms-label" for="ms-total">총 회차 수 *</label>
+                <input class="ms-input" type="number" id="ms-total" min="1" max="200" placeholder="예) 8" />
+              </div>
+              <div class="ms-field">
+                <label class="ms-label" for="ms-rec">반복 유형</label>
+                <select class="ms-select" id="ms-rec">
+                  <option value="daily">매일 (Daily)</option>
+                  <option value="weekly" selected>매주 (Weekly)</option>
+                  <option value="monthly">매월 (Monthly)</option>
+                </select>
+              </div>
+            </div>
           </div>
-        </div>
-
-        <div class="ms-field" style="margin-top:12px">
-          <label class="ms-label" for="ms-rec">반복 유형</label>
-          <select class="ms-select" id="ms-rec">
-            <option value="daily">매일 (Daily)</option>
-            <option value="weekly" selected>매주 (Weekly)</option>
-            <option value="monthly">매월 (Monthly)</option>
-          </select>
-        </div>
-
         <!-- Daily -->
         <div id="ms-opt-daily" class="ms-sub" style="display:none">
           <div class="ms-field" style="max-width:160px">
@@ -88,7 +101,7 @@
 
         <!-- Weekly -->
         <div id="ms-opt-weekly" class="ms-sub">
-          <div class="ms-grid" style="grid-template-columns:140px 1fr;align-items:start">
+          <div class="ms-grid" style="grid-template-columns:140px 1fr;align-items:start; margin-top:var(--space-4)">
             <div class="ms-field">
               <label class="ms-label" for="ms-week-n">N주 마다</label>
               <input class="ms-input" type="number" id="ms-week-n" min="1" value="1" />
@@ -177,24 +190,7 @@
       <!-- ② 공통 강의 정보 -->
       <div class="ms-section">
         <p class="ms-section-title">공통 강의 정보</p>
-        <div class="ms-grid">
-          <div class="ms-field">
-            <label class="ms-label" for="ms-client">고객사 *</label>
-            <input class="ms-input" type="text" id="ms-client" placeholder="고객사명" />
-          </div>
-          <div class="ms-field">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-              <label class="ms-label" for="ms-place" style="margin-bottom:0">강의장 주소 *</label>
-              <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#2563eb;cursor:pointer;user-select:none">
-                <input type="checkbox" id="ms-online" style="width:14px;height:14px;accent-color:#2563eb;cursor:pointer" />
-                💻 온라인 수업
-              </label>
-            </div>
-            <div class="ms-addr-wrap">
-              <button type="button" class="ms-addr-btn" id="ms-addr-search">🔍 주소 검색</button>
-              <input class="ms-input" type="text" id="ms-place" placeholder="강의장 주소" />
-            </div>
-          </div>
+        <div class="ms-grid ms-grid--3" style="margin-top:var(--space-4)">
           <div class="ms-field">
             <label class="ms-label" for="ms-ts">시작 시간 *</label>
             <select class="ms-select" id="ms-ts"></select>
@@ -204,13 +200,14 @@
             <select class="ms-select" id="ms-te"></select>
           </div>
           <div class="ms-field">
-            <label class="ms-label" for="ms-fee">회차별 강사료 (만원)</label>
-            <input class="ms-input" type="number" id="ms-fee" placeholder="0" min="0" />
+            <label class="ms-label">총 강의 시간</label>
+          <input class="ms-input ms-input--readonly" type="text" id="ms-duration-computed" readonly placeholder="자동 계산" />
           </div>
-          <div class="ms-field">
-            <label class="ms-label" for="ms-fee-total">강사료 총 금액 (만원)</label>
-            <input class="ms-input" type="number" id="ms-fee-total" placeholder="0" min="0" />
-          </div>
+        </div>
+
+
+
+        <div class="ms-grid ms-grid--3" style="margin-top:var(--space-4)">
           <div class="ms-field">
             <label class="ms-label" for="ms-settlement-cycle">정산 주기</label>
             <select class="ms-select" id="ms-settlement-cycle">
@@ -223,20 +220,50 @@
             </select>
           </div>
           <div class="ms-field">
-            <label class="ms-label" for="ms-progress">진행 상태</label>
-            <select class="ms-select" id="ms-progress">
-              <option value="scheduled">📅 강의 예정</option>
-              <option value="discussing">💬 논의 중</option>
-              <option value="onhold">⏸ 보류 중</option>
-            </select>
+            <label class="ms-label" for="ms-fee">회차별 강사료 (만원)</label>
+            <input class="ms-input" type="number" id="ms-fee" placeholder="0" min="0" />
+          </div>
+          <div class="ms-field">
+            <label class="ms-label" for="ms-fee-total">강사료 총 금액 (만원)</label>
+            <input class="ms-input" type="number" id="ms-fee-total" placeholder="0" min="0" />
           </div>
         </div>
-      </div>
-
-      <!-- ③ 물류 정보 -->
-      <div class="ms-section">
-        <p class="ms-section-title">물류 정보</p>
-        <div class="ms-grid">
+        <div class="ms-grid ms-grid--3" style="margin-top:var(--space-4)">
+          <div class="ms-field">
+            <label class="ms-label" for="ms-paid-status">정산 상태</label>
+            <select class="ms-input" id="ms-paid-status"><option value="false">미입금</option><option value="true">입금 완료</option></select>
+          </div>
+          <div class="ms-field"><label class="ms-label" for="ms-payment-date">예상 지급일</label><input class="ms-input" type="date" id="ms-payment-date" /></div>
+            <div class="ms-field">
+              <label class="ms-label" for="ms-tax">세금 정보</label>
+              <select class="ms-input" id="ms-tax">
+                <option value="income3_3">사업소득 3.3%</option>
+                <option value="income8_8">기타소득 8.8%</option>
+                <option value="exempt">면세</option>
+                <option value="other">기타</option>
+              </select>
+            </div>
+        </div>
+          <div>
+          <div class="ms-field-row" style="display: flex; gap: var(--space-4); margin-top: var(--space-4); align-items: flex-end;">
+            <div class="ms-field" style="flex: 3;">
+              <label class="ms-label" for="ms-client">고객사 *</label>
+              <input class="ms-input" type="text" id="ms-client" placeholder="고객사명" style="width: 100%;" />
+            </div>
+            <div class="ms-field" style="flex: 7;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <label class="ms-label" for="ms-place" style="margin-bottom: 0;">강의장 주소 *</label>
+                <label style="display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #2563eb; cursor: pointer; user-select: none;">
+                  <input type="checkbox" id="ms-online" style="width: 14px; height: 14px; accent-color: #2563eb; cursor: pointer;" />💻 온라인 수업
+                </label>
+              </div>
+              <div class="ms-addr-wrap" style="display: flex; gap: 5px; width: 100%;">
+                <button type="button" class="ms-addr-btn" id="ms-addr-search" style="flex-shrink: 0;">🔍 주소 검색</button>
+                <input class="ms-input" type="text" id="ms-place" placeholder="강의장 주소" style="flex: 1; min-width: 0;" />
+              </div>
+            </div>
+          </div>
+          <div class="ms-grid" style="margin-top:var(--space-4)">
           <div class="ms-field">
             <label class="ms-label" for="ms-classroom">강의실</label>
             <input class="ms-input" type="text" id="ms-classroom" placeholder="예) B동 301호" />
@@ -248,10 +275,10 @@
         </div>
       </div>
 
-      <!-- ④ 세션 상세 -->
+      <!-- ④ 강의 상세 정보 -->
       <div class="ms-section">
-        <p class="ms-section-title">세션 상세</p>
-        <div class="ms-grid">
+        <p class="ms-section-title"  style="margin-top:var(--space-8)">강의 상세 정보</p>
+        <div class="ms-grid ms-grid--3">
           <div class="ms-field">
             <label class="ms-label" for="ms-setup-time">현장 준비 시간 (분)</label>
             <input class="ms-input" type="text" id="ms-setup-time" placeholder="예) 30분" />
@@ -264,15 +291,18 @@
             <label class="ms-label" for="ms-buffer-time">이동 버퍼 (분)</label>
             <input class="ms-input" type="number" id="ms-buffer-time" placeholder="예) 30" min="0" />
           </div>
+        </div>
+        <div class="ms-grid"  style="margin-top:var(--space-4)">
           <div class="ms-field">
-            <label class="ms-label" for="ms-participants">참석 인원</label>
+            <label class="ms-label" for="ms-participants">수강 인원 (명)</label>
             <input class="ms-input" type="number" id="ms-participants" placeholder="예) 20" min="1" />
           </div>
           <div class="ms-field">
             <label class="ms-label" for="ms-group-info">그룹 구성</label>
             <input class="ms-input" type="text" id="ms-group-info" placeholder="예) 팀별 5인 4개조" />
           </div>
-          <div class="ms-field ms-field--full">
+          </div>
+          <div class="ms-field ms-field--full"  style="margin-top:var(--space-4)">
             <label class="ms-label" for="ms-supplies">준비물</label>
             <textarea class="ms-textarea" id="ms-supplies" placeholder="필요한 준비물을 입력하세요" rows="2"></textarea>
           </div>
@@ -282,19 +312,10 @@
       <!-- ⑤ 담당자 정보 -->
       <div class="ms-section">
         <p class="ms-section-title">담당자 정보</p>
-        <div class="ms-grid">
-          <div class="ms-field">
-            <label class="ms-label" for="ms-manager-name">담당자명</label>
-            <input class="ms-input" type="text" id="ms-manager-name" placeholder="예) 홍길동" />
-          </div>
-          <div class="ms-field">
-            <label class="ms-label" for="ms-manager-phone">연락처</label>
-            <input class="ms-input" type="tel" id="ms-manager-phone" placeholder="예) 010-1234-5678" />
-          </div>
-          <div class="ms-field ms-field--full">
-            <label class="ms-label" for="ms-manager-email">이메일</label>
-            <input class="ms-input" type="email" id="ms-manager-email" placeholder="예) manager@company.com" />
-          </div>
+        <div class="ms-grid ms-grid--3">
+          <div class="ms-field"><label class="ms-label" for="ms-manager-name">이름</label><input class="ms-input" type="text" id="ms-manager-name" placeholder="예) 홍길동" /></div>
+          <div class="ms-field"><label class="ms-label" for="ms-manager-phone">연락처</label><input class="ms-input" type="tel" id="ms-manager-phone" placeholder="예) 010-1234-5678" /></div>
+          <div class="ms-field"><label class="ms-label" for="ms-manager-email">이메일</label><input class="ms-input" type="email" id="ms-manager-email" placeholder="예) hong@company.com" /></div>
         </div>
       </div>
 

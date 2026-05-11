@@ -22,23 +22,28 @@
       <div id="view-panel">
         <div class="modal-section">
           <div class="modal-section-title-first">기본 정보</div>
+          <div>
+            
+          </div>
           <div class="modal-info-grid modal-info-grid--4">
-            <div class="modal-info-item" style="grid-column:1/3"><div class="modal-info-label">날짜</div><div class="modal-info-value" id="v-date"></div></div>
+            <div class="modal-info-value"><div class="modal-info-label">회차 정보</div><span id="v-session-current"></span> / <span id="v-session-total"></span></div>
+            <div class="modal-info-item"><div class="modal-info-label">날짜</div><div class="modal-info-value" id="v-date"></div></div>
             <div class="modal-info-item"><div class="modal-info-label">강의 시간</div><div class="modal-info-value" id="v-time"></div></div>
             <div class="modal-info-item"><div class="modal-info-label">총 강의 시간</div><div class="modal-info-value" id="v-total-duration"></div></div>
           </div>
-          <div class="modal-info-grid modal-info-grid--4" style="margin-top:var(--space-3)">
-            <div class="modal-info-item" style="grid-column:1/3"><div class="modal-info-label">강의명</div><div class="modal-info-value modal-info-value--title" id="v-title"></div></div>
-            <div class="modal-info-item"><div class="modal-info-label">현재 회차</div><div class="modal-info-value" id="v-session-current"></div></div>
-            <div class="modal-info-item"><div class="modal-info-label">총 회차</div><div class="modal-info-value" id="v-session-total"></div></div>
+          <div class="modal-info-iten" style="margin-top:var(--space-3)">
+            <div class="modal-info-item"><div class="modal-info-label">강의명</div><div class="modal-info-value modal-info-value--title" id="v-title"></div>
           </div>
-          <div class="modal-info-grid" style="margin-top:var(--space-3)">
+          </div>
+          <div class="modal-info" style="margin-top:var(--space-3)">            
             <div class="modal-info-item"><div class="modal-info-label">강의 주제</div><div class="modal-info-value" id="v-topic"></div></div>
-            <div class="modal-info-item"><div class="modal-info-label">카테고리</div><div class="modal-info-value" id="v-topic-tag"></div></div>
           </div>
-          <div class="modal-info-grid" style="margin-top:var(--space-3)">
-            <div class="modal-info-item"><div class="modal-info-label">고객사</div><div class="modal-info-value" id="v-client"></div></div>
-            <div class="modal-info-item"><div class="modal-info-label">강사료</div><div class="modal-info-value fee" id="v-fee"></div></div>
+          <div class="modal-info-grid modal-info-grid--4" style="margin-top:var(--space-3)">
+            <div class="modal-info-item" style="grid-column:1/3"><div class="modal-info-label">고객사</div><div class="modal-info-value" id="v-client"></div></div>
+            <div class="modal-info-item"><div class="modal-info-label">당 회차 강사료</div><div class="modal-info-value fee" id="v-fee"></div></div>
+            <div class="modal-info-item"><div class="modal-info-label">전체 회차 강사료 총 금액</div><div><p>'fee-total들어가야함'</p></div>
+            <!-- <div class="modal-info-value fee" id="v-fee-total"></div> -->
+            </div>
           </div>
           <div class="modal-info-grid" style="margin-top:var(--space-3)">
             <div class="modal-info-item" style="grid-column:1/-1"><div class="modal-info-label">강의장 주소</div><div class="modal-info-value" id="v-place"></div></div>
@@ -51,10 +56,10 @@
         <div class="modal-section">
           <div class="modal-section-title">상세 정보</div>
           <div class="modal-info-grid modal-info-grid--4" style="margin-top:var(--space-3)">
-            <div class="modal-info-item"><div class="modal-info-label">수강 인원</div><div class="modal-info-value" id="v-participants"></div></div>
-            <div class="modal-info-item"><div class="modal-info-label">조 편성</div><div class="modal-info-value" id="v-group-info"></div></div>
             <div class="modal-info-item"><div class="modal-info-label">현장 준비 시간</div><div class="modal-info-value" id="v-setup-time"></div></div>
             <div class="modal-info-item"><div class="modal-info-label">현장 정리 시간</div><div class="modal-info-value" id="v-wrapup-time"></div></div>
+            <div class="modal-info-item"><div class="modal-info-label">수강 인원</div><div class="modal-info-value" id="v-participants"></div></div>
+            <div class="modal-info-item"><div class="modal-info-label">조 편성</div><div class="modal-info-value" id="v-group-info"></div></div>            
           </div>
           <div class="modal-info-grid" style="margin-top:var(--space-3)">
             <div class="modal-info-item" style="grid-column:1/-1"><div class="modal-info-label">준비물</div><div class="modal-info-value" id="v-supplies"></div></div>
@@ -90,17 +95,15 @@
         <div class="modal-section">
           <div class="modal-section-title">메모 · 특이사항</div>
           <div class="view-memo" id="v-memo"></div>
-        </div>
-        <div class="modal-section">
           <div class="modal-section-title">강의 할 일</div>
           <div class="v-todo-add-row">
             <input class="v-todo-input" type="text" id="v-todo-input"
                    placeholder="이 강의 관련 할 일 추가[홈에서 강의상세보기]..." maxlength="80" />
             <button class="v-todo-add-btn" id="v-todo-add-btn" aria-label="추가">+</button>
           </div>
-          <div class="todo-list todo-list--modal" id="v-todo-list" role="list"
-               aria-label="강의 관련 할 일 목록"></div>
+          <div class="todo-list todo-list--modal" id="v-todo-list" role="list" aria-label="강의 관련 할 일 목록"></div>
         </div>
+        
       </div><!-- /#view-panel -->
 
       <!-- 입력 폼 패널 -->
@@ -109,11 +112,11 @@
           <div class="add-form-sections">
             <div>
               <div class="add-form-section-title-first">기본 정보</div>
-              <div class="add-form-field">
+                <div class="add-form-grid add-form-grid--2" style="margin-top: var(--space-3)">
+                <div class="add-form-field">
                   <label class="add-form-label">카테고리</label>
                   <div class="lm-tag-picker" id="lm-tag-picker">
-                    <button type="button" class="lm-tag-trigger" id="lm-tag-trigger"
-                            aria-expanded="false" aria-haspopup="listbox">
+                    <button type="button" class="lm-tag-trigger" id="lm-tag-trigger" aria-expanded="false" aria-haspopup="listbox">
                       <span class="lm-tag-swatch" id="lm-tag-swatch"></span>
                       <span id="lm-tag-trigger-label">일반 강의</span>
                       <span class="lm-tag-caret" aria-hidden="true">▾</span>
@@ -126,26 +129,52 @@
                         <div class="lm-tag-new-colors" id="lm-tag-new-colors"></div>
                         <div class="lm-tag-new-actions">
                           <button type="button" class="lm-tp-btn lm-tp-btn--cancel" id="lm-tag-new-cancel">취소</button>
-                          <button type="button" class="lm-tp-btn lm-tp-btn--save"   id="lm-tag-new-save">저장</button>
+                          <button type="button" class="lm-tp-btn lm-tp-btn--save" id="lm-tag-new-save">저장</button>
                         </div>
                       </div>
                     </div>
                   </div>
                   <input type="hidden" id="af-topic-tag" />
                 </div>
+                <div class="add-form-field">
+                  <label class="add-form-label" for="af-progress">진행 상태</label>
+                  <select class="add-form-input" id="af-progress">
+                    <option value="discussing">논의 중</option>
+                    <option value="scheduled" selected>강의 예정</option>
+                    <option value="done">진행 완료</option>
+                    <option value="onhold">보류 중</option>
+                    <option value="cancelled">취소/드롭</option>
+                    <option value="needs_review">확인 필요</option>
+                  </select>
+                </div>
+              </div>
               <div class="add-form-grid add-form-grid--4"  style="margin-top:var(--space-3)">
                 <div class="add-form-field"><label class="add-form-label" for="af-date">날짜 <span class="required">*</span></label><input class="add-form-input" type="date" id="af-date" required /></div>
                 <div class="add-form-field"><label class="add-form-label" for="af-time-start">시작 시간 <span class="required">*</span></label><select class="add-form-input" id="af-time-start" required></select></div>
                 <div class="add-form-field"><label class="add-form-label" for="af-time-end">종료 시간 <span class="required">*</span></label><select class="add-form-input" id="af-time-end" required></select></div>
                 <div class="add-form-field"><label class="add-form-label">총 강의 시간</label><input class="add-form-input add-form-input--readonly" type="text" id="af-duration-computed" readonly placeholder="자동 계산" /></div>
               </div>
-              <div class="add-form-grid add-form-grid--4" style="margin-top:var(--space-3)">
-                <div class="add-form-field" style="grid-column: span 2"><label class="add-form-label" for="af-title">강의명 <span class="required">*</span></label><input class="add-form-input" type="text" id="af-title" placeholder="예) AI 비즈니스 활용 특강" required /></div>
-                <div class="add-form-field"><label class="add-form-label" for="af-session-current">현재 회차</label><input class="add-form-input" type="number" id="af-session-current" placeholder="1" min="1" /></div>
-                <div class="add-form-field"><label class="add-form-label" for="af-session-total">총 회차</label><input class="add-form-input" type="number" id="af-session-total" placeholder="4" min="1" /></div>
+              <div class="add-form-field" style="margin-top:var(--space-3)">
+                <div class="add-form-field" style="min-width: 0;"><label class="add-form-label" for="af-title">강의명 <span class="required">*</span></label><input class="add-form-input" type="text" id="af-title" placeholder="예) AI 비즈니스 활용 특강" required style="width: 100%; box-sizing: border-box;" /></div>
               </div>
-              <div class="add-form-grid" style="margin-top:var(--space-3)">
-                <div class="add-form-field"><label class="add-form-label" for="af-topic">강의 주제</label><input class="add-form-input" type="text" id="af-topic" placeholder="예) 리더십, 조직문화" /></div>
+              <!--
+              <div style="display: grid !important; grid-template-columns: 3fr 1fr 1fr !important; gap: var(--space-4) !important; margin-top: var(--space-3) !important; width: 100%;">
+                <div class="add-form-field" style="min-width: 0;">
+                  <label class="add-form-label" for="af-title">강의명 <span class="required">*</span></label>
+                  <input class="add-form-input" type="text" id="af-title" placeholder="예) AI 비즈니스 활용 특강" required style="width: 100%; box-sizing: border-box;" />
+                </div>
+                <div class="add-form-field" style="min-width: 0;">
+                  <label class="add-form-label" for="af-session-current">현재 회차</label>
+                  <input class="add-form-input" type="number" id="af-session-current" placeholder="1" min="1" style="width: 100%; box-sizing: border-box;" />
+                </div>
+                <div class="add-form-field" style="min-width: 0;">
+                  <label class="add-form-label" for="af-session-total">총 회차</label>
+                  <input class="add-form-input" type="number" id="af-session-total" placeholder="4" min="1" style="width: 100%; box-sizing: border-box;" />
+                </div>
+              </div>
+              -->
+              <div class="add-form-field" style="margin-top:var(--space-3)">
+                <div class="add-form-field"><label class="add-form-label" for="af-topic">강의 주제</label><input class="add-form-input" type="text" id="af-topic" placeholder="예) 초보자를 위한 AI API 활용법 익히기" /></div>
               </div>
               <div class="add-form-grid" style="margin-top:var(--space-3)">
                 <div class="add-form-field"><label class="add-form-label" for="af-client">고객사 <span class="required">*</span></label><input class="add-form-input" type="text" id="af-client" placeholder="예) 삼성SDS" required /></div>
@@ -155,52 +184,40 @@
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
                   <label class="add-form-label" for="af-place" style="margin-bottom:0">강의장 주소 <span class="required" id="af-place-required">*</span></label>
                   <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#2563eb;cursor:pointer;user-select:none">
-                    <input type="checkbox" id="af-online" style="width:14px;height:14px;accent-color:#2563eb;cursor:pointer" />
-                    💻 온라인 수업
+                    <input type="checkbox" id="af-online" style="width:14px;height:14px;accent-color:#2563eb;cursor:pointer" /> 💻 온라인 수업
                   </label>
                 </div>
                 <div class="lm-addr-wrap">
                   <button type="button" class="lm-addr-btn" id="v-addr-search">🔍 주소 검색</button>
-                  <input class="add-form-input" type="text" id="af-place" placeholder="예) 서울 강남구 SSDC 4F" />
+                  <input class="add-form-input" type="text" id="af-place" placeholder="예) 서울 강남구 SSDC 4F" style="flex: 1;" />
                 </div>
               </div>
               <div class="add-form-grid" style="margin-top:var(--space-3)">
-                <div class="add-form-field"><label class="add-form-label" for="af-classroom">강의장/교실</label><input class="add-form-input" type="text" id="af-classroom" placeholder="예) 3층 소강당, 행복실" /></div>
+                <div class="add-form-field"><label class="add-form-label" for="af-classroom">강의실/교실</label><input class="add-form-input" type="text" id="af-classroom" placeholder="예) 3층 소강당, 행복실" /></div>
                 <div class="add-form-field"><label class="add-form-label" for="af-parking">주차 정보</label><input class="add-form-input" type="text" id="af-parking" placeholder="예) 지하 2시간 무료" /></div>
               </div>
             </div>
             <div>
-              <div class="add-form-section-title">상세 정보</div>
-                
+              <div class="add-form-section-title">상세 정보</div>                
               <div class="add-form-grid add-form-grid--4" style="margin-top:var(--space-3)">                
                 <div class="add-form-field"><label class="add-form-label" for="af-setup-time">현장 준비 시간 (분)</label><input class="add-form-input" type="number" id="af-setup-time" placeholder="20" min="0" max="120" /></div>
                 <div class="add-form-field"><label class="add-form-label" for="af-wrapup-time">현장 정리 시간 (분)</label><input class="add-form-input" type="number" id="af-wrapup-time" placeholder="15" min="0" max="120" /></div>
-                <div class="add-form-field"><label class="add-form-label" for="af-participants">수강 인원</label><input class="add-form-input" type="number" id="af-participants" placeholder="20" min="1" /></div>
-                <div class="add-form-field"><label class="add-form-label" for="af-group-info">조 편성</label><input class="add-form-input" type="text" id="af-group-info" placeholder="예) 5조 4명씩" /></div>
+                <div class="add-form-field"><label class="add-form-label" for="af-participants">수강 인원 (명)</label><input class="add-form-input" type="number" id="af-participants" placeholder="20" min="1" /></div>
+                <div class="add-form-field"><label class="add-form-label" for="af-group-info">그룹 구성</label><input class="add-form-input" type="text" id="af-group-info" placeholder="예) 5조 4명씩" /></div>
               </div>              
               <div class="add-form-field" style="margin-top:var(--space-3)"><label class="add-form-label" for="af-supplies">준비물</label><input class="add-form-input" type="text" id="af-supplies" placeholder="예) 마커, A4용지, 스티커" /></div>
             </div>
             <div>
               <div class="add-form-section-title">담당자 정보</div>
               <div class="add-form-grid add-form-grid--3">
-                <div class="add-form-field"><label class="add-form-label" for="af-manager-name">담당자 이름</label><input class="add-form-input" type="text" id="af-manager-name" placeholder="예) 홍길동" /></div>
+                <div class="add-form-field"><label class="add-form-label" for="af-manager-name">이름</label><input class="add-form-input" type="text" id="af-manager-name" placeholder="예) 홍길동" /></div>
                 <div class="add-form-field"><label class="add-form-label" for="af-manager-phone">연락처</label><input class="add-form-input" type="tel" id="af-manager-phone" placeholder="예) 010-1234-5678" /></div>
-                <div class="add-form-field"><label class="add-form-label" for="af-manager-email">담당자 이메일</label><input class="add-form-input" type="email" id="af-manager-email" placeholder="예) hong@company.com" /></div>
+                <div class="add-form-field"><label class="add-form-label" for="af-manager-email">이메일</label><input class="add-form-input" type="email" id="af-manager-email" placeholder="예) hong@company.com" /></div>
               </div>
             </div>
             <div>
               <div class="add-form-section-title">정산 &amp; 행정</div>
-              <div class="add-form-field">
-                <label class="add-form-label" for="af-progress">진행 상태</label>
-                <select class="add-form-input" id="af-progress">
-                  <option value="discussing">논의 중</option>
-                  <option value="scheduled" selected>강의 예정</option>
-                  <option value="done">진행 완료</option>
-                  <option value="onhold">보류 중</option>
-                  <option value="cancelled">취소/드롭</option>
-                  <option value="needs_review">확인 필요</option>
-                </select>
-              </div>
+
               <div class="add-form-grid add-form-grid--3" style="margin-top:var(--space-3)">
                 <div class="add-form-field">
                   <label class="add-form-label" for="af-paid-status">정산 상태</label>
@@ -224,21 +241,33 @@
                 <textarea class="add-form-input add-form-textarea" id="af-memo"
                   placeholder="특이사항, 요청사항 등을 자유롭게 기록하세요." rows="3"></textarea>
               </div>
-            </div>
-            <div>
-              <div class="add-form-section-title">강의 할 일</div>
+
+              <div class="add-form-field" style="margin-top:var(--space-5)"><label class="add-form-label">강의 할 일</label>
               <p style="font-size:11px;color:var(--color-text-muted);margin:4px 0 8px;">강의 저장 후 오늘 마감으로 자동 등록됩니다.</p>
               <div class="v-todo-add-row" style="margin-bottom:var(--space-2)">
-                <input class="v-todo-input" type="text" id="af-todo-input"
-                       placeholder="강의추가에서 이 강의 관련 할 일 추가..." maxlength="80" />
+                <input class="v-todo-input" type="text" id="af-todo-input" placeholder="강의추가에서 이 강의 관련 할 일 추가..." maxlength="80" />
                 <button type="button" class="v-todo-add-btn" id="af-todo-add-btn" aria-label="추가">+</button>
               </div>
-              <div class="todo-list todo-list--modal" id="af-todo-list" role="list"
-                   aria-label="등록 예정 할 일 목록"></div>
+              <div class="todo-list todo-list--modal" id="af-todo-list" role="list" aria-label="등록 예정 할 일 목록"></div>
+              </div>
             </div>
           </div>
         </form>
       </div><!-- /#form-panel -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     </div><!-- /.modal-body -->
 
