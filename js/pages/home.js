@@ -241,13 +241,28 @@ function renderBriefingCards() {
         ? `<span class="status-chip" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;margin-left:4px">연체</span>`
         : `<span class="status-chip" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;margin-left:4px">입금 대기</span>`
       : '';
+    const startDate   = l.startDate ?? l.date ?? '';
+    const endDate     = l.endDate   ?? l.date ?? '';
+    const isMultiDay  = startDate && endDate && startDate !== endDate;
+    const fmtDate     = d => { const [,m,day] = d.split('-'); const dow = ['일','월','화','수','목','금','토'][new Date(d).getDay()]; return `${m}/${day}(${dow})`; };
+    const dateDisplay = isMultiDay
+      ? `${fmtDate(startDate)} ${l.timeStart} ~ ${fmtDate(endDate)} ${l.timeEnd}`
+      : `${l.timeStart} – ${l.timeEnd}`;
+    const _tag      = l.topicTagId != null ? getTopicTags().find(t => t.id === l.topicTagId) : null;
+    let topicChip   = '';
+    if (_tag) {
+      const _bg = _tag.color ?? '#7c3aed';
+      const [_r, _g, _b] = [parseInt(_bg.slice(1,3),16), parseInt(_bg.slice(3,5),16), parseInt(_bg.slice(5,7),16)];
+      const _fg = (0.299*_r + 0.587*_g + 0.114*_b) > 160 ? '#374151' : '#ffffff';
+      topicChip = `<span class="status-chip status-chip--topic" style="background:${_bg};color:${_fg};margin-left:auto;">${escapeHtml(_tag.name)}</span>`;
+    }
     return `
       <div class="lecture-briefing-card" data-id="${escapeHtml(l.id)}"
            style="cursor:pointer;position:relative;border-left:4px solid ${color};">
         <div class="briefing-body" style="padding-left:8px;">
           <div class="briefing-row-top">
-            <span class="briefing-time">${l.timeStart} – ${l.timeEnd}</span>
-            <span class="status-chip status-chip--scheduled">예정</span>${payChip}
+            <span class="briefing-time">${dateDisplay}</span>
+            ${topicChip}
           </div>
           <div class="briefing-title">${escapeHtml(l.title)}</div>
           <div class="briefing-meta-grid">
