@@ -3,6 +3,7 @@ import { subscribeLectures, authGuard, db } from '../api.js';
 import {
   calcPaymentDate, getTodayString, escapeHtml, formatDateKo,
 } from '../utils.js';
+import { initLectureModal, openModal } from '../components/lectureModal.js';
 import {
   doc, updateDoc,
 } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
@@ -17,20 +18,35 @@ let _unsub       = null;
 const _filters = {
   dateFrom: '',
   dateTo:   '',
-  tab:      'all',   // 'all' | 'paid' | 'pending' | 'overdue'
+  tab:      'all',   // 'all' | 'paid' | 'pending' | 'overdue' | 'na'
   search:   '',
 };
+
+/* ════════════════════════════════════════
+   수수료 읽기 헬퍼 — feeTotal 우선, fee 폴백
+════════════════════════════════════════ */
+function _getFee(lec) {
+  return Number(lec.feeTotal != null ? lec.feeTotal : (lec.fee != null ? lec.fee : 0));
+}
 
 /* ════════════════════════════════════════
    결제 상태 계산
 ════════════════════════════════════════ */
 function _paymentDeadline(lec) {
-  const baseDate = lec.endDate ?? lec.date ?? '';
+  if (lec.settlementCycle === 'after-completion' && lec.groupId) {
+    const lastDate = allLectures
+      .filter(l => l.groupId === lec.groupId)
+      .reduce((max, l) => { const d = (l.endDate != null ? l.endDate : (l.date != null ? l.date : '')); return d > max ? d : max; }, '');
+    const baseDate = lastDate || (lec.endDate != null ? lec.endDate : (lec.date != null ? lec.date : ''));
+    return baseDate ? calcPaymentDate(baseDate, 'after-completion', lastDate || null) : null;
+  }
+  const baseDate = (lec.endDate != null ? lec.endDate : (lec.date != null ? lec.date : ''));
   return baseDate ? calcPaymentDate(baseDate, lec.settlementCycle || '', null) : null;
 }
 
 function _paymentStatus(lec, today) {
   if (lec.paidStatus === 'true' || lec.isPaid === true) return 'paid';
+  if (!_getFee(lec)) return 'na';          // 금액 없음 → 해당없음
   const deadline = _paymentDeadline(lec);
   if (!deadline) return 'pending';
   return today >= deadline ? 'overdue' : 'pending';
@@ -46,15 +62,16 @@ function _dday(deadline, today) {
   return Math.round((d1 - d0) / 86400000);
 }
 
-function _ddayHtml(deadline, today, status) {
-  if (status === 'paid') return '';
+function _ddayHtml(deadline, today, status, feeTotal) {
+  if (status === 'paid' || status === 'na') return '';
+  if (!(feeTotal > 0)) return '';           // 금액 없음 → D-day 계산 생략
   const diff = _dday(deadline, today);
   if (diff === null) return '';
   if (diff > 0) {
     const cls = diff <= 3 ? 'sl-dday--warning' : 'sl-dday--safe';
-    return `<span class="sl-dday ${cls}">D-${diff}</span>`;
+    return `<span class="sl-dday ${cls}">D-${diff} 입금 대기</span>`;
   }
-  if (diff === 0) return `<span class="sl-dday sl-dday--warning">D-Day</span>`;
+  if (diff === 0) return `<span class="sl-dday sl-dday--warning">D-Day 입금 대기</span>`;
   return `<span class="sl-dday sl-dday--late">D+${Math.abs(diff)} 연체</span>`;
 }
 
@@ -102,19 +119,24 @@ function _applyPreset(preset) {
 function _filtered() {
   const today = getTodayString();
   return allLectures.filter(l => {
-    const lDate  = l.date ?? '';
+    const lDate  = (l.date != null ? l.date : '');
     if (_filters.dateFrom && lDate < _filters.dateFrom) return false;
     if (_filters.dateTo   && lDate > _filters.dateTo)   return false;
 
     const status = _paymentStatus(l, today);
-    if (_filters.tab !== 'all' && status !== _filters.tab) return false;
+    if (_filters.tab === 'na') {
+      if (status !== 'na') return false;
+    } else {
+      if (status === 'na') return false;
+      if (_filters.tab !== 'all' && status !== _filters.tab) return false;
+    }
 
     if (_filters.search) {
       const q = _filters.search.toLowerCase();
       if (!l.title?.toLowerCase().includes(q) && !l.client?.toLowerCase().includes(q)) return false;
     }
     return true;
-  }).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+  }).sort((a, b) => (a.date != null ? a.date : '').localeCompare(b.date != null ? b.date : ''));
 }
 
 /* ════════════════════════════════════════
@@ -131,8 +153,9 @@ function renderStats() {
   let paidCnt  = 0, pendingCnt = 0, overdueCnt = 0;
 
   for (const l of all) {
-    const fee    = Number(l.fee) || 0;
+    const fee    = _getFee(l);
     const status = _paymentStatus(l, today);
+    if (status === 'na') continue;          // 금액 없는 항목은 집계 제외
     totalAmt += fee;
     if (status === 'paid')    { paidAmt    += fee; paidCnt++;    }
     if (status === 'pending') { pendingAmt += fee; pendingCnt++; }
@@ -197,20 +220,26 @@ function renderTable() {
   }
 
   tbody.innerHTML = rows.map(l => {
+    const fee      = _getFee(l);
     const status   = _paymentStatus(l, today);
     const deadline = _paymentDeadline(l);
     const dateStr  = l.date ? formatDateKo(l.date).main : '—';
-    const feeStr   = Number(l.fee) > 0 ? `₩${(Number(l.fee) * 10000).toLocaleString()}` : '—';
-    const ddHtml   = _ddayHtml(deadline, today, status);
+    const feeStr   = fee > 0 ? `₩${(fee * 10000).toLocaleString()}` : '—';
+    const ddHtml   = _ddayHtml(deadline, today, status, fee);
 
     const statusBadge = status === 'paid'
       ? `<span class="sl-status-badge sl-status-badge--paid">✓ 입금 완료</span>`
-      : status === 'overdue'
-        ? `<span class="sl-status-badge sl-status-badge--overdue">🚨 연체${ddHtml}</span>`
-        : `<span class="sl-status-badge sl-status-badge--pending">⏳ 입금 대기${ddHtml}</span>`;
+      : status === 'na'
+        ? `<span class="sl-status-badge sl-status-badge--record">기록</span>`
+        : status === 'overdue'
+          ? `<span class="sl-status-badge sl-status-badge--overdue">🚨 연체${ddHtml}</span>`
+          : `<span class="sl-status-badge sl-status-badge--pending">⏳ 입금 대기${ddHtml}</span>`;
 
-    const isPaid     = status === 'paid';
-    const rowCls     = status === 'overdue' ? ' class="sl-row--overdue"' : '';
+    const isPaid  = status === 'paid';
+    const isNa    = status === 'na';
+    const rowCls  = status === 'overdue' ? ' class="sl-row--overdue"'
+                  : isNa                 ? ' class="sl-row--na"'
+                  : '';
 
     return `
       <tr${rowCls} data-id="${escapeHtml(l.id)}">
@@ -218,17 +247,15 @@ function renderTable() {
         <td><div class="sl-cell-title" title="${escapeHtml(l.title)}">${escapeHtml(l.title)}</div></td>
         <td><div class="sl-cell-client" title="${escapeHtml(l.client || '')}">${escapeHtml(l.client || '—')}</div></td>
         <td class="sl-cell-amount">${feeStr}</td>
-        <td class="sl-cell-date">${deadline || '—'}</td>
+        <td class="sl-cell-date">${isNa ? '—' : (deadline || '—')}</td>
         <td>${statusBadge}</td>
         <td>
           <div class="sl-actions">
             <button class="sl-btn sl-btn--pay" data-id="${escapeHtml(l.id)}"
-                    ${isPaid ? 'disabled' : ''}>
-              ${isPaid ? '완료' : '입금 확인'}
+                    ${isPaid || isNa ? 'disabled' : ''}>
+              ${isPaid ? '완료' : isNa ? '—' : '입금 확인'}
             </button>
-            <button class="sl-btn sl-btn--invoice" data-invoice-id="${escapeHtml(l.id)}">
-              청구서
-            </button>
+            ${isNa ? '' : `<button class="sl-btn sl-btn--invoice" data-invoice-id="${escapeHtml(l.id)}">청구서</button>`}
           </div>
         </td>
       </tr>`;
@@ -263,7 +290,8 @@ function _generateInvoice(id) {
   if (!lec) return;
 
   const deadline = _paymentDeadline(lec) || '—';
-  const fee      = Number(lec.fee) > 0 ? `₩${(Number(lec.fee) * 10000).toLocaleString()}` : '—';
+  const feeAmt   = _getFee(lec);
+  const fee      = feeAmt > 0 ? `₩${(feeAmt * 10000).toLocaleString()}` : '—';
   const dateStr  = lec.date ? formatDateKo(lec.date).full : '—';
 
   const win = window.open('', '_blank', 'width=700,height=900');
@@ -337,7 +365,7 @@ function _bindEvents() {
     if (!tab) return;
     _filters.tab = tab.dataset.tab;
     document.querySelectorAll('.sl-tab').forEach(t => {
-      t.classList.remove('active', 'active--paid', 'active--pending', 'active--overdue');
+      t.classList.remove('active', 'active--paid', 'active--pending', 'active--overdue', 'active--na');
     });
     tab.classList.add('active');
     if (_filters.tab !== 'all') tab.classList.add(`active--${_filters.tab}`);
@@ -350,12 +378,16 @@ function _bindEvents() {
     renderTable();
   });
 
-  // Table action buttons (event delegation)
+  // Table action buttons + title click (event delegation)
   document.getElementById('sl-table-body')?.addEventListener('click', async e => {
+    const titleCell  = e.target.closest('.sl-cell-title');
     const payBtn     = e.target.closest('.sl-btn--pay');
     const invoiceBtn = e.target.closest('.sl-btn--invoice');
 
-    if (payBtn && !payBtn.disabled) {
+    if (titleCell) {
+      const row = titleCell.closest('tr[data-id]');
+      if (row) openModal(row.dataset.id);
+    } else if (payBtn && !payBtn.disabled) {
       await _confirmPayment(payBtn.dataset.id);
     } else if (invoiceBtn) {
       _generateInvoice(invoiceBtn.dataset.invoiceId);
@@ -369,10 +401,10 @@ function _bindEvents() {
 function _applyUrlParams() {
   const params = new URLSearchParams(location.search);
   const filter = params.get('filter');
-  if (filter === 'overdue' || filter === 'pending' || filter === 'paid') {
+  if (filter === 'overdue' || filter === 'pending' || filter === 'paid' || filter === 'na') {
     _filters.tab = filter;
     document.querySelectorAll('.sl-tab').forEach(t => {
-      t.classList.remove('active', 'active--paid', 'active--pending', 'active--overdue');
+      t.classList.remove('active', 'active--paid', 'active--pending', 'active--overdue', 'active--na');
       if (t.dataset.tab === filter) {
         t.classList.add('active', `active--${filter}`);
       }
@@ -385,16 +417,17 @@ function _applyUrlParams() {
 ════════════════════════════════════════ */
 _bindEvents();
 
-authGuard(user => {
+authGuard(async user => {
   currentUser = user;
 
   _applyUrlParams();
+  await initLectureModal(() => ({ allLectures, currentUser }));
 
   _unsub = subscribeLectures(user.uid, snap => {
     allLectures = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     render();
   }, err => console.error('[강비서] 정산 구독 오류:', err));
 }, {
-  withModal: false,
-  cleanupFn: () => { _unsub?.(); },
+  withModal: true,
+  cleanupFn: () => { if (_unsub) _unsub(); },
 });

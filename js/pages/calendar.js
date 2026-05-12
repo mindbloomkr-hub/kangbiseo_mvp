@@ -63,6 +63,13 @@ import { initMultiSessionModal, openAddModal as openMultiSessionModal } from '..
 })();
 
 /* ════════════════════════════════════════
+   수수료 읽기 헬퍼 — feeTotal 우선, fee 폴백
+════════════════════════════════════════ */
+function _getFee(lec) {
+  return Number(lec.feeTotal != null ? lec.feeTotal : (lec.fee != null ? lec.fee : 0));
+}
+
+/* ════════════════════════════════════════
    calendar.js 전용 확장
    — doc(서류 미비) 상태 추가 → classifyStatus + STATUS_META 로컬 오버라이드
 ════════════════════════════════════════ */
@@ -72,10 +79,10 @@ function classifyStatus(lec) {
   // Priority 1: cancelled always wins
   if (prog === 'cancelled') return 'cancelled';
 
-  const d = parseDate(lec.startDate ?? lec.date);
+  const d = parseDate(lec.startDate != null ? lec.startDate : lec.date);
 
-  // Priority 2: unpaid alert
-  if (!lec.isPaid && (d < TODAY || prog === 'done')) return 'unpaid';
+  // Priority 2: unpaid alert — skip if no fee (na)
+  if (!lec.isPaid && _getFee(lec) > 0 && (d < TODAY || prog === 'done')) return 'unpaid';
 
   // Priority 3: urgent alert — scheduled within 7 days
   if (prog === 'scheduled' && d >= TODAY && d <= IN_7DAYS) return 'urgent';
@@ -106,12 +113,20 @@ let unsubLectures = null;
 ════════════════════════════════════════ */
 function getEventColor(lec) {
   const prog = lec.progressStatus || 'scheduled';
-  const d    = parseDate(lec.startDate ?? lec.date);
+  const d    = parseDate(lec.startDate != null ? lec.startDate : lec.date);
 
   if (prog === 'cancelled')  return { bg: '#f9fafb', border: '#d1d5db', text: '#9ca3af' };
   if (prog === 'onhold')     return { bg: '#f3f4f6', border: '#9ca3af', text: '#6b7280' };
   if (prog === 'discussing') return { bg: '#ede9fe', border: '#a78bfa', text: '#5b21b6' };
   if (prog === 'needs_review') return { bg: '#fbee03', border: '#fbee03', text: '#108500' };
+
+  // na-fee: no payment tracking — display with tag/scheduled color regardless of progress
+  if (!lec.isPaid && !_getFee(lec)) {
+    const _tagNa = lec.topicTagId != null ? getTopicTags().find(t => t.id === lec.topicTagId) : null;
+    if (_tagNa?.color) return { bg: _tagNa.color, border: _tagNa.color, text: '#fff' };
+    return { bg: '#0ea5e9', border: '#0284c7', text: '#fff' };
+  }
+
   if (prog === 'done')       return lec.isPaid
     ? { bg: '#059669', border: '#047857', text: '#fff' }
     : { bg: '#96efc1', border: '#9ca3af', text: '#ef4444' };
@@ -138,12 +153,12 @@ function calcDynamicSlotRange(lectures) {
   let maxH = 21;
 
   lectures.forEach(lec => {
-    const startDate = lec.startDate ?? lec.date ?? '';
-    const endDate   = lec.endDate   ?? lec.date ?? '';
+    const startDate = (lec.startDate != null ? lec.startDate : (lec.date != null ? lec.date : ''));
+    const endDate   = (lec.endDate   != null ? lec.endDate   : (lec.date != null ? lec.date : ''));
     // Skip multi-day lectures — their times belong to different days
     if (startDate !== endDate) return;
-    const timeStart = lec.startTime ?? lec.timeStart ?? '';
-    const timeEnd   = lec.endTime   ?? lec.timeEnd   ?? '';
+    const timeStart = (lec.startTime != null ? lec.startTime : (lec.timeStart != null ? lec.timeStart : ''));
+    const timeEnd   = (lec.endTime   != null ? lec.endTime   : (lec.timeEnd   != null ? lec.timeEnd   : ''));
     if (timeStart) {
       const h = parseInt(timeStart.split(':')[0], 10);
       if (h < minH) minH = h;
@@ -167,16 +182,16 @@ function calcDynamicSlotRange(lectures) {
 function toFcEvents(lectures) {
   return lectures
     .filter(lec => {
-      const startDate = lec.startDate ?? lec.date;
-      const timeStart = lec.startTime ?? lec.timeStart;
-      const timeEnd   = lec.endTime   ?? lec.timeEnd;
+      const startDate = (lec.startDate != null ? lec.startDate : lec.date);
+      const timeStart = (lec.startTime != null ? lec.startTime : lec.timeStart);
+      const timeEnd   = (lec.endTime   != null ? lec.endTime   : lec.timeEnd);
       return startDate && timeStart && timeEnd;
     })
     .map(lec => {
-      const startDate  = lec.startDate ?? lec.date;
-      const endDate    = lec.endDate   ?? lec.date;
-      const timeStart  = lec.startTime ?? lec.timeStart;
-      const timeEnd    = lec.endTime   ?? lec.timeEnd;
+      const startDate  = (lec.startDate != null ? lec.startDate : lec.date);
+      const endDate    = (lec.endDate   != null ? lec.endDate   : lec.date);
+      const timeStart  = (lec.startTime != null ? lec.startTime : lec.timeStart);
+      const timeEnd    = (lec.endTime   != null ? lec.endTime   : lec.timeEnd);
       const isMultiDay = startDate !== endDate;
       const prog = lec.progressStatus || 'scheduled';
       const { bg, border, text } = getEventColor(lec);
@@ -233,8 +248,8 @@ function initCalendar() {
     eventContent: (arg) => {
       const lec        = arg.event.extendedProps;
       const prog       = lec.progressStatus || 'scheduled';
-      const t          = lec._timeStart ?? lec.timeStart ?? '';
-      const isMultiDay = lec._isMultiDay ?? false;
+      const t          = (lec._timeStart != null ? lec._timeStart : (lec.timeStart != null ? lec.timeStart : ''));
+      const isMultiDay = (lec._isMultiDay != null ? lec._isMultiDay : false);
       const isMobile   = window.matchMedia('(max-width: 768px)').matches;
       const fmt        = isMobile ? t.trim().split(':')[0] : t.slice(0, 5);
       const title      = arg.event.title;
@@ -266,17 +281,18 @@ function initCalendar() {
       const lec  = event.extendedProps;
       const prog = lec.progressStatus || 'scheduled';
 
-      const timeStart  = lec._timeStart ?? lec.timeStart ?? '';
-      const timeEnd    = lec._timeEnd   ?? lec.timeEnd   ?? '';
-      const startDate  = lec._startDate ?? lec.date ?? '';
-      const endDate    = lec._endDate   ?? lec.date ?? '';
-      const isMultiDay = lec._isMultiDay ?? false;
+      const timeStart  = (lec._timeStart != null ? lec._timeStart : (lec.timeStart != null ? lec.timeStart : ''));
+      const timeEnd    = (lec._timeEnd   != null ? lec._timeEnd   : (lec.timeEnd   != null ? lec.timeEnd   : ''));
+      const startDate  = (lec._startDate != null ? lec._startDate : (lec.date      != null ? lec.date      : ''));
+      const endDate    = (lec._endDate   != null ? lec._endDate   : (lec.date      != null ? lec.date      : ''));
+      const isMultiDay = (lec._isMultiDay != null ? lec._isMultiDay : false);
       const timeRange  = isMultiDay
         ? `${startDate} ${timeStart} ~ ${endDate} ${timeEnd}`
         : `${timeStart}~${timeEnd}`;
 
+      const naFee = !_getFee(lec);
       const STATUS_HINTS = { discussing: '[논의 중] ', onhold: '[보류 중] ', cancelled: '[취소/드롭] ' };
-      const paidMark   = lec.isPaid ? '' : '[미입금] ';
+      const paidMark   = (lec.isPaid || naFee) ? '' : '[미입금] ';
       const statusHint = STATUS_HINTS[prog] || '';
       evEl.setAttribute('title',
         `${statusHint}${paidMark}${lec.title || ''}\n${timeRange}  ${lec.client || ''}`
@@ -284,8 +300,9 @@ function initCalendar() {
 
       // Visual effects for discussing/onhold/cancelled are handled by CSS classes.
       // Unpaid red border applies only to scheduled/done events (status events have their own identity).
+      // Skip for na-fee lectures — they have no payment obligation.
       const isStatusEvent = prog === 'discussing' || prog === 'onhold' || prog === 'cancelled';
-      if (!isStatusEvent && !lec.isPaid && (parseDate(startDate) < TODAY || prog === 'done')) {
+      if (!isStatusEvent && !lec.isPaid && !naFee && (parseDate(startDate) < TODAY || prog === 'done')) {
         evEl.style.borderLeft = '3px solid #ef4444';
       }
     },

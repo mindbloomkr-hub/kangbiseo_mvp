@@ -19,7 +19,7 @@ export function subscribeTodos(uid, onUpdate, onError) {
   return onSnapshot(q, snap => {
     const todos = snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
-      .sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0));
+      .sort((a, b) => (a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0) - (b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : 0));
     onUpdate(todos);
   }, onError);
 }
@@ -31,7 +31,7 @@ export function subscribeLectureTodos(uid, lectureId, onUpdate, onError) {
     const todos = snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       .filter(t => t.lectureId === lectureId)
-      .sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0));
+      .sort((a, b) => (a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0) - (b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : 0));
     onUpdate(todos);
   }, onError);
 }
@@ -45,8 +45,8 @@ export async function addTodo(uid, text, lectureId = null, groupId = null, dueDa
     uid,
     text: text.trim(),
     isDone: false,
-    lectureId: lectureId ?? null,
-    groupId: groupId ?? null,
+    lectureId: (lectureId != null ? lectureId : null),
+    groupId: (groupId != null ? groupId : null),
     deadline: dueDate || _dateStr(0),
     createdAt: serverTimestamp(),
     completedAt: null,
@@ -64,7 +64,7 @@ export function subscribeGroupTodos(uid, groupId, onUpdate, onError) {
     const todos = snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       .filter(t => t.groupId === groupId)
-      .sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0));
+      .sort((a, b) => (a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0) - (b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : 0));
     onUpdate(todos);
   }, onError);
 }

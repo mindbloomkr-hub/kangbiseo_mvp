@@ -76,7 +76,7 @@ export function calcPaymentDate(date, cycle, lastDate) {
     }
     case 'after-completion': {
       const last = new Date((lastDate || date) + 'T00:00:00');
-      last.setDate(last.getDate() + 14);
+      last.setDate(last.getDate() + 7);
       return formatDateString(last);
     }
     default: {
@@ -100,13 +100,13 @@ export function formatDateKo(dateStr) {
    범용 유틸
 ════════════════════════════════════════ */
 export function escapeHtml(str) {
-  return String(str ?? '')
+  return String(str != null ? str : '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 export function hexToRgba(hex, alpha) {
-  let h = (hex ?? '').replace('#', '');
+  let h = (hex != null ? hex : '').replace('#', '');
   if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
   const r = parseInt(h.substring(0, 2), 16);
   const g = parseInt(h.substring(2, 4), 16);
@@ -248,8 +248,8 @@ export function showToast(msg, type = 'default') {
 }
 
 /* DOM 값 읽기/쓰기 헬퍼 */
-export function setVal(id, val) { const el = document.getElementById(id); if (el) el.value = val ?? ''; }
-export function getVal(id)       { return document.getElementById(id)?.value ?? ''; }
+export function setVal(id, val) { const el = document.getElementById(id); if (el) el.value = (val != null ? val : ''); }
+export function getVal(id)       { const _el = document.getElementById(id); return (_el != null && _el.value != null ? _el.value : ''); }
 
 /* ════════════════════════════════════════
    사이드바 UI 업데이트
@@ -402,13 +402,13 @@ export async function fetchTravelMin(placeA, placeB, originTime = null) {
 // Firestore 형식(timeStart/timeEnd) 또는 정규화 형식(startTime/endTime) 통일
 function _normLec(l) {
   return {
-    date:       l.date       ?? '',
-    startTime:  l.startTime  ?? l.timeStart  ?? '',
-    endTime:    l.endTime    ?? l.timeEnd    ?? '',
-    place:      l.isOnline ? 'Online' : (l.place ?? ''),
-    isOnline:   l.isOnline   ?? false,
-    setupTime:  l.setupTime  ?? 0,
-    wrapupTime: l.wrapupTime ?? 0,
+    date:       (l.date      != null ? l.date      : ''),
+    startTime:  (l.startTime != null ? l.startTime : (l.timeStart != null ? l.timeStart : '')),
+    endTime:    (l.endTime   != null ? l.endTime   : (l.timeEnd   != null ? l.timeEnd   : '')),
+    place:      l.isOnline ? 'Online' : (l.place != null ? l.place : ''),
+    isOnline:   (l.isOnline  != null ? l.isOnline  : false),
+    setupTime:  (l.setupTime != null ? l.setupTime : 0),
+    wrapupTime: (l.wrapupTime != null ? l.wrapupTime : 0),
   };
 }
 
@@ -457,7 +457,7 @@ async function _buildAlternatives(newLec, sameDayLecs, settings, allLectures, D)
   const defaultSetup  = settings.setupTime   || 0;
   const defaultWrapup = settings.wrapupTime  || 0;
   const newDur        = timeToMin(newLec.endTime) - timeToMin(newLec.startTime);
-  const bMin          = defaultWrapup + globalBuffer + (newLec.setupTime ?? defaultSetup);
+  const bMin          = defaultWrapup + globalBuffer + (newLec.setupTime != null ? newLec.setupTime : defaultSetup);
 
   // Option A: 같은 날 빈 슬롯
   const optionA = _findSameDaySlots(newLec.date, sameDayLecs, newDur, bMin, D);
@@ -466,7 +466,7 @@ async function _buildAlternatives(newLec, sameDayLecs, settings, allLectures, D)
   const optionB = [];
   for (const delta of [-1, 1]) {
     const d    = _offsetDate(newLec.date, delta);
-    const lecs = allLectures.filter(l => (l.date ?? '') === d);
+    const lecs = allLectures.filter(l => (l.date != null ? l.date : '') === d);
     if (_isSlotFree(lecs, newLec.startTime, newLec.endTime)) {
       optionB.push({ date: d, startTime: newLec.startTime, endTime: newLec.endTime });
     }
@@ -474,7 +474,7 @@ async function _buildAlternatives(newLec, sameDayLecs, settings, allLectures, D)
 
   // Option C: 다음 주 같은 시간대
   const nextWeek = _offsetDate(newLec.date, 7);
-  const nwLecs   = allLectures.filter(l => (l.date ?? '') === nextWeek);
+  const nwLecs   = allLectures.filter(l => (l.date != null ? l.date : '') === nextWeek);
   const optionC  = _isSlotFree(nwLecs, newLec.startTime, newLec.endTime)
     ? { date: nextWeek, startTime: newLec.startTime, endTime: newLec.endTime }
     : null;
@@ -505,12 +505,12 @@ export async function checkScheduleConflict(newLec, sameDayLecs, settings, allLe
     const isPrevNew     = newEnd <= ext._s;
     const prevEnd       = isPrevNew ? newEnd   : ext._e;
     const nextStart     = isPrevNew ? ext._s   : newStart;
-    const prevOnline    = isPrevNew ? (newLec.isOnline ?? false) : (ext.isOnline ?? false);
-    const nextOnline    = isPrevNew ? (ext.isOnline ?? false)    : (newLec.isOnline ?? false);
+    const prevOnline    = isPrevNew ? (newLec.isOnline != null ? newLec.isOnline : false) : (ext.isOnline != null ? ext.isOnline : false);
+    const nextOnline    = isPrevNew ? (ext.isOnline   != null ? ext.isOnline   : false) : (newLec.isOnline != null ? newLec.isOnline : false);
     const prevPlace     = prevOnline ? 'Online' : (isPrevNew ? newLec.place : ext.place);
     const nextPlace     = nextOnline ? 'Online' : (isPrevNew ? ext.place    : newLec.place);
-    const prevWrapup    = isPrevNew ? (newLec.wrapupTime ?? defaultWrapup) : (ext.wrapupTime ?? defaultWrapup);
-    const nextSetup     = isPrevNew ? (ext.setupTime  ?? defaultSetup)     : (newLec.setupTime ?? defaultSetup);
+    const prevWrapup    = isPrevNew ? (newLec.wrapupTime != null ? newLec.wrapupTime : defaultWrapup) : (ext.wrapupTime != null ? ext.wrapupTime : defaultWrapup);
+    const nextSetup     = isPrevNew ? (ext.setupTime   != null ? ext.setupTime   : defaultSetup)     : (newLec.setupTime != null ? newLec.setupTime : defaultSetup);
     const pureGap       = nextStart - prevEnd;
 
     const samePlace = prevPlace?.trim() !== '' && prevPlace?.trim() === nextPlace?.trim();
@@ -528,7 +528,7 @@ export async function checkScheduleConflict(newLec, sameDayLecs, settings, allLe
     const depMinOfDay = (prevEnd + prevWrapup) % 1440;
     const originTime  = newLec.date ? `${newLec.date}T${minToTime(depMinOfDay)}:00` : null;
     const travelMin   = await fetchTravelMin(prevPlace, nextPlace, originTime);
-    const D           = travelMin ?? 60;
+    const D           = (travelMin != null ? travelMin : 60);
     if (pureGap < D + bMin) {
       const alts = await _buildAlternatives(newLec, sameDayLecs, settings, allLectures, D);
       return { status: 'risk', step: 3, msg: 'travel', bMin, pureGap, travelMin: D, ...alts };
@@ -563,14 +563,15 @@ export function calculateExpectedSettlement(lectures) {
 
   for (const lec of lectures) {
     if (lec.progressStatus === 'cancelled') continue;
-    if (!lec.feeType || !lec.feeAmount || !lec.date) continue;
+    const feeAmt = (lec.feeTotal != null ? lec.feeTotal : lec.feeAmount);
+    if (!lec.feeType || !feeAmt || !lec.date) continue;
 
     let sessionAmount;
     if (lec.feeType === 'unit') {
-      sessionAmount = lec.feeAmount;
+      sessionAmount = feeAmt;
     } else if (lec.feeType === 'fixed') {
-      if (!lec.sessionTotal) continue; // can't divide without a total
-      sessionAmount = Math.round(lec.feeAmount / lec.sessionTotal);
+      if (!lec.sessionTotal) continue;
+      sessionAmount = Math.round(feeAmt / lec.sessionTotal);
     } else {
       continue;
     }
@@ -578,7 +579,7 @@ export function calculateExpectedSettlement(lectures) {
     // 'total' cycle: push all shares to the month of the last session
     const attributionDate =
       lec.settlementCycle === 'total' && lec.groupId
-        ? (lastDateByGroup.get(lec.groupId) ?? lec.date)
+        ? (lastDateByGroup.get(lec.groupId) != null ? lastDateByGroup.get(lec.groupId) : lec.date)
         : lec.date;
 
     const month  = attributionDate.slice(0, 7); // 'YYYY-MM'

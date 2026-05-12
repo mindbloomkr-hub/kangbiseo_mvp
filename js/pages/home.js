@@ -25,10 +25,10 @@ import { initLectureModal, openModal, getTopicTags } from '../components/lecture
    멀티데이 슬라이스 — 날짜별 강의 분할
 ════════════════════════════════════════ */
 function _sliceLectureForDay(lec, dayStr) {
-  const startDate  = lec.startDate ?? lec.date ?? '';
-  const endDate    = lec.endDate   ?? lec.date ?? '';
-  const timeStart  = lec.startTime ?? lec.timeStart ?? '';
-  const timeEnd    = lec.endTime   ?? lec.timeEnd   ?? '';
+  const startDate  = (lec.startDate != null ? lec.startDate : (lec.date != null ? lec.date : ''));
+  const endDate    = (lec.endDate   != null ? lec.endDate   : (lec.date != null ? lec.date : ''));
+  const timeStart  = (lec.startTime != null ? lec.startTime : (lec.timeStart != null ? lec.timeStart : ''));
+  const timeEnd    = (lec.endTime   != null ? lec.endTime   : (lec.timeEnd   != null ? lec.timeEnd   : ''));
   const isMultiDay = startDate !== endDate;
 
   if (!isMultiDay) {
@@ -47,9 +47,16 @@ function _sliceLectureForDay(lec, dayStr) {
 }
 
 /* 슬라이스 시간 접근자 (renderTimelineInto + _createTimelineCard 공용) */
-const _ts = lec => lec._sliceStart ?? (lec.startTime ?? lec.timeStart ?? '');
-const _te = lec => lec._sliceEnd   ?? (lec.endTime   ?? lec.timeEnd   ?? '');
-const _td = lec => lec._sliceDate  ?? lec.date ?? '';
+const _ts = lec => (lec._sliceStart != null ? lec._sliceStart : (lec.startTime != null ? lec.startTime : (lec.timeStart != null ? lec.timeStart : '')));
+const _te = lec => (lec._sliceEnd   != null ? lec._sliceEnd   : (lec.endTime   != null ? lec.endTime   : (lec.timeEnd   != null ? lec.timeEnd   : '')));
+const _td = lec => (lec._sliceDate  != null ? lec._sliceDate  : (lec.date      != null ? lec.date      : ''));
+
+/* ════════════════════════════════════════
+   수수료 읽기 헬퍼 — feeTotal 우선, fee 폴백
+════════════════════════════════════════ */
+function _getFee(lec) {
+  return Number(lec.feeTotal != null ? lec.feeTotal : (lec.fee != null ? lec.fee : 0));
+}
 
 /* ════════════════════════════════════════
    강의별 색상 — topicTag 색상 우선, 없으면 중립 회색
@@ -137,12 +144,20 @@ function renderGreeting() {
 ════════════════════════════════════════ */
 function _getPaymentDeadline(lec) {
   if (lec.paymentDate) return lec.paymentDate;
-  const baseDate = lec.endDate ?? lec.date ?? '';
+  if (lec.settlementCycle === 'after-completion' && lec.groupId) {
+    const lastDate = allLectures
+      .filter(l => l.groupId === lec.groupId)
+      .reduce((max, l) => { const d = (l.endDate != null ? l.endDate : (l.date != null ? l.date : '')); return d > max ? d : max; }, '');
+    const baseDate = lastDate || (lec.endDate != null ? lec.endDate : (lec.date != null ? lec.date : ''));
+    return baseDate ? calcPaymentDate(baseDate, 'after-completion', lastDate || null) : null;
+  }
+  const baseDate = (lec.endDate != null ? lec.endDate : (lec.date != null ? lec.date : ''));
   return baseDate ? calcPaymentDate(baseDate, lec.settlementCycle || '', null) : null;
 }
 
 function _paymentStatus(lec, todayStr) {
-  if (lec.isPaid) return 'paid';
+  if (lec.paidStatus === 'true' || lec.isPaid === true) return 'paid';
+  if (!_getFee(lec)) return 'na';          // 금액 없음 → 해당없음
   const deadline = _getPaymentDeadline(lec);
   if (!deadline) return 'pending';
   return todayStr >= deadline ? 'overdue' : 'pending';
@@ -155,7 +170,7 @@ function renderStatBar() {
   const container = document.getElementById('stat-bar');
   if (!container) return;
 
-  const totalFee = todayLectures.reduce((sum, l) => sum + (Number(l.fee) || 0), 0);
+  const totalFee = todayLectures.reduce((sum, l) => sum + _getFee(l), 0);
   const now0     = new Date(); now0.setHours(0, 0, 0, 0);
   const todayStr = getTodayString();
 
@@ -165,8 +180,8 @@ function renderStatBar() {
   });
   const overdueLecs = pastUnpaid.filter(l => _paymentStatus(l, todayStr) === 'overdue');
   const pendingLecs = pastUnpaid.filter(l => _paymentStatus(l, todayStr) === 'pending');
-  const overdueAmt  = overdueLecs.reduce((s, l) => s + (Number(l.fee) || 0), 0);
-  const pendingAmt  = pendingLecs.reduce((s, l) => s + (Number(l.fee) || 0), 0);
+  const overdueAmt  = overdueLecs.reduce((s, l) => s + _getFee(l), 0);
+  const pendingAmt  = pendingLecs.reduce((s, l) => s + _getFee(l), 0);
 
   const unpaidIconCls = overdueLecs.length > 0
     ? 'stat-icon--red'
@@ -236,13 +251,13 @@ function renderBriefingCards() {
     const color      = getLectureColor(l);
     const mgrInitial = (l.managerName || '담').charAt(0);
     const payStatus  = _paymentStatus(l, todayStr);
-    const payChip    = !l.isPaid
-      ? payStatus === 'overdue'
+    const payChip    = (payStatus === 'paid' || payStatus === 'na')
+      ? ''
+      : payStatus === 'overdue'
         ? `<span class="status-chip" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;margin-left:4px">연체</span>`
-        : `<span class="status-chip" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;margin-left:4px">입금 대기</span>`
-      : '';
-    const startDate   = l.startDate ?? l.date ?? '';
-    const endDate     = l.endDate   ?? l.date ?? '';
+        : `<span class="status-chip" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;margin-left:4px">입금 대기</span>`;
+    const startDate   = (l.startDate != null ? l.startDate : (l.date != null ? l.date : ''));
+    const endDate     = (l.endDate   != null ? l.endDate   : (l.date != null ? l.date : ''));
     const isMultiDay  = startDate && endDate && startDate !== endDate;
     const fmtDate     = d => { const [,m,day] = d.split('-'); const dow = ['일','월','화','수','목','금','토'][new Date(d).getDay()]; return `${m}/${day}(${dow})`; };
     const dateDisplay = isMultiDay
@@ -251,7 +266,7 @@ function renderBriefingCards() {
     const _tag      = l.topicTagId != null ? getTopicTags().find(t => t.id === l.topicTagId) : null;
     let topicChip   = '';
     if (_tag) {
-      const _bg = _tag.color ?? '#7c3aed';
+      const _bg = (_tag.color != null ? _tag.color : '#7c3aed');
       const [_r, _g, _b] = [parseInt(_bg.slice(1,3),16), parseInt(_bg.slice(3,5),16), parseInt(_bg.slice(5,7),16)];
       const _fg = (0.299*_r + 0.587*_g + 0.114*_b) > 160 ? '#374151' : '#ffffff';
       topicChip = `<span class="status-chip status-chip--topic" style="background:${_bg};color:${_fg};margin-left:auto;">${escapeHtml(_tag.name)}</span>`;
@@ -269,7 +284,7 @@ function renderBriefingCards() {
             <div class="briefing-meta-item"><span class="briefing-meta-icon">🏢</span><span class="briefing-meta-text">${escapeHtml(l.client)}</span></div>
             <div class="briefing-meta-item"><span class="briefing-meta-icon">📍</span><span class="briefing-meta-text">${escapeHtml(l.place || '장소 미정')}</span></div>
             <div class="briefing-meta-item"><span class="briefing-meta-icon">⏱</span><span class="briefing-meta-text">${l.timeStart} ~ ${l.timeEnd}</span></div>
-            <div class="briefing-meta-item"><span class="briefing-meta-icon">💰</span><span class="briefing-meta-text">₩${(Number(l.fee)*10000||0).toLocaleString()}</span></div>
+            <div class="briefing-meta-item"><span class="briefing-meta-icon">💰</span><span class="briefing-meta-text">${_getFee(l) > 0 ? `₩${(_getFee(l)*10000).toLocaleString()}` : '해당없음'}</span></div>
           </div>
         </div>
         <div class="briefing-footer">
@@ -307,8 +322,9 @@ function buildOriginTime(date, timeHHMM, extraMin = 0) {
 
 function getDeviceScheduler() {
   try {
-    const d = JSON.parse(localStorage.getItem('kangbiseo_device') ?? 'null');
-    return d?.scheduler ?? {};
+    const _raw = localStorage.getItem('kangbiseo_device');
+    const d = JSON.parse(_raw != null ? _raw : 'null');
+    return (d != null && d.scheduler != null ? d.scheduler : {});
   } catch { return {}; }
 }
 
@@ -324,7 +340,7 @@ function getEffectiveBufferTime() {
 function _createTimelineCard(lec, isDone) {
   const sliceStart  = _ts(lec);
   const sliceEnd    = _te(lec);
-  const isMultiDay  = lec._isMultiDay ?? false;
+  const isMultiDay  = (lec._isMultiDay != null ? lec._isMultiDay : false);
 
   const color     = getLectureColor(lec);
   const bg        = hexToRgba(color, isDone ? 0.1 : 0.3);
@@ -443,7 +459,7 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
   // Fetch all travel times in parallel: inter-lecture + home legs if needed
   // Inter-lecture: pass endTime + wrapupTime as originTime for time-aware routing
   const interLecPromises = lectures.slice(0, -1).map((lec, i) => {
-    const wrapup     = Number(lec.wrapupTime ?? sched.wrapupTime ?? 15);
+    const wrapup     = Number(lec.wrapupTime != null ? lec.wrapupTime : (sched.wrapupTime != null ? sched.wrapupTime : 15));
     const originTime = buildOriginTime(_td(lec), _te(lec), wrapup);
     return fetchTravelMin(lec.place, lectures[i + 1].place, originTime);
   });
@@ -457,22 +473,22 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
   ]);
 
   // Home-to-Home calculations
-  const firstSetup  = Number(firstLec.setupTime  ?? sched.setupTime  ?? 20);
-  const lastWrapup  = Number(lastLec.wrapupTime   ?? sched.wrapupTime ?? 15);
+  const firstSetup  = Number(firstLec.setupTime != null ? firstLec.setupTime : (sched.setupTime != null ? sched.setupTime : 20));
+  const lastWrapup  = Number(lastLec.wrapupTime  != null ? lastLec.wrapupTime : (sched.wrapupTime != null ? sched.wrapupTime : 15));
   // Round departure DOWN to nearest 10-min increment (07:06 → 07:00, 08:19 → 08:10)
   const departureMin = hasOrigin
-    ? Math.floor((timeToMin(_ts(firstLec)) - (firstSetup + bufferTime + (travelToFirst ?? 0))) / 10) * 10
+    ? Math.floor((timeToMin(_ts(firstLec)) - (firstSetup + bufferTime + (travelToFirst != null ? travelToFirst : 0))) / 10) * 10
     : null;
   const returnMin = hasOrigin
-    ? timeToMin(_te(lastLec)) + lastWrapup + (travelToHome ?? 0)
+    ? timeToMin(_te(lastLec)) + lastWrapup + (travelToHome != null ? travelToHome : 0)
     : null;
 
   const now    = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
 
 // 1. 날짜 기준점 설정
-const firstStartDate   = firstLec.startDate ?? firstLec.date ?? '';
-const lastEndDate      = lastLec.endDate    ?? lastLec.date  ?? '';
+const firstStartDate   = (firstLec.startDate != null ? firstLec.startDate : (firstLec.date != null ? firstLec.date : ''));
+const lastEndDate      = (lastLec.endDate    != null ? lastLec.endDate    : (lastLec.date  != null ? lastLec.date  : ''));
 
 // 2. 억제(Suppress) 로직 개선
 // 출발 정보 억제: 연속 일정(isMultiDay)이면서, 현재 날짜(_sliceDate)가 실제 시작일이 아닐 때 (즉, 중간날이나 종료일일 때)
@@ -500,7 +516,7 @@ if (hasOrigin && !suppressDeparture) {
       </div>`);
 
     // Home → First lecture gap (이동/버퍼/준비 정보)
-    const t2f = travelToFirst ?? 0;
+    const t2f = (travelToFirst != null ? travelToFirst : 0);
     const totalMargin = t2f + bufferTime + firstSetup;
     parts.push(`
       <div class="tl-gap-row">
@@ -528,9 +544,9 @@ if (hasOrigin && !suppressDeparture) {
     if (idx < lectures.length - 1) {
       const next       = lectures[idx + 1];
       const rawTravel  = travelMins[idx];
-      const travelMin  = rawTravel ?? 0;
-      const wrapup1    = Number(lec.wrapupTime  ?? sched.wrapupTime ?? 15);
-      const setup2     = Number(next.setupTime  ?? sched.setupTime  ?? 20);
+      const travelMin  = (rawTravel != null ? rawTravel : 0);
+      const wrapup1    = Number(lec.wrapupTime  != null ? lec.wrapupTime  : (sched.wrapupTime != null ? sched.wrapupTime : 15));
+      const setup2     = Number(next.setupTime  != null ? next.setupTime  : (sched.setupTime  != null ? sched.setupTime  : 20));
       const reqGap     = wrapup1 + travelMin + bufferTime + setup2;
       const actGap     = timeToMin(_ts(next)) - timeToMin(_te(lec));
       const arrivalMin = timeToMin(_te(lec)) + wrapup1 + travelMin;
@@ -563,7 +579,7 @@ if (hasOrigin && !suppressDeparture) {
 
   // ── Home return node ─────────────────────────────────
   if (hasOrigin && !suppressReturn) {
-    const t2h      = travelToHome ?? 0;
+    const t2h      = (travelToHome != null ? travelToHome : 0);
     const depStr   = minToTime(timeToMin(_te(lastLec)) + lastWrapup);
     const retStr   = minToTime(returnMin);
 
@@ -668,7 +684,7 @@ function renderWeekly() {
   });
 
   const weekTotal    = Object.values(dateToLectures).flat().length;
-  const weekTotalFee = Object.values(dateToLectures).flat().reduce((s, l) => s + (Number(l.fee)||0), 0);
+  const weekTotalFee = Object.values(dateToLectures).flat().reduce((s, l) => s + _getFee(l), 0);
   const daysWithLec  = Object.keys(dateToLectures).length;
 
   if (summaryEl) {

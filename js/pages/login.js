@@ -99,7 +99,7 @@ pwInput?.addEventListener('input', () => {
     pwStrText.textContent = '';
   } else {
     pwFill.dataset.level  = level;
-    pwStrText.textContent = STRENGTH_LABELS[level] ?? '';
+    pwStrText.textContent = (STRENGTH_LABELS[level] != null ? STRENGTH_LABELS[level] : '');
   }
 });
 
@@ -173,7 +173,7 @@ loginForm?.addEventListener('submit', async e => {
       'auth/invalid-credential': '이메일 또는 비밀번호를 확인해 주세요.',
       'auth/too-many-requests':  '잠시 후 다시 시도해 주세요.',
     };
-    window.showToast?.(MESSAGES[err.code] ?? '로그인에 실패했습니다.', 'error');
+    window.showToast?.((MESSAGES[err.code] != null ? MESSAGES[err.code] : '로그인에 실패했습니다.'), 'error');
   }
 });
 
@@ -228,7 +228,7 @@ signupForm?.addEventListener('submit', async e => {
       'auth/invalid-email':        '올바른 이메일 형식을 입력해 주세요.',
       'auth/weak-password':        '비밀번호가 너무 약합니다. (6자 이상)',
     };
-    window.showToast?.(MESSAGES[err.code] ?? '회원가입에 실패했습니다.', 'error');
+    window.showToast?.((MESSAGES[err.code] != null ? MESSAGES[err.code] : '회원가입에 실패했습니다.'), 'error');
   }
 });
 

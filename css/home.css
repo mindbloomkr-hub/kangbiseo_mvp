@@ -797,6 +797,28 @@
     gap: var(--space-3);
   }
 
+  /* 모든 홈 컨테이너: 뷰포트 너비를 넘지 않도록 */
+  .home-grid,
+  .home-col-left,
+  .home-col-right,
+  .home-full-row {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* 패널 내부 가로 패딩 축소 — 모바일 여백 확보 */
+  .panel-header,
+  .panel-body {
+    padding-inline: var(--space-4);
+  }
+
+  /* 타임라인: 블록 내부에서 가로 스와이프 허용 */
+  .timeline-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   /* 위클리: 2일씩 */
   .weekly-day-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -805,5 +827,18 @@
   .weekly-summary-bar {
     flex-wrap: wrap;
     gap: var(--space-3);
+  }
+}
+
+/* 초소형 화면 (480px 미만) — 단열 레이아웃 */
+@media (max-width: 480px) {
+  .stat-bar {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+
+  /* 브리핑 메타 그리드를 1열로 */
+  .briefing-meta-grid {
+    grid-template-columns: 1fr;
   }
 }

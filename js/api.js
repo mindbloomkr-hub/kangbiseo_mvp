@@ -71,7 +71,8 @@ export async function fetchGoogleCalendarEvents() {
     const errBody = await res.json().catch(() => ({}));
     throw new Error(`캘린더 API ${res.status}: ${JSON.stringify(errBody)}`);
   }
-  return (await res.json()).items ?? [];
+  const _apiData = await res.json();
+  return (_apiData.items != null ? _apiData.items : []);
 }
 
 /* ════════════════════════════════════════

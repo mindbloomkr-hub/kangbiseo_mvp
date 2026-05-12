@@ -126,7 +126,7 @@ export async function openModal(id) {
   if (currentUser) {
     _unsubLecTodos?.();
     const listEl = document.getElementById('v-todo-list');
-    const gId    = lec.groupId ?? null;
+    const gId    = (lec.groupId != null ? lec.groupId : null);
     _unsubLecTodos = renderTodoUI(listEl, gId ? null : id, {
       uid:         currentUser.uid,
       allLectures: _getCtx().allLectures,
@@ -165,11 +165,13 @@ export async function openAddModal() {
   const taxSel = document.getElementById('af-tax');
   if (taxSel) { taxSel.value = 'income3_3'; taxSel.disabled = false; }
 
-  const sched    = JSON.parse(localStorage.getItem('kangbiseo_device') ?? 'null')?.scheduler ?? {};
+  var _devRaw0 = localStorage.getItem('kangbiseo_device');
+  var _devData0 = JSON.parse(_devRaw0 != null ? _devRaw0 : 'null');
+  const sched    = (_devData0 != null && _devData0.scheduler != null ? _devData0.scheduler : {});
   const setupEl  = document.getElementById('af-setup-time');
   const wrapupEl = document.getElementById('af-wrapup-time');
-  if (setupEl)  setupEl.value  = sched.setupTime  ?? 20;
-  if (wrapupEl) wrapupEl.value = sched.wrapupTime ?? 15;
+  if (setupEl)  setupEl.value  = (sched.setupTime  != null ? sched.setupTime  : 20);
+  if (wrapupEl) wrapupEl.value = (sched.wrapupTime != null ? sched.wrapupTime : 15);
 
   _refreshTagPicker(null);
 
@@ -260,10 +262,10 @@ function _populateView(lec) {
   const status = _classifyFn(lec);
   const meta   = _statusMeta[status] || { label: status, cls: '' };
 
-  const startDate  = lec.startDate ?? lec.date;
-  const endDate    = lec.endDate   ?? lec.date;
-  const timeStart  = lec.startTime ?? lec.timeStart ?? '';
-  const timeEnd    = lec.endTime   ?? lec.timeEnd   ?? '';
+  const startDate  = (lec.startDate != null ? lec.startDate : lec.date);
+  const endDate    = (lec.endDate   != null ? lec.endDate   : lec.date);
+  const timeStart  = (lec.startTime != null ? lec.startTime : (lec.timeStart != null ? lec.timeStart : ''));
+  const timeEnd    = (lec.endTime   != null ? lec.endTime   : (lec.timeEnd   != null ? lec.timeEnd   : ''));
   const isCrossDay = startDate !== endDate;
   const { full: startFull } = formatDateKo(startDate);
   const endFull = isCrossDay ? formatDateKo(endDate).full : '';
@@ -352,7 +354,7 @@ function _populateView(lec) {
 
   document.getElementById('v-progress').textContent     = PROGRESS_LABEL[lec.progressStatus || 'scheduled'] || '—';
   const paidEl = document.getElementById('v-paid-status');
-  const _paidStatus = lec.paidStatus ?? (lec.isPaid ? 'true' : 'false');
+  const _paidStatus = (lec.paidStatus != null ? lec.paidStatus : (lec.isPaid ? 'true' : 'false'));
   if (_paidStatus === 'na') {
     paidEl.textContent = '— 해당없음';
     paidEl.className   = 'modal-info-value paid-badge paid-badge--na';
@@ -372,8 +374,8 @@ function _populateView(lec) {
 }
 
 function _populateForm(lec) {
-  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
-  set('af-date',     lec.startDate ?? lec.date);
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = (val != null ? val : ''); };
+  set('af-date',     (lec.startDate != null ? lec.startDate : lec.date));
   set('af-title',           lec.title);
   set('af-client',          lec.client);
   set('af-fee',             lec.fee);
@@ -383,18 +385,18 @@ function _populateForm(lec) {
   set('af-group-info',      lec.groupInfo);
   set('af-topic',           lec.topic);
   _refreshTagPicker(lec.topicTagId);
-  set('af-setup-time',      lec.setupTime  ?? '');
-  set('af-wrapup-time',     lec.wrapupTime ?? '');
+  set('af-setup-time',      (lec.setupTime  != null ? lec.setupTime  : ''));
+  set('af-wrapup-time',     (lec.wrapupTime != null ? lec.wrapupTime : ''));
   set('af-supplies',        lec.supplies);
   const onlineCb = document.getElementById('af-online');
   const placeEl  = document.getElementById('af-place');
-  if (onlineCb) onlineCb.checked = lec.isOnline ?? false;
+  if (onlineCb) onlineCb.checked = (lec.isOnline != null ? lec.isOnline : false);
   if (placeEl) {
-    placeEl.disabled    = lec.isOnline ?? false;
-    placeEl.value       = lec.isOnline ? '' : (lec.place ?? '');
+    placeEl.disabled    = (lec.isOnline != null ? lec.isOnline : false);
+    placeEl.value       = lec.isOnline ? '' : (lec.place != null ? lec.place : '');
     placeEl.placeholder = lec.isOnline ? '' : '예) 서울 강남구 SSDC 4F';
   }
-  set('af-end-date', lec.endDate ?? lec.date ?? '');
+  set('af-end-date', (lec.endDate != null ? lec.endDate : (lec.date != null ? lec.date : '')));
 
   set('af-classroom',       lec.classroom);
   set('af-parking',         lec.parkingInfo);
@@ -405,10 +407,10 @@ function _populateForm(lec) {
   set('af-payment-date',    lec.paymentDate);
   set('af-memo',            lec.memo);
 
-  const _startDate  = lec.startDate ?? lec.date ?? '';
-  const _endDate    = lec.endDate   ?? lec.date ?? '';
-  const _timeStart  = lec.startTime ?? lec.timeStart ?? '';
-  const _timeEnd    = lec.endTime   ?? lec.timeEnd   ?? '';
+  const _startDate  = (lec.startDate != null ? lec.startDate : (lec.date      != null ? lec.date      : ''));
+  const _endDate    = (lec.endDate   != null ? lec.endDate   : (lec.date      != null ? lec.date      : ''));
+  const _timeStart  = (lec.startTime != null ? lec.startTime : (lec.timeStart != null ? lec.timeStart : ''));
+  const _timeEnd    = (lec.endTime   != null ? lec.endTime   : (lec.timeEnd   != null ? lec.timeEnd   : ''));
   const _isCrossDay = _startDate !== _endDate;
   const startSel = document.getElementById('af-time-start');
   if (startSel) { startSel.innerHTML = buildTimeOptions(); startSel.value = _timeStart; }
@@ -417,7 +419,7 @@ function _populateForm(lec) {
   _syncFeeTotalForm();
 
   const paidSel = document.getElementById('af-paid-status');
-  const paidStatusVal = lec.paidStatus ?? (lec.isPaid ? 'true' : 'false');
+  const paidStatusVal = (lec.paidStatus != null ? lec.paidStatus : (lec.isPaid ? 'true' : 'false'));
   if (paidSel) paidSel.value = paidStatusVal;
   const taxSel = document.getElementById('af-tax');
   if (taxSel) {
@@ -507,7 +509,7 @@ function _applyTagTrigger(tagId, prefix = 'lm') {
   const labelEl  = document.getElementById(`${prefix}-tag-trigger-label`);
   const hiddenEl = document.getElementById(prefix === 'lm' ? 'af-topic-tag' : `${prefix}-tag-id`);
 
-  if (swatchEl) swatchEl.style.background = tag?.color ?? '#fff';
+  if (swatchEl) swatchEl.style.background = (tag != null && tag.color != null ? tag.color : '#fff');
   if (labelEl)  labelEl.textContent        = tag ? tag.name : '일반 강의';
   if (hiddenEl) hiddenEl.value             = tagId != null ? String(tagId) : '';
 
@@ -566,7 +568,7 @@ async function _doSaveNewTag(prefix = 'lm') {
   const name      = nameInput?.value.trim();
   if (!name) { nameInput?.focus(); return; }
 
-  const { currentUser } = _getCtx?.() ?? {};
+  const { currentUser } = (_getCtx != null ? _getCtx() : {});
   if (!currentUser) { window.showToast?.('로그인이 필요합니다.', 'error'); return; }
   if (_topicTags.some(t => t.name === name)) { window.showToast?.('이미 존재하는 카테고리입니다.', 'warn'); return; }
   if (_topicTags.length >= 20) { window.showToast?.('카테고리는 최대 20개까지 가능합니다.', 'warn'); return; }
@@ -735,8 +737,8 @@ async function _checkIcsImport(user) {
 ════════════════════════════════════════ */
 function _lecField(l, which) {
   return which === 's'
-    ? (l.startTime ?? l.timeStart ?? '')
-    : (l.endTime   ?? l.timeEnd   ?? '');
+    ? (l.startTime != null ? l.startTime : (l.timeStart != null ? l.timeStart : ''))
+    : (l.endTime   != null ? l.endTime   : (l.timeEnd   != null ? l.timeEnd   : ''));
 }
 
 function _findConflictLec(rawNewLec, sameDayRaw, check) {
@@ -748,7 +750,7 @@ function _findConflictLec(rawNewLec, sameDayRaw, check) {
     return sameDayRaw.find(l => {
       const s = timeToMin(_lecField(l,'s')), e = timeToMin(_lecField(l,'e'));
       return Math.max(nS, s) < Math.min(nE, e);
-    }) ?? sameDayRaw[0];
+    }) || sameDayRaw[0];
   }
 
   return sameDayRaw.reduce((best, l) => {
@@ -852,19 +854,19 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
   const prevTitle  = prevIsNew ? payload.title                : (conflictLec.title  || '(제목 없음)');
   const prevClient = prevIsNew ? payload.client               : (conflictLec.client || '—');
   const prevPlace  = prevIsNew ? (rawNewLec.place  || '—')   : (conflictLec.place  || '—');
-  const prevStatus = prevIsNew ? null : (conflictLec.progressStatus ?? conflictLec._status ?? null);
+  const prevStatus = prevIsNew ? null : (conflictLec.progressStatus != null ? conflictLec.progressStatus : (conflictLec._status != null ? conflictLec._status : null));
   const nextStart  = prevIsNew ? _lecField(conflictLec, 's')  : rawNewLec.startTime;
   const nextEnd    = prevIsNew ? _lecField(conflictLec, 'e')  : rawNewLec.endTime;
   const nextTitle  = prevIsNew ? (conflictLec.title  || '(제목 없음)') : payload.title;
   const nextClient = prevIsNew ? (conflictLec.client || '—')            : payload.client;
   const nextPlace  = prevIsNew ? (conflictLec.place  || '—') : (rawNewLec.place    || '—');
-  const nextStatus = prevIsNew ? (conflictLec.progressStatus ?? conflictLec._status ?? null) : null;
+  const nextStatus = prevIsNew ? (conflictLec.progressStatus != null ? conflictLec.progressStatus : (conflictLec._status != null ? conflictLec._status : null)) : null;
 
   const isHard        = !!check.isHardConflict;
-  const isOnlineCtx   = (rawNewLec.isOnline ?? false) || (conflictLec?.isOnline ?? false);
-  const wrapup  = prevIsNew ? (rawNewLec.wrapupTime  ?? 0) : (conflictLec.wrapupTime ?? 0);
-  const setup   = prevIsNew ? (conflictLec.setupTime ?? 0) : (rawNewLec.setupTime    ?? 0);
-  const travel  = check.travelMin ?? 0;
+  const isOnlineCtx   = (rawNewLec.isOnline != null ? rawNewLec.isOnline : false) || (conflictLec != null && conflictLec.isOnline != null ? conflictLec.isOnline : false);
+  const wrapup  = prevIsNew ? (rawNewLec.wrapupTime  != null ? rawNewLec.wrapupTime  : 0) : (conflictLec.wrapupTime != null ? conflictLec.wrapupTime : 0);
+  const setup   = prevIsNew ? (conflictLec.setupTime != null ? conflictLec.setupTime : 0) : (rawNewLec.setupTime    != null ? rawNewLec.setupTime    : 0);
+  const travel  = (check.travelMin != null ? check.travelMin : 0);
   const reqGap  = wrapup + travel + setup;
   const actGap  = check.pureGap != null
     ? check.pureGap
@@ -873,10 +875,10 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
   const depStr  = minToTime(timeToMin(prevEnd) + wrapup);
 
   // ── Alternatives ────────────────────────────────────
-  const _alts    = check.alternatives ?? {};
-  const _optA    = _alts.optionA ?? [];
-  const _optB    = _alts.optionB ?? [];
-  const _optC    = _alts.optionC ?? null;
+  const _alts    = (check.alternatives != null ? check.alternatives : {});
+  const _optA    = (_alts.optionA != null ? _alts.optionA : []);
+  const _optB    = (_alts.optionB != null ? _alts.optionB : []);
+  const _optC    = (_alts.optionC != null ? _alts.optionC : null);
   const _hasAlts = _optA.length > 0 || _optB.length > 0 || _optC != null;
 
   const _mkAltBtn = slot => {
@@ -1159,13 +1161,13 @@ function _bindEvents() {
   });
 
   document.getElementById('btn-form-submit')?.addEventListener('click', async () => {
-    const get       = id => document.getElementById(id)?.value?.trim() ?? '';
+    const get       = function(id) { var _e = document.getElementById(id); return (_e != null && _e.value != null ? _e.value.trim() : ''); };
     const date      = get('af-date');
     const timeStart = get('af-time-start');
     const timeEnd   = get('af-time-end');
     const title     = get('af-title');
     const client    = get('af-client');
-    const isOnline  = document.getElementById('af-online')?.checked ?? false;
+    var _afOnline = document.getElementById('af-online'); const isOnline  = (_afOnline != null ? _afOnline.checked : false);
     const place     = isOnline ? 'Online' : get('af-place');
     const feeRaw    = get('af-fee');
     const endDate   = get('af-end-date') || date;
@@ -1189,7 +1191,9 @@ function _bindEvents() {
     }
 
     const { allLectures, currentUser } = _getCtx();
-    const rawSched = JSON.parse(localStorage.getItem('kangbiseo_device') ?? 'null')?.scheduler ?? {};
+    var _devRaw1 = localStorage.getItem('kangbiseo_device');
+    var _devData1 = JSON.parse(_devRaw1 != null ? _devRaw1 : 'null');
+    const rawSched = (_devData1 != null && _devData1.scheduler != null ? _devData1.scheduler : {});
     const settings = {
       bufferTime:  rawSched.bufferTime === 'custom' ? (Number(rawSched.bufferCustom) || 30) : (Number(rawSched.bufferTime) || 30),
       setupTime:   Number(rawSched.setupTime)  || 20,
@@ -1209,15 +1213,15 @@ function _bindEvents() {
     const sameDayRaw   = allLectures.filter(l => l.date === date && l.id !== _editingLecId);
     const existingLecs = sameDayRaw.map(l => ({
       date:       l.date,
-      startTime:  l.startTime  ?? l.timeStart  ?? '',
-      endTime:    l.endTime    ?? l.timeEnd    ?? '',
-      place:      l.isOnline ? 'Online' : (l.place ?? ''),
-      isOnline:   l.isOnline   ?? false,
-      setupTime:  l.setupTime  ?? 0,
-      wrapupTime: l.wrapupTime ?? 0,
+      startTime:  (l.startTime != null ? l.startTime : (l.timeStart != null ? l.timeStart : '')),
+      endTime:    (l.endTime   != null ? l.endTime   : (l.timeEnd   != null ? l.timeEnd   : '')),
+      place:      l.isOnline ? 'Online' : (l.place != null ? l.place : ''),
+      isOnline:   (l.isOnline  != null ? l.isOnline  : false),
+      setupTime:  (l.setupTime != null ? l.setupTime : 0),
+      wrapupTime: (l.wrapupTime != null ? l.wrapupTime : 0),
     }));
 
-    const _paidStatusVal = document.getElementById('af-paid-status')?.value ?? 'false';
+    var _afPaidEl = document.getElementById('af-paid-status'); const _paidStatusVal = (_afPaidEl != null && _afPaidEl.value != null ? _afPaidEl.value : 'false');
     const isPaid         = _paidStatusVal === 'true';
     const paidStatus     = _paidStatusVal;
     const taxType        = document.getElementById('af-tax')?.value || 'income3_3';
@@ -1312,11 +1316,11 @@ function _bindEvents() {
     const input = document.getElementById('v-todo-input');
     const text  = input?.value.trim();
     if (!text || !_activeModalId) return;
-    const { currentUser, allLectures } = _getCtx?.() ?? {};
+    const { currentUser, allLectures } = (_getCtx != null ? _getCtx() : {});
     if (!currentUser) return;
     try {
-      const lec       = allLectures?.find(l => l.id === _activeModalId);
-      const gId       = lec?.groupId ?? null;
+      const lec       = allLectures != null ? allLectures.find(l => l.id === _activeModalId) : null;
+      const gId       = (lec != null && lec.groupId != null ? lec.groupId : null);
       const dueDateEl = document.getElementById('v-todo-due-date');
       const dueDate   = dueDateEl?.value || null;
       await addTodo(currentUser.uid, text, gId ? null : _activeModalId, gId, dueDate);

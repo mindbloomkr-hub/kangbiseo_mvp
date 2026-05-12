@@ -290,8 +290,8 @@ function _applyFilterTrigger(val) {
   } else {
     filterTagId = val;
     const tag = tags.find(t => String(t.id) === String(val));
-    if (swatchEl) { swatchEl.style.background = tag?.color ?? '#fff'; swatchEl.style.borderColor = 'rgba(0,0,0,.12)'; }
-    if (labelEl)  labelEl.textContent = tag?.name ?? '';
+    if (swatchEl) { swatchEl.style.background = (tag != null && tag.color != null ? tag.color : '#fff'); swatchEl.style.borderColor = 'rgba(0,0,0,.12)'; }
+    if (labelEl)  labelEl.textContent = (tag != null && tag.name != null ? tag.name : '');
   }
 
   document.querySelectorAll('#filter-tag-option-list .lm-tag-option').forEach(el => {
@@ -464,7 +464,7 @@ function _computeSeqUpdates() {
       .filter(l => l.groupId === gid)
       .sort((a, b) => {
         const d = a.date.localeCompare(b.date);
-        return d !== 0 ? d : (a.timeStart ?? '').localeCompare(b.timeStart ?? '');
+        return d !== 0 ? d : (a.timeStart != null ? a.timeStart : '').localeCompare(b.timeStart != null ? b.timeStart : '');
       });
     const total = inGroup.length;
     inGroup.forEach((lec, i) => {
@@ -483,7 +483,7 @@ async function _executeBatch(commonPayload, seqUpdates) {
     for (const id of selectedIds) merged.set(id, { ...commonPayload });
   }
   for (const [id, upd] of Object.entries(seqUpdates)) {
-    merged.set(id, { ...(merged.get(id) ?? {}), ...upd });
+    merged.set(id, { ...(merged.get(id) != null ? merged.get(id) : {}), ...upd });
   }
   if (merged.size === 0) return;
 
@@ -724,7 +724,7 @@ function _openBatchModal() {
       if (placeEl) { placeEl.value = ''; placeEl.disabled = true; }
       if (addrBtn) addrBtn.disabled = true;
     } else {
-      const enabled = placeCb?.checked ?? false;
+      const enabled = (placeCb != null ? placeCb.checked : false);
       if (placeEl) placeEl.disabled = !enabled;
       if (addrBtn) addrBtn.disabled = !enabled;
     }
@@ -759,8 +759,8 @@ function _openBatchModal() {
     applyBtn.disabled = true; applyBtn.textContent = '적용 중...';
     try {
       const payload = {};
-      const get     = id => document.getElementById(id)?.value ?? '';
-      const checked = id => document.getElementById(id)?.checked ?? false;
+      const get     = function(id) { var _e = document.getElementById(id); return (_e != null && _e.value != null ? _e.value : ''); };
+      const checked = function(id) { var _e = document.getElementById(id); return (_e != null ? !!_e.checked : false); };
 
       // Text / string fields
       if (checked('bm-cb-title'))     payload.title        = get('bm-title').trim();
@@ -806,14 +806,14 @@ function _openBatchModal() {
 
       // Online / place
       if (checked('bm-cb-place')) {
-        const isOnline = document.getElementById('bm-online')?.checked ?? false;
+        var _bmOnline = document.getElementById('bm-online'); const isOnline = (_bmOnline != null ? _bmOnline.checked : false);
         payload.isOnline = isOnline;
         payload.place    = isOnline ? 'Online' : get('bm-place').trim();
       }
 
       // Overnight
       if (checked('bm-cb-overnight')) {
-        const isOvernight = document.getElementById('bm-overnight-flag')?.checked ?? false;
+        var _bmOvernight = document.getElementById('bm-overnight-flag'); const isOvernight = (_bmOvernight != null ? _bmOvernight.checked : false);
         payload.isOvernight = isOvernight;
         payload.endDate     = isOvernight ? (get('bm-end-date') || null) : null;
       }
@@ -828,7 +828,7 @@ function _openBatchModal() {
       // Schedule collision check when time or location fields are changed
       const timeOrLocChanged = checked('bm-cb-timeStart') || checked('bm-cb-timeEnd') || checked('bm-cb-place');
       if (timeOrLocChanged) {
-        const conflicts = _detectBatchConflicts(payload.timeStart ?? null, payload.timeEnd ?? null);
+        const conflicts = _detectBatchConflicts((payload.timeStart != null ? payload.timeStart : null), (payload.timeEnd != null ? payload.timeEnd : null));
         if (conflicts.length > 0) {
           const names = conflicts.slice(0, 3).map(l => l.title || '(제목 없음)').join(', ');
           const more  = conflicts.length > 3 ? ` 외 ${conflicts.length - 3}건` : '';
@@ -839,8 +839,8 @@ function _openBatchModal() {
         }
       }
 
-      const doSeq   = document.getElementById('bm-seq-cb')?.checked ?? false;
-      const doGroup = document.getElementById('bm-group-cb')?.checked ?? false;
+      var _bmSeq = document.getElementById('bm-seq-cb'); const doSeq   = (_bmSeq   != null ? _bmSeq.checked   : false);
+      var _bmGrp = document.getElementById('bm-group-cb'); const doGroup = (_bmGrp != null ? _bmGrp.checked : false);
 
       let seqUpdates = doSeq ? _computeSeqUpdates() : {};
 
@@ -854,11 +854,11 @@ function _openBatchModal() {
           .filter(Boolean)
           .sort((a, b) => {
             const d = a.date.localeCompare(b.date);
-            return d !== 0 ? d : (a.timeStart ?? '').localeCompare(b.timeStart ?? '');
+            return d !== 0 ? d : (a.timeStart != null ? a.timeStart : '').localeCompare(b.timeStart != null ? b.timeStart : '');
           });
         const total = groupedLecs.length;
         groupedLecs.forEach((lec, i) => {
-          seqUpdates[lec.id] = { ...(seqUpdates[lec.id] ?? {}), sessionTotal: total, sessionCurrent: i + 1 };
+          seqUpdates[lec.id] = { ...(seqUpdates[lec.id] != null ? seqUpdates[lec.id] : {}), sessionTotal: total, sessionCurrent: i + 1 };
         });
       }
 
@@ -872,7 +872,7 @@ function _openBatchModal() {
             for (const id of selectedIds) {
               const lec = allLectures.find(l => l.id === id);
               const sessionTotal = lec?.sessionTotal || 1;
-              seqUpdates[id] = { ...(seqUpdates[id] ?? {}), fee: Math.floor(feeTotal / sessionTotal) };
+              seqUpdates[id] = { ...(seqUpdates[id] != null ? seqUpdates[id] : {}), fee: Math.floor(feeTotal / sessionTotal) };
             }
           }
         }
@@ -886,7 +886,7 @@ function _openBatchModal() {
             const lec = allLectures.find(l => l.id === id);
             if (!lec?.date) continue;
             const paymentDate = calcPaymentDate(lec.date, cycle, lec.endDate || lec.date);
-            seqUpdates[id] = { ...(seqUpdates[id] ?? {}), paymentDate };
+            seqUpdates[id] = { ...(seqUpdates[id] != null ? seqUpdates[id] : {}), paymentDate };
           }
         }
       }

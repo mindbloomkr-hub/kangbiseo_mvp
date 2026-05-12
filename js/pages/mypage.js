@@ -263,13 +263,13 @@ function initScheduler() {
   const customInput = document.getElementById('buffer-custom-value');
   if (customInput) customInput.value = s.bufferCustom;
   const setupInput = document.getElementById('setup-time-input');
-  if (setupInput) setupInput.value = s.setupTime ?? 20;
+  if (setupInput) setupInput.value = (s.setupTime != null ? s.setupTime : 20);
   const wrapupInput = document.getElementById('wrapup-time-input');
-  if (wrapupInput) wrapupInput.value = s.wrapupTime ?? 15;
+  if (wrapupInput) wrapupInput.value = (s.wrapupTime != null ? s.wrapupTime : 15);
   const parkingCb = document.getElementById('parking-alert');
   if (parkingCb) parkingCb.checked = s.parkingAlert;
   const originInput = document.getElementById('origin-address-input');
-  if (originInput) originInput.value = s.originAddress ?? '';
+  if (originInput) originInput.value = (s.originAddress != null ? s.originAddress : '');
   updateParkingRow(s.transport);
 }
 

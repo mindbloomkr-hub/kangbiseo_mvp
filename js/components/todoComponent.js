@@ -9,7 +9,7 @@ export function createTodoItemHTML(todo, allLectures = [], topicTags = []) {
   const today     = getTodayString();
   const isToday   = todo.deadline === today;
   const isOverdue = !todo.isDone && todo.deadline && todo.deadline < today;
-  const count     = todo.postponeCount ?? 0;
+  const count     = (todo.postponeCount != null ? todo.postponeCount : 0);
   const isGroup   = !!todo.groupId;
 
   // Find lecture — support groupId fallback for multi-session todos
@@ -20,7 +20,7 @@ export function createTodoItemHTML(todo, allLectures = [], topicTags = []) {
       : null;
 
   const tag       = lecture?.topicTagId != null ? topicTags.find(t => t.id === lecture.topicTagId) : null;
-  const tagColor  = tag?.color ?? null;
+  const tagColor  = (tag != null && tag.color != null ? tag.color : null);
   const tagBgRgba = tagColor ? hexToRgba(tagColor, 0.04) : null;
 
   const styleAttrs = [
@@ -112,7 +112,7 @@ export function bindTodoEvents(container, getTodos, { getAllLectures, openModal 
       if (groupBadge) {
         e.stopPropagation();
         e.preventDefault();
-        const lecs = getAllLectures?.() ?? [];
+        const lecs = (getAllLectures != null ? getAllLectures() : []);
         const lec  = lecs.find(l => l.groupId === groupBadge.dataset.groupId);
         if (lec) openModal(lec.id);
         return;
@@ -223,19 +223,19 @@ export function renderTodoUI(container, lectureId, options = {}) {
       if (!item) return;
       if (e.target.closest('.todo-btn--delete')) {
         e.stopPropagation();
-        const pending = getPendingTodos?.() ?? [];
+        const pending = (getPendingTodos != null ? getPendingTodos() : []);
         const updated = pending.filter(t => t.id !== item.dataset.id);
-        onPendingChange?.(updated);
+        if (onPendingChange != null) onPendingChange(updated);
         renderTodoList(container, updated, allLectures, topicTags);
       }
     });
   }
 
-  const todos = getPendingTodos?.() ?? [];
+  const todos = (getPendingTodos != null ? getPendingTodos() : []);
   renderTodoList(container, todos, allLectures, topicTags);
 
   return () => {
-    const updated = getPendingTodos?.() ?? [];
+    const updated = (getPendingTodos != null ? getPendingTodos() : []);
     renderTodoList(container, updated, allLectures, topicTags);
   };
 }

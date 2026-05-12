@@ -40,7 +40,7 @@ export function isKRHoliday(date) {
   const y  = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
-  return _SOLAR.has(`${mm}-${dd}`) || (_LUNAR[y]?.has(`${y}-${mm}-${dd}`) ?? false);
+  return _SOLAR.has(`${mm}-${dd}`) || (_LUNAR[y] != null ? _LUNAR[y].has(`${y}-${mm}-${dd}`) : false);
 }
 
 /* ════════════════════════════════════════
@@ -664,7 +664,8 @@ function _handleGenerate() {
   if (!total || total < 1)  { window.showToast?.('총 회차 수를 입력하세요.', 'warn'); return; }
   if (total > 200)          { window.showToast?.('최대 200회차까지 지원합니다.', 'warn'); return; }
 
-  const monthMode = document.querySelector('input[name="ms-mm"]:checked')?.value ?? 'same';
+  const _mmChecked = document.querySelector('input[name="ms-mm"]:checked');
+  const monthMode = (_mmChecked != null ? _mmChecked.value : 'same');
 
   if (rec === 'weekly' && _selDow.size === 0) {
     window.showToast?.('요일을 하나 이상 선택하세요.', 'warn'); return;
@@ -727,9 +728,8 @@ function _reRenderTableBody() {
   $('ms-tbody').innerHTML = _sessions.map((s, i) => {
     const shifted  = s.wasShifted;
     const tip      = shifted ? `title="원래 날짜: ${s.originalDate} (공휴일)"` : '';
-    const tagColor = s.topicTagId != null
-      ? (getTopicTags().find(t => t.id === s.topicTagId)?.color ?? '#e5e7eb')
-      : '#e5e7eb';
+    const _foundTag = s.topicTagId != null ? getTopicTags().find(t => t.id === s.topicTagId) : null;
+    const tagColor = (_foundTag != null && _foundTag.color != null ? _foundTag.color : '#e5e7eb');
 
     return `
       <tr class="${shifted ? 'row-shifted' : ''}" data-idx="${i}" ${tip} style="border-left:3px solid ${tagColor}">
@@ -787,14 +787,14 @@ function _findConflictLec(newLec, sameDayRaw, check) {
   const nS = timeToMin(newLec.startTime);
   const nE = timeToMin(newLec.endTime);
   const lf = (l, w) => w === 's'
-    ? (l.startTime ?? l.timeStart ?? '')
-    : (l.endTime   ?? l.timeEnd   ?? '');
+    ? (l.startTime != null ? l.startTime : (l.timeStart != null ? l.timeStart : ''))
+    : (l.endTime   != null ? l.endTime   : (l.timeEnd   != null ? l.timeEnd   : ''));
 
   if (check.step === 1) {
     return sameDayRaw.find(l => {
       const s = timeToMin(lf(l,'s')), e = timeToMin(lf(l,'e'));
       return Math.max(nS, s) < Math.min(nE, e);
-    }) ?? sameDayRaw[0];
+    }) || sameDayRaw[0];
   }
   return sameDayRaw.reduce((best, l) => {
     const s  = timeToMin(lf(l,'s')),    e  = timeToMin(lf(l,'e'));
@@ -814,7 +814,8 @@ async function _commitBatch(commonData, sessionTotal) {
   try {
     const batch = writeBatch(db);
     const commonForFs = commonData;
-    const lastSessionDate = _sessions[_sessions.length - 1]?.date ?? '';
+    const _lastSession = _sessions[_sessions.length - 1];
+    const lastSessionDate = (_lastSession != null ? _lastSession.date : '');
     for (const s of _sessions) {
       const ref = doc(collection(db, 'lectures'));
       const endDate = s.date;
@@ -833,7 +834,7 @@ async function _commitBatch(commonData, sessionTotal) {
         timeEnd:           _sTimeEnd,
         topic:             s.topic     || '',
         sessionCurrent:    s.sessionCurrent,
-        wasHolidayShifted: s.wasShifted ?? false,
+        wasHolidayShifted: (s.wasShifted != null ? s.wasShifted : false),
         createdAt:         serverTimestamp(),
       });
     }
@@ -872,8 +873,8 @@ function _openConflictModal({ session, check, conflictLec, common, sessionTotal 
   const cTitle  = conflictLec?.title  || '(제목 없음)';
   const cClient = conflictLec?.client || '—';
   const cPlace  = conflictLec?.isOnline ? '💻 온라인 수업' : (conflictLec?.place || '—');
-  const cStart  = conflictLec?.startTime ?? conflictLec?.timeStart ?? '?';
-  const cEnd    = conflictLec?.endTime   ?? conflictLec?.timeEnd   ?? '?';
+  const cStart  = conflictLec != null ? (conflictLec.startTime != null ? conflictLec.startTime : (conflictLec.timeStart != null ? conflictLec.timeStart : '?')) : '?';
+  const cEnd    = conflictLec != null ? (conflictLec.endTime   != null ? conflictLec.endTime   : (conflictLec.timeEnd   != null ? conflictLec.timeEnd   : '?')) : '?';
 
   const bd = document.createElement('div');
   bd.id        = 'ms-cf-backdrop';
@@ -976,7 +977,8 @@ async function _handleSave() {
 
   const groupId        = `grp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const sessionTotal   = _sessions.length;
-  const _paidStatusVal = $('ms-paid-status')?.value ?? 'false';
+  const _psEl = $('ms-paid-status');
+  const _paidStatusVal = (_psEl != null ? _psEl.value : 'false');
   const isPaid         = _paidStatusVal === 'true';
   const paidStatus     = _paidStatusVal;
   const taxType        = $('ms-tax')?.value || 'income3_3';
@@ -1037,12 +1039,12 @@ async function _handleSave() {
     const sameDayRaw   = allLectures.filter(l => l.date === s.date);
     const existingLecs = sameDayRaw.map(l => ({
       date:       l.date,
-      startTime:  l.startTime  ?? l.timeStart  ?? '',
-      endTime:    l.endTime    ?? l.timeEnd    ?? '',
-      place:      l.isOnline ? 'Online' : (l.place ?? ''),
-      isOnline:   l.isOnline   ?? false,
-      setupTime:  l.setupTime  ?? 0,
-      wrapupTime: l.wrapupTime ?? 0,
+      startTime:  (l.startTime  != null ? l.startTime  : (l.timeStart != null ? l.timeStart : '')),
+      endTime:    (l.endTime    != null ? l.endTime    : (l.timeEnd   != null ? l.timeEnd   : '')),
+      place:      l.isOnline ? 'Online' : (l.place != null ? l.place : ''),
+      isOnline:   (l.isOnline   != null ? l.isOnline   : false),
+      setupTime:  (l.setupTime  != null ? l.setupTime  : 0),
+      wrapupTime: (l.wrapupTime != null ? l.wrapupTime : 0),
     }));
 
     const newLec = {

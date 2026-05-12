@@ -32,8 +32,8 @@ function _computeStats() {
   const rate   = total === 0 ? 0 : Math.round((done / total) * 100);
 
   const topPostponed = [...allTodos]
-    .filter(t => (t.postponeCount ?? 0) > 0)
-    .sort((a, b) => (b.postponeCount ?? 0) - (a.postponeCount ?? 0))
+    .filter(t => (t.postponeCount != null ? t.postponeCount : 0) > 0)
+    .sort((a, b) => (b.postponeCount != null ? b.postponeCount : 0) - (a.postponeCount != null ? a.postponeCount : 0))
     .slice(0, 3);
 
   return { total, done, active, rate, topPostponed };
@@ -99,7 +99,7 @@ function _applyFilters(todos) {
         : t.groupId
           ? allLectures.find(l => l.groupId === t.groupId)
           : null;
-      if ((lec?.topicTagId ?? null) !== _filters.tagId) return false;
+      if ((lec != null && lec.topicTagId != null ? lec.topicTagId : null) !== _filters.tagId) return false;
     }
     return true;
   });
@@ -131,7 +131,7 @@ function _buildCatPicker(selectedTagId) {
   const tag  = selectedTagId != null ? tags.find(t => t.id === selectedTagId) : null;
 
   if (swatchEl) {
-    swatchEl.style.background = tag?.color ?? 'transparent';
+    swatchEl.style.background = (tag != null && tag.color != null ? tag.color : 'transparent');
     swatchEl.style.display    = tag ? 'inline-block' : 'none';
   }
   if (labelEl) labelEl.textContent = tag ? tag.name : '전체 카테고리';

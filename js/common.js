@@ -21,8 +21,9 @@
     appMain?.classList.add('sidebar-collapsed');
   }
 
-  // 데스크탑 토글
+  // 데스크탑 토글 (모바일에서는 오버레이로 닫기 때문에 무시)
   toggleBtn?.addEventListener('click', () => {
+    if (window.innerWidth <= 768) return;
     const collapsed = sidebar.classList.toggle('collapsed');
     appMain?.classList.toggle('sidebar-collapsed', collapsed);
     localStorage.setItem('sidebar-collapsed', collapsed);

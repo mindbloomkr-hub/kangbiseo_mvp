@@ -175,9 +175,10 @@
 
 .sl-tab:hover { border-color: var(--color-primary-300); color: var(--color-primary-500); }
 .sl-tab.active { background: var(--color-primary-500); border-color: var(--color-primary-500); color: #fff; }
-.sl-tab.active--paid   { background: #059669; border-color: #059669; color: #fff; }
+.sl-tab.active--paid    { background: #059669; border-color: #059669; color: #fff; }
 .sl-tab.active--pending { background: #d97706; border-color: #d97706; color: #fff; }
 .sl-tab.active--overdue { background: #dc2626; border-color: #dc2626; color: #fff; }
+.sl-tab.active--na      { background: #6b7280; border-color: #6b7280; color: #fff; }
 
 .sl-filter-right {
   margin-left: auto;
@@ -193,14 +194,44 @@
    Table
 ════════════════════════════════════════ */
 .sl-table-wrap {
-  background: var(--color-white);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-gray-300) var(--color-gray-100);
+
+  /* 스크롤 섀도우: 끝에 도달하면 그림자가 자동으로 사라짐 */
+  background-color: var(--color-white);
+  background-image:
+    linear-gradient(to right, var(--color-white) 16px, transparent),
+    linear-gradient(to left,  var(--color-white) 16px, transparent),
+    linear-gradient(to right, rgba(0,0,0,0.05),  transparent),
+    linear-gradient(to left,  rgba(0,0,0,0.05),  transparent);
+  background-position: left, right, left, right;
+  background-size: 24px 100%, 24px 100%, 12px 100%, 12px 100%;
+  background-repeat: no-repeat;
+  background-attachment: local, local, scroll, scroll;
 }
+
+.sl-table-wrap::-webkit-scrollbar { height: 4px; }
+.sl-table-wrap::-webkit-scrollbar-track {
+  background: var(--color-gray-100);
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+}
+.sl-table-wrap::-webkit-scrollbar-thumb {
+  background: var(--color-gray-300);
+  border-radius: var(--radius-full);
+}
+.sl-table-wrap::-webkit-scrollbar-thumb:hover { background: var(--color-gray-400); }
 
 .sl-table {
   width: 100%;
+  min-width: 700px;
+  table-layout: auto;
   border-collapse: collapse;
   font-size: var(--font-size-sm);
 }
@@ -229,6 +260,9 @@
 .sl-table tbody tr:hover { background: var(--color-gray-50); }
 .sl-table tbody tr.sl-row--overdue { background: #fff8f8; }
 .sl-table tbody tr.sl-row--overdue:hover { background: #fff0f0; }
+.sl-table tbody tr.sl-row--na { color: var(--color-text-muted); }
+.sl-table tbody tr.sl-row--na .sl-cell-title { color: var(--color-text-muted); }
+.sl-table tbody tr.sl-row--na .sl-cell-title:hover { color: var(--color-gray-600); }
 
 .sl-cell-title {
   font-weight: var(--font-weight-semibold);
@@ -237,6 +271,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.sl-cell-title:hover {
+  text-decoration: underline;
+  color: var(--color-primary-600);
 }
 
 .sl-cell-client {
@@ -270,6 +310,7 @@
 .sl-status-badge--paid    { background: #d1fae5; color: #065f46; }
 .sl-status-badge--pending { background: #fff7ed; color: #92400e; }
 .sl-status-badge--overdue { background: #fee2e2; color: #991b1b; }
+.sl-status-badge--record  { background: #f3f4f6; color: #6b7280; }
 
 /* D-day badge */
 .sl-dday {
@@ -341,10 +382,7 @@
 @media (max-width: 768px) {
   .sl-stat-bar { grid-template-columns: repeat(2, 1fr); }
 
-  .sl-table th:nth-child(3),
-  .sl-table td:nth-child(3),
-  .sl-table th:nth-child(5),
-  .sl-table td:nth-child(5) { display: none; }
+  /* 가로 스크롤 활성화로 컬럼 숨김 불필요 — 모든 컬럼 표시 */
 
   .sl-filter-panel { flex-direction: column; align-items: stretch; }
   .sl-filter-right { margin-left: 0; }
