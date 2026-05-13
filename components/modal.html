@@ -233,12 +233,11 @@
             <div>
               <div class="add-form-section-title">정산 &amp; 행정</div>
 
-              <div class="add-form-grid add-form-grid--3" style="margin-top:var(--space-3)">
+              <div class="add-form-grid" style="margin-top:var(--space-3)">
                 <div class="add-form-field">
                   <label class="add-form-label" for="af-paid-status">정산 상태</label>
                   <select class="add-form-input" id="af-paid-status"><option value="false">미입금</option><option value="true">입금 완료</option><option value="na">해당없음</option></select>
                 </div>
-                <div class="add-form-field"><label class="add-form-label" for="af-payment-date">예상 지급일</label><input class="add-form-input" type="date" id="af-payment-date" /></div>
                 <div class="add-form-field">
                   <label class="add-form-label" for="af-tax">세금 정보</label>
                   <select class="add-form-input" id="af-tax">
@@ -249,6 +248,20 @@
                     <option value="na">해당없음</option>
                   </select>
                 </div>
+              </div>
+              <div class="add-form-grid" style="margin-top:var(--space-2)">
+                <div class="add-form-field">
+                  <label class="add-form-label" for="af-settlement-cycle">정산 주기</label>
+                  <select class="add-form-input" id="af-settlement-cycle">
+                    <option value="">선택 안 함</option>
+                    <option value="per-session">회차별 정산</option>
+                    <option value="monthly">익월 정산</option>
+                    <option value="quarterly">분기 정산</option>
+                    <option value="after-completion">완강 후 정산</option>
+                    <option value="other">기타</option>
+                  </select>
+                </div>
+                <div class="add-form-field"><label class="add-form-label" for="af-payment-date">예상 지급일</label><input class="add-form-input" type="date" id="af-payment-date" /></div>
               </div>
             </div>
             <div>

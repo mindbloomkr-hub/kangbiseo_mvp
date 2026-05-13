@@ -308,7 +308,7 @@
 }
 
 .sl-status-badge--paid    { background: #d1fae5; color: #065f46; }
-.sl-status-badge--pending { background: #fff7ed; color: #92400e; }
+.sl-status-badge--pending { background: #dbeafe; color: #1e40af; }
 .sl-status-badge--overdue { background: #fee2e2; color: #991b1b; }
 .sl-status-badge--record  { background: #f3f4f6; color: #6b7280; }
 

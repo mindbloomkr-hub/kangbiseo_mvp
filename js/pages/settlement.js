@@ -45,9 +45,12 @@ function _paymentDeadline(lec) {
 }
 
 function _paymentStatus(lec, today) {
-  if (lec.paidStatus === 'true' || lec.isPaid === true) return 'paid';
+  const ps = lec.paidStatus || (lec.isPaid === true ? 'true' : 'false');
+  if (ps === 'true' || lec.isPaid === true) return 'paid';
+  if (ps === 'na') return 'na';
   if (!_getFee(lec)) return 'na';          // 금액 없음 → 해당없음
-  const deadline = _paymentDeadline(lec);
+  // Prefer the stored paymentDate; fall back to calculated deadline
+  const deadline = lec.paymentDate || _paymentDeadline(lec);
   if (!deadline) return 'pending';
   return today >= deadline ? 'overdue' : 'pending';
 }
@@ -220,12 +223,12 @@ function renderTable() {
   }
 
   tbody.innerHTML = rows.map(l => {
-    const fee      = _getFee(l);
-    const status   = _paymentStatus(l, today);
-    const deadline = _paymentDeadline(l);
-    const dateStr  = l.date ? formatDateKo(l.date).main : '—';
-    const feeStr   = fee > 0 ? `₩${(fee * 10000).toLocaleString()}` : '—';
-    const ddHtml   = _ddayHtml(deadline, today, status, fee);
+    const fee                 = _getFee(l);
+    const status              = _paymentStatus(l, today);
+    const expectedPaymentDate = l.paymentDate || _paymentDeadline(l);
+    const dateStr             = l.date ? formatDateKo(l.date).main : '—';
+    const feeStr              = fee > 0 ? `₩${(fee * 10000).toLocaleString()}` : '—';
+    const ddHtml              = _ddayHtml(expectedPaymentDate, today, status, fee);
 
     const statusBadge = status === 'paid'
       ? `<span class="sl-status-badge sl-status-badge--paid">✓ 입금 완료</span>`
@@ -247,7 +250,7 @@ function renderTable() {
         <td><div class="sl-cell-title" title="${escapeHtml(l.title)}">${escapeHtml(l.title)}</div></td>
         <td><div class="sl-cell-client" title="${escapeHtml(l.client || '')}">${escapeHtml(l.client || '—')}</div></td>
         <td class="sl-cell-amount">${feeStr}</td>
-        <td class="sl-cell-date">${isNa ? '—' : (deadline || '—')}</td>
+        <td class="sl-cell-date">${isNa ? '—' : (expectedPaymentDate || '—')}</td>
         <td>${statusBadge}</td>
         <td>
           <div class="sl-actions">

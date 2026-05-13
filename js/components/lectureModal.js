@@ -22,7 +22,7 @@ import {
   escapeHtml, formatDateKo, calcDuration, classifyStatus,
   buildTimeOptions, updateDurationDisplay, syncEndTimeOptions, initTimeSelects,
   checkScheduleConflict, _geocode, positionPanel, getTodayString,
-  timeToMin, minToTime,
+  timeToMin, minToTime, calcPaymentDate,
 } from '../utils.js';
 import { openKakaoAddress } from '../services/kakaoAddressService.js';
 
@@ -162,6 +162,8 @@ export async function openAddModal() {
   if (progressSel) progressSel.value = 'scheduled';
   const paidSel = document.getElementById('af-paid-status');
   if (paidSel) paidSel.value = 'false';
+  const cycleSel = document.getElementById('af-settlement-cycle');
+  if (cycleSel) cycleSel.value = '';
   const taxSel = document.getElementById('af-tax');
   if (taxSel) { taxSel.value = 'income3_3'; taxSel.disabled = false; }
 
@@ -403,9 +405,10 @@ function _populateForm(lec) {
   set('af-manager-name',    lec.managerName);
   set('af-manager-phone',   lec.managerPhone);
   set('af-manager-email',   lec.managerEmail);
-  set('af-progress',        lec.progressStatus || 'scheduled');
-  set('af-payment-date',    lec.paymentDate);
-  set('af-memo',            lec.memo);
+  set('af-progress',          lec.progressStatus || 'scheduled');
+  set('af-settlement-cycle',  lec.settlementCycle || '');
+  set('af-payment-date',      lec.paymentDate);
+  set('af-memo',              lec.memo);
 
   const _startDate  = (lec.startDate != null ? lec.startDate : (lec.date      != null ? lec.date      : ''));
   const _endDate    = (lec.endDate   != null ? lec.endDate   : (lec.date      != null ? lec.date      : ''));
@@ -1068,6 +1071,40 @@ function _flashHighlight(el) {
 }
 
 /* ════════════════════════════════════════
+   예상 지급일 자동 계산
+════════════════════════════════════════ */
+function _autoFillPaymentDate(forceOverwrite = false) {
+  const cycleEl = document.getElementById('af-settlement-cycle');
+  const payEl   = document.getElementById('af-payment-date');
+  if (!cycleEl || !payEl) return;
+
+  const cycle = cycleEl.value;
+  if (!cycle) return;
+  if (!forceOverwrite && payEl.value) return;  // manual entry → skip unless cycle changed
+
+  const date    = document.getElementById('af-date')?.value;
+  const endDate = document.getElementById('af-end-date')?.value;
+  if (!date) return;
+
+  let lastDate = null;
+  if (cycle === 'after-completion') {
+    const ctx     = _getCtx?.();
+    const groupId = _editingLecId
+      ? ctx?.allLectures?.find(l => l.id === _editingLecId)?.groupId
+      : null;
+    if (groupId && ctx?.allLectures) {
+      lastDate = ctx.allLectures
+        .filter(l => l.groupId === groupId)
+        .reduce((max, l) => { const d = l.endDate || l.date || ''; return d > max ? d : max; }, '');
+    }
+    lastDate = lastDate || endDate || date;
+  }
+
+  const baseDate = cycle === 'after-completion' ? (lastDate || date) : (endDate || date);
+  payEl.value = calcPaymentDate(baseDate, cycle, lastDate);
+}
+
+/* ════════════════════════════════════════
    이벤트 바인딩
 ════════════════════════════════════════ */
 function _bindEvents() {
@@ -1135,6 +1172,10 @@ function _bindEvents() {
   document.getElementById('af-fee')?.addEventListener('input', _syncFeeTotalForm);
   document.getElementById('af-session-total')?.addEventListener('input', _syncFeeTotalForm);
 
+  document.getElementById('af-settlement-cycle')?.addEventListener('change', () => {
+    _autoFillPaymentDate(true);  // cycle change always overwrites
+  });
+
   document.getElementById('af-date')?.addEventListener('change', () => {
     const startEl = document.getElementById('af-date');
     const endEl   = document.getElementById('af-end-date');
@@ -1143,6 +1184,7 @@ function _bindEvents() {
     _flashHighlight(endEl);
     syncEndTimeOptions('', false); // reset to same-day end-time options
     updateDurationDisplay();
+    _autoFillPaymentDate(false);  // date change: only fill when payment date is empty
   });
 
   document.getElementById('v-addr-search')?.addEventListener('click', () => openKakaoAddress('af-place'));
@@ -1248,7 +1290,9 @@ function _bindEvents() {
       managerPhone:   get('af-manager-phone'),
       managerEmail:   get('af-manager-email'),
       progressStatus: get('af-progress') || 'scheduled',
-      isPaid, paidStatus, paymentDate: get('af-payment-date'), taxType,
+      isPaid, paidStatus, paymentDate: get('af-payment-date'),
+      settlementCycle: get('af-settlement-cycle') || null,
+      taxType,
       isOvernight, endDate,
       memo:           get('af-memo'),
     };

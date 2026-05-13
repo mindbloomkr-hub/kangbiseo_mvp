@@ -60,27 +60,29 @@ export function calcPaymentDate(date, cycle, lastDate) {
   const d = new Date(date + 'T00:00:00');
   switch (cycle) {
     case 'per-session': {
-      d.setDate(d.getDate() + 14);
+      // lecture date + 15 days
+      d.setDate(d.getDate() + 15);
       return formatDateString(d);
     }
     case 'monthly': {
-      const lastOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-      lastOfMonth.setDate(lastOfMonth.getDate() + 30);
-      return formatDateString(lastOfMonth);
+      // 15th of the following month
+      return formatDateString(new Date(d.getFullYear(), d.getMonth() + 1, 15));
     }
     case 'quarterly': {
-      const qEndMonth = Math.floor(d.getMonth() / 3) * 3 + 2;
-      const lastOfQ   = new Date(d.getFullYear(), qEndMonth + 1, 0);
-      lastOfQ.setDate(lastOfQ.getDate() + 30);
-      return formatDateString(lastOfQ);
+      // 15th of the first month of the next quarter
+      // new Date(y, 12, 15) resolves correctly to Jan 15 of y+1
+      const nextQStartMonth = (Math.floor(d.getMonth() / 3) + 1) * 3;
+      return formatDateString(new Date(d.getFullYear(), nextQStartMonth, 15));
     }
     case 'after-completion': {
+      // last session date + 15 days (caller passes lastDate)
       const last = new Date((lastDate || date) + 'T00:00:00');
-      last.setDate(last.getDate() + 7);
+      last.setDate(last.getDate() + 15);
       return formatDateString(last);
     }
     default: {
-      d.setDate(d.getDate() + 30);
+      // endDate + 15 days (caller passes endDate || date as `date`)
+      d.setDate(d.getDate() + 15);
       return formatDateString(d);
     }
   }
@@ -162,8 +164,10 @@ export function classifyStatus(lec) {
 
   const d = parseDate(lec.date);
 
-  // Priority 2: unpaid alert — past date OR done status, AND not yet paid
-  if (!lec.isPaid && (d < TODAY || prog === 'done')) return 'unpaid';
+  // Priority 2: unpaid alert — past date OR done status, AND not yet paid, AND payment is not N/A
+  const _paidStatus = lec.paidStatus || (lec.isPaid ? 'true' : 'false');
+  const _isPaymentNa = _paidStatus === 'na' || lec.taxType === 'na';
+  if (!_isPaymentNa && !lec.isPaid && (d < TODAY || prog === 'done')) return 'unpaid';
 
   // Priority 3: urgent alert — confirmed scheduled lecture within 7 days
   if (prog === 'scheduled' && d >= TODAY && d <= IN_7DAYS) return 'urgent';

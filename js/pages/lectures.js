@@ -723,6 +723,8 @@ function _openBatchModal() {
     if (e.target.checked) {
       if (placeEl) { placeEl.value = ''; placeEl.disabled = true; }
       if (addrBtn) addrBtn.disabled = true;
+      // Auto-activate the place section so the payload builder includes place/isOnline
+      if (placeCb && !placeCb.checked) placeCb.checked = true;
     } else {
       const enabled = (placeCb != null ? placeCb.checked : false);
       if (placeEl) placeEl.disabled = !enabled;
@@ -882,10 +884,41 @@ function _openBatchModal() {
       if (checked('bm-cb-settlementCycle')) {
         const cycle = get('bm-settlementCycle');
         if (cycle) {
+          // For after-completion: pre-compute the true last session date per group
+          // so every lecture in the same group gets the same paymentDate.
+          const groupLastDate = new Map();
+          if (cycle === 'after-completion') {
+            if (doGroup) {
+              // All selected lectures are being merged into a brand-new group right now —
+              // the last session is the latest date among the selection itself.
+              const lastInSelection = [...selectedIds]
+                .map(id => allLectures.find(l => l.id === id))
+                .filter(Boolean)
+                .reduce((max, l) => { const d = l.endDate || l.date || ''; return d > max ? d : max; }, '');
+              groupLastDate.set(payload.groupId, lastInSelection);
+            } else {
+              // Collect unique existing groupIds and find their last session across ALL lectures.
+              for (const id of selectedIds) {
+                const gid = allLectures.find(l => l.id === id)?.groupId;
+                if (!gid || groupLastDate.has(gid)) continue;
+                const lastInGroup = allLectures
+                  .filter(l => l.groupId === gid)
+                  .reduce((max, l) => { const d = l.endDate || l.date || ''; return d > max ? d : max; }, '');
+                groupLastDate.set(gid, lastInGroup);
+              }
+            }
+          }
+
           for (const id of selectedIds) {
             const lec = allLectures.find(l => l.id === id);
             if (!lec?.date) continue;
-            const paymentDate = calcPaymentDate(lec.date, cycle, lec.endDate || lec.date);
+            const baseDate = lec.endDate || lec.date;
+            let lastDate = null;
+            if (cycle === 'after-completion') {
+              const gid = doGroup ? payload.groupId : lec.groupId;
+              lastDate = (gid ? groupLastDate.get(gid) : null) || baseDate;
+            }
+            const paymentDate = calcPaymentDate(baseDate, cycle, lastDate);
             seqUpdates[id] = { ...(seqUpdates[id] != null ? seqUpdates[id] : {}), paymentDate };
           }
         }
