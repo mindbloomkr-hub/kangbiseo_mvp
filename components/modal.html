@@ -147,7 +147,7 @@
                   <label class="add-form-label" for="af-progress">진행 상태</label>
                   <select class="add-form-input" id="af-progress">
                     <option value="discussing">논의 중</option>
-                    <option value="scheduled" selected>강의 예정</option>
+                    <option value="scheduled" selected>진행 예정</option>
                     <option value="done">진행 완료</option>
                     <option value="onhold">보류 중</option>
                     <option value="cancelled">취소/드롭</option>
@@ -327,3 +327,6 @@
     </div>
   </div>
 </div>
+
+<!-- 충돌 리뷰 모달 (persistent) — lectureModal.js 가 innerHTML 로 채움 -->
+<div id="lm-rv-backdrop" class="lm-rv-bd" role="dialog" aria-modal="true"></div>

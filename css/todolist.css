@@ -130,6 +130,21 @@
   color: var(--color-gray-400);
 }
 
+/* 날짜 범위 그룹 (기한 / 완료일) */
+.tl-date-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.tl-date-label {
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+  letter-spacing: 0.02em;
+}
+
 /* 날짜 범위 */
 .tl-date-wrap {
   display: flex;
@@ -239,11 +254,8 @@
 }
 
 .tl-cat-panel {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 300;
   min-width: 180px;
+  max-width: 240px;
 }
 
 /* ════════════════════════════════

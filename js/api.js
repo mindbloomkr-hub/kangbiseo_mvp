@@ -2,7 +2,7 @@
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js';
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-auth.js';
-import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
+import { getFirestore, collection, query, where, orderBy, limit, startAfter, onSnapshot, getDocs, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-storage.js';
 import { loadSidebar, loadModal, updateSidebarUI } from './utils.js';
 
@@ -76,11 +76,59 @@ export async function fetchGoogleCalendarEvents() {
 }
 
 /* ════════════════════════════════════════
+   localStorage 강의 캐시 (무거운 필드 제외)
+════════════════════════════════════════ */
+const _CACHE_VERSION  = 'v1';
+const _CACHE_TTL_MS   = 10 * 60 * 1000; // 10분
+const _HEAVY_FIELDS   = new Set(['memo', 'supplies', 'parkingInfo', 'groupInfo']);
+
+function _cacheKey(uid) { return `kb_lec_${_CACHE_VERSION}_${uid}`; }
+
+export function getLectureCache(uid) {
+  try {
+    const raw = localStorage.getItem(_cacheKey(uid));
+    if (!raw) return null;
+    const { ts, data } = JSON.parse(raw);
+    if (Date.now() - ts > _CACHE_TTL_MS) { localStorage.removeItem(_cacheKey(uid)); return null; }
+    return data;
+  } catch { return null; }
+}
+
+export function setLectureCache(uid, lectures) {
+  try {
+    const slim = lectures.map(l => {
+      const out = {};
+      for (const [k, v] of Object.entries(l)) { if (!_HEAVY_FIELDS.has(k)) out[k] = v; }
+      return out;
+    });
+    localStorage.setItem(_cacheKey(uid), JSON.stringify({ ts: Date.now(), data: slim }));
+  } catch {}
+}
+
+export function clearLectureCache(uid) {
+  try { localStorage.removeItem(_cacheKey(uid)); } catch {}
+}
+
+/* ════════════════════════════════════════
    공통 Firestore 강의 구독
 ════════════════════════════════════════ */
 export function subscribeLectures(uid, callback, onError) {
   const q = query(collection(db, 'lectures'), where('uid', '==', uid));
   return onSnapshot(q, callback, onError);
+}
+
+/* ════════════════════════════════════════
+   단발성 페이지네이션 강의 조회 (비실시간)
+════════════════════════════════════════ */
+export async function getPaginatedLectures(uid, pageSize = 30, lastDoc = null) {
+  const constraints = [where('uid', '==', uid), orderBy('date', 'desc'), limit(pageSize)];
+  if (lastDoc) constraints.push(startAfter(lastDoc));
+  const snap = await getDocs(query(collection(db, 'lectures'), ...constraints));
+  return {
+    docs:    snap.docs,
+    lastDoc: snap.docs[snap.docs.length - 1] ?? null,
+    hasMore: snap.docs.length === pageSize,
+  };
 }
 
 /* ════════════════════════════════════════

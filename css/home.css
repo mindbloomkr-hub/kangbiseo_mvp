@@ -78,15 +78,15 @@
   grid-template-columns: 1fr 340px;
   gap: var(--space-6);
   align-items: start;
-  margin-bottom: var(--space-6);
+  /*margin-bottom: var(--space-6);*/
   grid-template-columns: 6fr 4fr;
 }
 
 /* 좌 컬럼: 브리핑 위, 투두 아래 */
-.home-col-left  { display: flex; flex-direction: column; gap: var(--space-6);}
+.home-col-left  { display: flex; flex-direction: column;}
 
 /* 우 컬럼: 타임라인 단독 */
-.home-col-right { display: flex; flex-direction: column; gap: var(--space-6);}
+.home-col-right { display: flex; flex-direction: column;}
 
 /* 하단 풀위드 섹션 */
 .home-full-row {
@@ -487,6 +487,11 @@
 .todo-deadline--overdue {
   color: var(--color-danger-600);
   font-weight: var(--font-weight-semibold);
+}
+
+.todo-deadline--done {
+  color: var(--color-success-600, #16a34a);
+  font-size: 10px;
 }
 
 .todo-actions {

@@ -19,7 +19,7 @@ export const TAX_LABEL = {
 
 export const PROGRESS_LABEL = {
   discussing: '논의 중',
-  scheduled:  '강의 예정',
+  scheduled:  '진행 예정',
   done:       '진행 완료',
   onhold:     '보류 중',
   cancelled:  '취소/드롭',
@@ -28,7 +28,7 @@ export const PROGRESS_LABEL = {
 
 export const STATUS_META = {
   discussing:   { label: '💬 논의 중',    cls: 'lec-badge--discussing'  },
-  scheduled:    { label: '📅 강의 예정',  cls: 'lec-badge--scheduled'   },
+  scheduled:    { label: '📅 진행 예정',  cls: 'lec-badge--scheduled'   },
   done:         { label: '✅ 진행 완료',  cls: 'lec-badge--done'        },
   onhold:       { label: '⏸️ 보류 중',    cls: 'lec-badge--onhold'      },
   cancelled:    { label: '❌ 취소/드롭',  cls: 'lec-badge--cancelled'   },
@@ -378,22 +378,26 @@ export async function _geocode(addr) {
 }
 
 // Kakao Navi API: 두 장소 간 이동 소요 시간(분), 실패 시 null
-// originTime: ISO 8601 출발 시각 (예: "2026-05-06T09:30:00"). 미지정 시 시간 무관 탐색.
-export async function fetchTravelMin(placeA, placeB, originTime = null) {
+// originTime:  ISO 8601 출발 시각 — "2026-05-06T09:30:00" (departure-based)
+// arrivalTime: ISO 8601 도착 목표 시각 — "2026-05-06T08:10:00" (arrival-based predictive routing)
+// arrivalTime가 있으면 arrival_time 파라미터를 사용하고, originTime보다 우선 적용된다.
+export async function fetchTravelMin(placeA, placeB, originTime = null, arrivalTime = null) {
   const a = placeA?.trim() || '';
   const b = placeB?.trim() || '';
   if (!a || !b || a === b) return 0;
   if (a === 'Online' || b === 'Online') return 0;
-  // originTime 포함 시 방향 · 시각 모두 캐시 키에 포함 (대칭 키 사용 불가)
-  const cacheKey = originTime
-    ? `${a}|||${b}|||${originTime}`
+  // 시각 포함 시 방향 · 시각 모두 캐시 키에 포함 (대칭 키 사용 불가)
+  const timeKey = arrivalTime ? `ARR:${arrivalTime}` : (originTime ? `DEP:${originTime}` : '');
+  const cacheKey = timeKey
+    ? `${a}|||${b}|||${timeKey}`
     : (a < b ? `${a}|||${b}` : `${b}|||${a}`);
   if (_travelCache.has(cacheKey)) return _travelCache.get(cacheKey);
   try {
     const [orig, dest] = await Promise.all([_geocode(a), _geocode(b)]);
     if (!orig || !dest) { _travelCache.set(cacheKey, null); return null; }
     let url = `https://apis-navi.kakaomobility.com/v1/directions?origin=${orig.x},${orig.y}&destination=${dest.x},${dest.y}`;
-    if (originTime) url += `&priority=TIME&origin_time=${encodeURIComponent(originTime)}`;
+    if (arrivalTime)      url += `&priority=TIME&arrival_time=${encodeURIComponent(arrivalTime)}`;
+    else if (originTime)  url += `&priority=TIME&origin_time=${encodeURIComponent(originTime)}`;
     const r = await fetch(url, { headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` } });
     const j    = await r.json();
     const secs = j.routes?.[0]?.summary?.duration;
@@ -528,10 +532,11 @@ export async function checkScheduleConflict(newLec, sameDayLecs, settings, allLe
       return { status: 'risk', step: 2, msg: 'buffer', bMin, pureGap, travelMin: 0, isHardConflict: true, ...alts };
     }
 
-    // ── Step 3: API 이동시간 포함 재판단 (origin_time 적용) ───────────────
-    const depMinOfDay = (prevEnd + prevWrapup) % 1440;
-    const originTime  = newLec.date ? `${newLec.date}T${minToTime(depMinOfDay)}:00` : null;
-    const travelMin   = await fetchTravelMin(prevPlace, nextPlace, originTime);
+    // ── Step 3: API 이동시간 포함 재판단 (arrival_time 예측 라우팅) ───────────────
+    // 목표 도착 시각 = 다음 강의 시작 - (버퍼 + 준비 시간)
+    const targetArrivalMin = nextStart - (samePlace ? 0 : globalBuffer) - nextSetup;
+    const arrivalTime = newLec.date ? `${newLec.date}T${minToTime(((targetArrivalMin % 1440) + 1440) % 1440)}:00` : null;
+    const travelMin   = await fetchTravelMin(prevPlace, nextPlace, null, arrivalTime);
     const D           = (travelMin != null ? travelMin : 60);
     if (pureGap < D + bMin) {
       const alts = await _buildAlternatives(newLec, sameDayLecs, settings, allLectures, D);
@@ -665,10 +670,10 @@ export function initAllDateWithDay(root = document) {
 
 /* ════════════════════════════════════════
    드롭다운 패널 position:fixed 배치 유틸
-   alignLeft=false → 화면 수평 중앙 (모달 태그 피커)
-   alignLeft=true  → trigger 좌측 정렬 (검색바 필터 피커)
+   Left edge of panel aligns with left edge of trigger.
+   Flips above trigger when there is not enough space below.
 ════════════════════════════════════════ */
-export function positionPanel(triggerEl, panelEl, { alignLeft = false } = {}) {
+export function positionPanel(triggerEl, panelEl) {
   const rect = triggerEl.getBoundingClientRect();
   const vw   = window.innerWidth;
   const vh   = window.innerHeight;
@@ -684,8 +689,11 @@ export function positionPanel(triggerEl, panelEl, { alignLeft = false } = {}) {
   panelEl.style.visibility = '';
 
   panelEl.style.position  = 'fixed';
+  panelEl.style.margin    = '0';
   panelEl.style.transform = 'none';
-  panelEl.style.width     = alignLeft ? `${rect.width}px` : '';
+  panelEl.style.right     = 'auto';
+  panelEl.style.bottom    = 'auto';
+  panelEl.style.width     = '';
 
   // ── Vertical: prefer downward, flip upward only when there's more room above
   const spaceBelow = vh - rect.bottom - GAP;
@@ -701,16 +709,12 @@ export function positionPanel(triggerEl, panelEl, { alignLeft = false } = {}) {
   const optList = panelEl.querySelector('.lm-tag-option-list');
   if (optList) {
     const available = Math.max(80, openDown ? spaceBelow : spaceAbove);
-    optList.style.maxHeight = `${Math.min(190, Math.max(60, available - 44))}px`;
+    optList.style.maxHeight = `${Math.min(250, Math.max(60, available - 44))}px`;
     optList.style.overflowY = 'auto';
   }
 
-  // ── Horizontal: align to trigger edge, clamp so panel stays inside viewport
-  let left = alignLeft
-    ? rect.left
-    : rect.left + (rect.width - panelW) / 2;
-  left = Math.max(GAP, Math.min(left, vw - panelW - GAP));
-
+  // ── Horizontal: left-align to trigger, clamp so panel stays inside viewport
+  const left = Math.max(GAP, Math.min(rect.left, vw - panelW - GAP));
   panelEl.style.left  = `${left}px`;
   panelEl.style.right = '';
 }

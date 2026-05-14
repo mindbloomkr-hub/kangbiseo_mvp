@@ -1,5 +1,5 @@
 // js/pages/settlement.js — 정산 관리 페이지
-import { subscribeLectures, authGuard, db } from '../api.js';
+import { subscribeLectures, authGuard, db, getLectureCache, setLectureCache } from '../api.js';
 import {
   calcPaymentDate, getTodayString, escapeHtml, formatDateKo,
 } from '../utils.js';
@@ -14,6 +14,10 @@ import {
 let allLectures  = [];
 let currentUser  = null;
 let _unsub       = null;
+
+let _isLoading   = true;
+let _slPage      = 0;
+const SL_PAGE    = 30;
 
 const _filters = {
   dateFrom: '',
@@ -201,10 +205,48 @@ function renderStats() {
 /* ════════════════════════════════════════
    테이블 렌더링
 ════════════════════════════════════════ */
+function _slSkeletonRows(n = 5) {
+  return Array.from({ length: n }, () => `
+    <tr class="skeleton-row">
+      <td><span class="skeleton-cell skeleton-cell--medium"></span></td>
+      <td><span class="skeleton-cell skeleton-cell--long"></span></td>
+      <td><span class="skeleton-cell skeleton-cell--medium"></span></td>
+      <td><span class="skeleton-cell skeleton-cell--short"></span></td>
+      <td><span class="skeleton-cell skeleton-cell--medium"></span></td>
+      <td><span class="skeleton-cell skeleton-cell--badge"></span></td>
+      <td><span class="skeleton-cell skeleton-cell--short"></span></td>
+    </tr>`).join('');
+}
+
+function _renderSlPagination(tbody, total) {
+  let bar = document.getElementById('sl-pagination');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'sl-pagination';
+    bar.className = 'sl-pagination';
+    tbody.closest('table')?.after(bar);
+  }
+  const totalPages = Math.max(1, Math.ceil(total / SL_PAGE));
+  if (totalPages <= 1) { bar.hidden = true; return; }
+  bar.hidden = false;
+  bar.innerHTML = `
+    <button class="sl-pagination__btn" id="sl-pg-prev" ${_slPage === 0 ? 'disabled' : ''}>← 이전</button>
+    <span class="sl-pagination__info">${_slPage + 1} / ${totalPages}</span>
+    <button class="sl-pagination__btn" id="sl-pg-next" ${_slPage >= totalPages - 1 ? 'disabled' : ''}>다음 →</button>`;
+  bar.querySelector('#sl-pg-prev')?.addEventListener('click', () => { _slPage--; render(); });
+  bar.querySelector('#sl-pg-next')?.addEventListener('click', () => { _slPage++; render(); });
+}
+
 function renderTable() {
   const tbody   = document.getElementById('sl-table-body');
   const countEl = document.getElementById('sl-result-count');
   if (!tbody) return;
+
+  if (_isLoading && allLectures.length === 0) {
+    if (countEl) countEl.textContent = '로딩 중...';
+    tbody.innerHTML = _slSkeletonRows(5);
+    return;
+  }
 
   const today = getTodayString();
   const rows  = _filtered();
@@ -219,10 +261,14 @@ function renderTable() {
           <p>조건에 맞는 강의가 없어요.</p>
         </div>
       </td></tr>`;
+    _renderSlPagination(tbody, 0);
     return;
   }
 
-  tbody.innerHTML = rows.map(l => {
+  const start = _slPage * SL_PAGE;
+  const page  = rows.slice(start, start + SL_PAGE);
+
+  tbody.innerHTML = page.map(l => {
     const fee                 = _getFee(l);
     const status              = _paymentStatus(l, today);
     const expectedPaymentDate = l.paymentDate || _paymentDeadline(l);
@@ -263,6 +309,8 @@ function renderTable() {
         </td>
       </tr>`;
   }).join('');
+
+  _renderSlPagination(tbody, rows.length);
 }
 
 function render() {
@@ -346,6 +394,7 @@ function _bindEvents() {
     document.querySelectorAll('.sl-preset-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     _applyPreset(btn.dataset.preset);
+    _slPage = 0;
     renderTable();
   });
 
@@ -353,12 +402,14 @@ function _bindEvents() {
   document.getElementById('sl-date-from')?.addEventListener('change', e => {
     _filters.dateFrom = e.target.value;
     document.querySelectorAll('.sl-preset-btn').forEach(b => b.classList.remove('active'));
+    _slPage = 0;
     renderTable();
   });
 
   document.getElementById('sl-date-to')?.addEventListener('change', e => {
     _filters.dateTo = e.target.value;
     document.querySelectorAll('.sl-preset-btn').forEach(b => b.classList.remove('active'));
+    _slPage = 0;
     renderTable();
   });
 
@@ -372,12 +423,14 @@ function _bindEvents() {
     });
     tab.classList.add('active');
     if (_filters.tab !== 'all') tab.classList.add(`active--${_filters.tab}`);
+    _slPage = 0;
     renderTable();
   });
 
   // Search
   document.getElementById('sl-search')?.addEventListener('input', e => {
     _filters.search = e.target.value.trim();
+    _slPage = 0;
     renderTable();
   });
 
@@ -426,8 +479,18 @@ authGuard(async user => {
   _applyUrlParams();
   await initLectureModal(() => ({ allLectures, currentUser }));
 
+  // Show cached data instantly
+  const cached = getLectureCache(user.uid);
+  if (cached && cached.length > 0) {
+    allLectures = cached;
+    _isLoading  = false;
+    render();
+  }
+
   _unsub = subscribeLectures(user.uid, snap => {
     allLectures = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    _isLoading  = false;
+    setLectureCache(user.uid, allLectures);
     render();
   }, err => console.error('[강비서] 정산 구독 오류:', err));
 }, {

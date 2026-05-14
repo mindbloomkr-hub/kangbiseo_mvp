@@ -307,18 +307,6 @@ function renderBriefingCards() {
 /* ════════════════════════════════════════
    5. 타임스케줄 (오늘 / 내일 공용)
 ════════════════════════════════════════ */
-// Builds an ISO 8601 datetime string from a lecture date + HH:MM + optional extra minutes.
-// Handles overflow past midnight by advancing the date.
-function buildOriginTime(date, timeHHMM, extraMin = 0) {
-  const totalMin = timeToMin(timeHHMM) + extraMin;
-  const dayOff   = Math.floor(totalMin / 1440);
-  const minOfDay = totalMin % 1440;
-  const d = new Date(date + 'T00:00:00');
-  d.setDate(d.getDate() + dayOff);
-  const h = String(Math.floor(minOfDay / 60)).padStart(2, '0');
-  const m = String(minOfDay % 60).padStart(2, '0');
-  return `${formatDateString(d)}T${h}:${m}:00`;
-}
 
 function getDeviceScheduler() {
   try {
@@ -343,7 +331,8 @@ function _createTimelineCard(lec, isDone) {
   const isMultiDay  = (lec._isMultiDay != null ? lec._isMultiDay : false);
 
   const color     = getLectureColor(lec);
-  const bg        = hexToRgba(color, isDone ? 0.1 : 0.3);
+  // 타임라인 강의 카드 색상 불투명도 조절 5% 10%
+  const bg        = hexToRgba(color, isDone ? 0.05 : 0.1);
   const nodeStyle = isDone
     ? 'background:#9ca3af;border-color:#9ca3af;'
     : `background:${color};border-color:${color};`;
@@ -374,65 +363,25 @@ function _createTimelineCard(lec, isDone) {
 }
 
 /* ════════════════════════════════════════
-   현재 시간 바 — DOM 기반 분 단위 정밀 위치
+   현재 시간 바 — 선형 시간-비율 기반 위치
+   top% = (nowMin - tlStartMin) / (tlEndMin - tlStartMin) * 100
 ════════════════════════════════════════ */
-function _injectNowBar(container, nowMin) {
+function _injectNowBar(container, nowMin, tlStartMin, tlEndMin) {
+  const totalDuration = tlEndMin - tlStartMin;
+  if (totalDuration <= 0) return;
+
   const now    = new Date();
   const nowStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
+  const clamped = Math.min(Math.max(nowMin, tlStartMin), tlEndMin);
+  const pct     = (clamped - tlStartMin) / totalDuration;
+
   const bar = document.createElement('div');
-  bar.className = 'tl-now-bar';
-  bar.innerHTML = `<div class="tl-now-line"></div><span class="tl-now-label">현재 ${nowStr}</span>`;
-  Object.assign(bar.style, {
-    position: 'absolute', left: '0', right: '0', margin: '0',
-    pointerEvents: 'none', zIndex: '10',
-  });
+  bar.className    = 'tl-now-bar';
+  bar.dataset.time = nowStr;
   container.style.position = 'relative';
   container.appendChild(bar);
-
-  requestAnimationFrame(() => {
-    const items = [...container.querySelectorAll('.timeline-item[data-start-min]')];
-    if (!items.length) { bar.style.top = '0px'; return; }
-
-    const contTop = container.getBoundingClientRect().top;
-    let topPx;
-
-    // Case 1: nowMin falls inside a lecture item
-    let withinEl = null, withinS = 0, withinE = 0;
-    for (const el of items) {
-      const s = Number(el.dataset.startMin), e = Number(el.dataset.endMin);
-      if (s <= nowMin && nowMin < e) { withinEl = el; withinS = s; withinE = e; break; }
-    }
-
-    if (withinEl) {
-      const r     = withinEl.getBoundingClientRect();
-      const ratio = (nowMin - withinS) / (withinE - withinS);
-      topPx = (r.top - contTop) + ratio * r.height;
-    } else {
-      // Case 2: nowMin is in a gap between lectures (or before/after all)
-      let prevEl = null, prevE = -Infinity, nextEl = null, nextS = Infinity;
-      for (const el of items) {
-        const s = Number(el.dataset.startMin), e = Number(el.dataset.endMin);
-        if (e <= nowMin && e > prevE) { prevEl = el; prevE = e; }
-        if (s > nowMin && s < nextS)  { nextEl = el; nextS = s; }
-      }
-
-      if (!prevEl && nextEl) {
-        topPx = nextEl.getBoundingClientRect().top - contTop - 18;
-      } else if (prevEl && !nextEl) {
-        topPx = prevEl.getBoundingClientRect().bottom - contTop + 4;
-      } else if (prevEl && nextEl) {
-        const pBot  = prevEl.getBoundingClientRect().bottom - contTop;
-        const nTop  = nextEl.getBoundingClientRect().top    - contTop;
-        const ratio = (nowMin - prevE) / (nextS - prevE);
-        topPx = pBot + ratio * (nTop - pBot);
-      } else {
-        topPx = Math.max(0, items[0].getBoundingClientRect().top - contTop - 18);
-      }
-    }
-
-    bar.style.top = `${Math.max(0, topPx)}px`;
-  });
+  bar.style.top = `${(pct * 100).toFixed(2)}%`;
 }
 
 async function renderTimelineInto(containerId, lectures, showNowBar) {
@@ -456,15 +405,23 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
   const firstLec = lectures[0];
   const lastLec  = lectures[lectures.length - 1];
 
-  // Fetch all travel times in parallel: inter-lecture + home legs if needed
-  // Inter-lecture: pass endTime + wrapupTime as originTime for time-aware routing
+  // Fetch all travel times using arrival_time predictive routing:
+  // Target Arrival = lecture start - setup - buffer (time we must be at the venue)
+  const firstSetup  = Number(firstLec.setupTime != null ? firstLec.setupTime : (sched.setupTime != null ? sched.setupTime : 20));
+  const lastWrapup  = Number(lastLec.wrapupTime != null ? lastLec.wrapupTime : (sched.wrapupTime != null ? sched.wrapupTime : 15));
+
   const interLecPromises = lectures.slice(0, -1).map((lec, i) => {
-    const wrapup     = Number(lec.wrapupTime != null ? lec.wrapupTime : (sched.wrapupTime != null ? sched.wrapupTime : 15));
-    const originTime = buildOriginTime(_td(lec), _te(lec), wrapup);
-    return fetchTravelMin(lec.place, lectures[i + 1].place, originTime);
+    const next    = lectures[i + 1];
+    const setup2  = Number(next.setupTime != null ? next.setupTime : (sched.setupTime != null ? sched.setupTime : 20));
+    const targetArrivalMin = timeToMin(_ts(next)) - setup2 - bufferTime;
+    const arrivalTimeISO   = `${_td(next)}T${minToTime(targetArrivalMin)}:00`;
+    return fetchTravelMin(lec.place, next.place, null, arrivalTimeISO);
   });
+
+  const firstTargetArrivalMin = timeToMin(_ts(firstLec)) - firstSetup - bufferTime;
+  const firstArrivalTimeISO   = `${_td(firstLec)}T${minToTime(firstTargetArrivalMin)}:00`;
   const homePromises = hasOrigin
-    ? [fetchTravelMin(originAddr, firstLec.place), fetchTravelMin(lastLec.place, originAddr)]
+    ? [fetchTravelMin(originAddr, firstLec.place, null, firstArrivalTimeISO), fetchTravelMin(lastLec.place, originAddr)]
     : [Promise.resolve(null), Promise.resolve(null)];
 
   const [travelMins, [travelToFirst, travelToHome]] = await Promise.all([
@@ -472,10 +429,7 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
     Promise.all(homePromises),
   ]);
 
-  // Home-to-Home calculations
-  const firstSetup  = Number(firstLec.setupTime != null ? firstLec.setupTime : (sched.setupTime != null ? sched.setupTime : 20));
-  const lastWrapup  = Number(lastLec.wrapupTime  != null ? lastLec.wrapupTime : (sched.wrapupTime != null ? sched.wrapupTime : 15));
-  // Round departure DOWN to nearest 10-min increment (07:06 → 07:00, 08:19 → 08:10)
+  // Round departure DOWN to nearest 10-min increment (08:17 → 08:10)
   const departureMin = hasOrigin
     ? Math.floor((timeToMin(_ts(firstLec)) - (firstSetup + bufferTime + (travelToFirst != null ? travelToFirst : 0))) / 10) * 10
     : null;
@@ -549,9 +503,9 @@ if (hasOrigin && !suppressDeparture) {
       const setup2     = Number(next.setupTime  != null ? next.setupTime  : (sched.setupTime  != null ? sched.setupTime  : 20));
       const reqGap     = wrapup1 + travelMin + bufferTime + setup2;
       const actGap     = timeToMin(_ts(next)) - timeToMin(_te(lec));
-      const arrivalMin = timeToMin(_te(lec)) + wrapup1 + travelMin;
-      const depStr     = minToTime(timeToMin(_te(lec)) + wrapup1);
-      const arrivalStr = minToTime(arrivalMin);
+      const targetArrivalMin = timeToMin(_ts(next)) - setup2 - bufferTime;
+      const depStr     = minToTime(targetArrivalMin - travelMin);
+      const arrivalStr = minToTime(targetArrivalMin);
       const isWarn     = actGap < reqGap;
       const travelLabel = rawTravel == null
         ? '이동 시간 미확인'
@@ -560,7 +514,7 @@ if (hasOrigin && !suppressDeparture) {
       parts.push(`
         <div class="tl-gap-row${isWarn ? ' tl-gap-row--warn' : ''}">
           <div class="tl-time-col">
-            <div class="tl-time" style="font-size:9px;color:#9ca3af;">${depStr}</div>
+            <div class="tl-time" style="color:#9ca3af;">${depStr}</div>
           </div>
           <div class="tl-track tl-gap-track"></div>
           <div class="tl-content">
@@ -586,7 +540,7 @@ if (hasOrigin && !suppressDeparture) {
     parts.push(`
       <div class="tl-gap-row">
         <div class="tl-time-col">
-          <div class="tl-time" style="font-size:9px;color:#9ca3af;">${depStr}</div>
+          <div class="tl-time" style="color:#9ca3af;">${depStr}</div>
         </div>
         <div class="tl-track tl-gap-track"></div>
         <div class="tl-content">
@@ -615,7 +569,11 @@ if (hasOrigin && !suppressDeparture) {
   container.querySelectorAll('.tl-card--lecture[data-id]').forEach(card => {
     card.addEventListener('click', () => openModal(card.dataset.id));
   });
-  if (showNowBar) _injectNowBar(container, nowMin);
+  if (showNowBar) {
+    const tlStartMin = timeToMin(_ts(firstLec));
+    const tlEndMin   = timeToMin(_te(lastLec));
+    _injectNowBar(container, nowMin, tlStartMin, tlEndMin);
+  }
 }
 
 function renderTimeline()         { renderTimelineInto('timeline-list',          todayLectures,    true);  }
@@ -774,11 +732,11 @@ function initLectures(uid) {
    To-do List — todoService + todoComponent 위임
 ════════════════════════════════════════ */
 
-// Sidebar shows only overdue + today's incomplete todos, sorted oldest-first
+// Sidebar shows: overdue (incomplete only) + all of today's todos (done or not)
 function _sidebarTodos(all) {
   const today = getTodayString();
   return all
-    .filter(t => !t.isDone && t.deadline <= today)
+    .filter(t => t.deadline === today || (!t.isDone && t.deadline < today))
     .sort((a, b) => (a.deadline < b.deadline ? -1 : a.deadline > b.deadline ? 1 : 0));
 }
 
@@ -788,11 +746,14 @@ function _renderSidebarTodos() {
   const visible = _sidebarTodos(todos);
   renderTodoList(listEl, visible, allLectures, getTopicTags());
   if (countEl) {
-    const overdue = visible.filter(t => t.deadline < getTodayString()).length;
-    const todayCount = visible.length - overdue;
+    const todayStr   = getTodayString();
+    const overdue    = visible.filter(t => t.deadline < todayStr).length;
+    const todayAll   = visible.filter(t => t.deadline === todayStr);
+    const todayDone  = todayAll.filter(t => t.isDone).length;
+    const todayCount = todayAll.length;
     countEl.textContent = overdue > 0
-      ? `오늘 ${todayCount}건 · 연체 ${overdue}건`
-      : `오늘 ${todayCount}건`;
+      ? `오늘 ${todayCount}건(완료 ${todayDone}) · 연체 ${overdue}건`
+      : `오늘 ${todayCount}건(완료 ${todayDone})`;
   }
 }
 

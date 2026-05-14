@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="../css/home.css" />
   <link rel="stylesheet" href="../css/lectures.css" />
   <link rel="stylesheet" href="../css/todolist.css" />
+  <link rel="stylesheet" href="../css/modal.css" />
 </head>
 <body>
 
@@ -52,17 +53,33 @@
             <div class="tl-filter-row">
 
               <!-- 텍스트 검색 -->
-              <div class="tl-search-wrap">
-                <span class="tl-search-icon" aria-hidden="true">🔍</span>
-                <input type="text" id="tl-search" class="tl-search-input"
-                       placeholder="할 일 내용 검색..." aria-label="할 일 내용 검색" />
+              <div class="tl-date-group">
+                <span class="tl-date-label">할 일 내용 검색</span>
+                <div class="tl-search-wrap">
+                  <span class="tl-search-icon" aria-hidden="true">🔍</span>
+                  <input type="text" id="tl-search" class="tl-search-input"
+                        placeholder="할 일 내용 검색..." aria-label="할 일 내용 검색" />
+                </div>
               </div>
 
-              <!-- 날짜 범위 -->
-              <div class="tl-date-wrap">
-                <input type="date" id="tl-date-from" class="tl-date-input" aria-label="시작일" />
-                <span class="tl-date-sep" aria-hidden="true">~</span>
-                <input type="date" id="tl-date-to" class="tl-date-input" aria-label="종료일" />
+              <!-- 기한 검색 -->
+              <div class="tl-date-group">
+                <span class="tl-date-label">기한 검색</span>
+                <div class="tl-date-wrap">
+                  <input type="date" id="tl-date-from" class="tl-date-input" aria-label="기한 시작일" />
+                  <span class="tl-date-sep" aria-hidden="true">~</span>
+                  <input type="date" id="tl-date-to" class="tl-date-input" aria-label="기한 종료일" />
+                </div>
+              </div>
+
+              <!-- 완료일 검색 -->
+              <div class="tl-date-group">
+                <span class="tl-date-label">완료일 검색</span>
+                <div class="tl-date-wrap">
+                  <input type="date" id="tl-done-from" class="tl-date-input" aria-label="완료일 시작" />
+                  <span class="tl-date-sep" aria-hidden="true">~</span>
+                  <input type="date" id="tl-done-to" class="tl-date-input" aria-label="완료일 종료" />
+                </div>
               </div>
 
               <!-- 상태 버튼 그룹 -->

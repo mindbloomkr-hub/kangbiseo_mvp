@@ -2,7 +2,7 @@
 import { subscribeLectures, authGuard } from '../api.js';
 import { subscribeTodos, addTodo, clearDoneTodos, postponeAllTodayTodos } from '../services/todoService.js';
 import { renderTodoList, bindTodoEvents } from '../components/todoComponent.js';
-import { getTodayString, escapeHtml } from '../utils.js';
+import { getTodayString, escapeHtml, positionPanel } from '../utils.js';
 import { initLectureModal, openModal, getTopicTags } from '../components/lectureModal.js';
 
 /* ════════════════════════════════════════
@@ -18,9 +18,20 @@ const _filters = {
   search:   '',
   dateFrom: '',
   dateTo:   '',
+  doneFrom: '',
+  doneTo:   '',
   status:   'all',   // 'all' | 'active' | 'done'
   tagId:    null,    // null = 전체, number = 특정 태그
 };
+
+// Converts a Firestore Timestamp (or Date) to YYYY-MM-DD string
+function _fmtDate(ts) {
+  if (!ts) return null;
+  try {
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  } catch { return null; }
+}
 
 /* ════════════════════════════════════════
    1. 통계 계산 및 렌더링
@@ -91,6 +102,13 @@ function _applyFilters(todos) {
       return false;
     if (_filters.dateTo && t.deadline && t.deadline > _filters.dateTo)
       return false;
+    if (_filters.doneFrom || _filters.doneTo) {
+      if (!t.isDone) return false;
+      const doneStr = _fmtDate(t.completedAt);
+      if (!doneStr) return false;
+      if (_filters.doneFrom && doneStr < _filters.doneFrom) return false;
+      if (_filters.doneTo   && doneStr > _filters.doneTo)   return false;
+    }
     if (_filters.status === 'active' && t.isDone)  return false;
     if (_filters.status === 'done'   && !t.isDone) return false;
     if (_filters.tagId !== null) {
@@ -99,7 +117,12 @@ function _applyFilters(todos) {
         : t.groupId
           ? allLectures.find(l => l.groupId === t.groupId)
           : null;
-      if ((lec != null && lec.topicTagId != null ? lec.topicTagId : null) !== _filters.tagId) return false;
+      const effectiveTagId = (lec != null && lec.topicTagId != null ? lec.topicTagId : null);
+      if (_filters.tagId === '__general__') {
+        if (effectiveTagId !== null) return false;
+      } else {
+        if (effectiveTagId !== _filters.tagId) return false;
+      }
     }
     return true;
   });
@@ -121,20 +144,56 @@ function renderFilteredList() {
 /* ════════════════════════════════════════
    3. 카테고리 피커
 ════════════════════════════════════════ */
-function _buildCatPicker(selectedTagId) {
+function _updateCategoryFilter() {
   const listEl   = document.getElementById('tl-cat-option-list');
   const swatchEl = document.getElementById('tl-cat-swatch');
   const labelEl  = document.getElementById('tl-cat-label');
   if (!listEl) return;
 
-  const tags = getTopicTags();
-  const tag  = selectedTagId != null ? tags.find(t => t.id === selectedTagId) : null;
+  const selectedTagId = _filters.tagId;
+  const allTags       = getTopicTags();
+  const tagLookup     = new Map(allTags.map(t => [t.id, t]));
+
+  // Walk all todos → linked lecture → topicTagId to build used-tags map
+  const usedMap    = new Map(); // tagId → { id, name, color }
+  let   hasGeneral = false;
+
+  allTodos.forEach(t => {
+    const lec = t.lectureId
+      ? allLectures.find(l => l.id === t.lectureId)
+      : t.groupId
+        ? allLectures.find(l => l.groupId === t.groupId)
+        : null;
+    const tid = (lec != null && lec.topicTagId != null ? lec.topicTagId : null);
+    if (tid !== null) {
+      if (!usedMap.has(tid)) {
+        const tag = tagLookup.get(tid);
+        usedMap.set(tid, tag
+          ? { id: tid, name: tag.name, color: tag.color ?? '#9ca3af' }
+          : { id: tid, name: `태그 ${tid}`, color: '#9ca3af' }
+        );
+      }
+    } else {
+      hasGeneral = true;
+    }
+  });
+
+  // Update trigger swatch + label to reflect current selection
+  const isGeneral = selectedTagId === '__general__';
+  const selTag    = (!isGeneral && selectedTagId != null)
+    ? (usedMap.get(selectedTagId) ?? tagLookup.get(selectedTagId) ?? null)
+    : null;
 
   if (swatchEl) {
-    swatchEl.style.background = (tag != null && tag.color != null ? tag.color : 'transparent');
-    swatchEl.style.display    = tag ? 'inline-block' : 'none';
+    if (isGeneral) {
+      swatchEl.style.background = '#9ca3af';
+      swatchEl.style.display    = 'inline-block';
+    } else {
+      swatchEl.style.background = selTag?.color ?? 'transparent';
+      swatchEl.style.display    = selTag ? 'inline-block' : 'none';
+    }
   }
-  if (labelEl) labelEl.textContent = tag ? tag.name : '전체 카테고리';
+  if (labelEl) labelEl.textContent = isGeneral ? '일반' : (selTag ? selTag.name : '전체 카테고리');
 
   const noneHtml = `
     <div class="lm-tag-option lm-tag-option-none${selectedTagId == null ? ' selected' : ''}"
@@ -142,14 +201,55 @@ function _buildCatPicker(selectedTagId) {
       <span class="lm-tag-option-dot"></span><span>전체 카테고리</span>
     </div>`;
 
-  const tagsHtml = tags.map(t => `
+  const generalHtml = hasGeneral ? `
+    <div class="lm-tag-option${isGeneral ? ' selected' : ''}"
+         data-cat-id="__general__" role="option" aria-selected="${isGeneral}">
+      <span class="lm-tag-option-dot" style="background:#9ca3af;border-color:#9ca3af"></span>
+      <span>일반</span>
+    </div>` : '';
+
+  const tagsHtml = [...usedMap.values()].map(t => `
     <div class="lm-tag-option${t.id === selectedTagId ? ' selected' : ''}"
          data-cat-id="${t.id}" role="option" aria-selected="${t.id === selectedTagId}">
       <span class="lm-tag-option-dot" style="background:${escapeHtml(t.color)}"></span>
       <span>${escapeHtml(t.name)}</span>
     </div>`).join('');
 
-  listEl.innerHTML = noneHtml + tagsHtml;
+  listEl.innerHTML = noneHtml + generalHtml + tagsHtml;
+}
+
+let _catPanelAbortCtrl = null;
+
+function _openCatPanel() {
+  const trigger = document.getElementById('tl-cat-trigger');
+  const panel   = document.getElementById('tl-cat-panel');
+  if (!trigger || !panel) return;
+
+  _catPanelAbortCtrl?.abort();
+  _catPanelAbortCtrl = new AbortController();
+  const { signal } = _catPanelAbortCtrl;
+
+  // Escape parent overflow/clip by living at the top of the DOM
+  if (panel.parentNode !== document.body) document.body.appendChild(panel);
+  positionPanel(trigger, panel);
+  panel.hidden = false;
+  trigger.setAttribute('aria-expanded', 'true');
+
+  window.addEventListener('resize', () => _closeCatPanel(), { signal });
+  document.addEventListener('scroll', e => {
+    if (panel.contains(e.target)) return;
+    _closeCatPanel();
+  }, { capture: true, signal });
+}
+
+function _closeCatPanel() {
+  const trigger = document.getElementById('tl-cat-trigger');
+  const panel   = document.getElementById('tl-cat-panel');
+  if (!panel) return;
+  panel.hidden = true;
+  trigger?.setAttribute('aria-expanded', 'false');
+  _catPanelAbortCtrl?.abort();
+  _catPanelAbortCtrl = null;
 }
 
 function _initCatPicker() {
@@ -160,26 +260,24 @@ function _initCatPicker() {
 
   trigger.addEventListener('click', e => {
     e.stopPropagation();
-    const willOpen = panel.hidden;
-    panel.hidden = !willOpen;
-    trigger.setAttribute('aria-expanded', String(willOpen));
+    panel.hidden ? _openCatPanel() : _closeCatPanel();
   });
 
   listEl.addEventListener('click', e => {
     const opt = e.target.closest('[data-cat-id]');
     if (!opt) return;
-    const raw     = opt.dataset.catId;
-    _filters.tagId = raw === '' ? null : Number(raw);
-    _buildCatPicker(_filters.tagId);
-    panel.hidden = true;
-    trigger.setAttribute('aria-expanded', 'false');
+    const raw = opt.dataset.catId;
+    _filters.tagId = raw === '' ? null : raw === '__general__' ? '__general__' : Number(raw);
+    _updateCategoryFilter();
+    _closeCatPanel();
     renderFilteredList();
   });
 
-  document.addEventListener('click', () => {
-    if (!panel.hidden) { panel.hidden = true; trigger.setAttribute('aria-expanded', 'false'); }
+  document.addEventListener('click', e => {
+    if (!panel || panel.hidden) return;
+    if (panel.contains(e.target) || trigger.contains(e.target)) return;
+    _closeCatPanel();
   });
-  panel.addEventListener('click', e => e.stopPropagation());
 }
 
 /* ════════════════════════════════════════
@@ -201,6 +299,16 @@ function _bindFilterEvents() {
     renderFilteredList();
   });
 
+  document.getElementById('tl-done-from')?.addEventListener('change', e => {
+    _filters.doneFrom = e.target.value;
+    renderFilteredList();
+  });
+
+  document.getElementById('tl-done-to')?.addEventListener('change', e => {
+    _filters.doneTo = e.target.value;
+    renderFilteredList();
+  });
+
   document.getElementById('tl-status-group')?.addEventListener('click', e => {
     const btn = e.target.closest('[data-status]');
     if (!btn) return;
@@ -214,18 +322,23 @@ function _bindFilterEvents() {
     _filters.search   = '';
     _filters.dateFrom = '';
     _filters.dateTo   = '';
+    _filters.doneFrom = '';
+    _filters.doneTo   = '';
     _filters.status   = 'all';
     _filters.tagId    = null;
 
     const el = id => document.getElementById(id);
-    const searchEl = el('tl-search');     if (searchEl) searchEl.value = '';
-    const fromEl   = el('tl-date-from'); if (fromEl)   fromEl.value   = '';
-    const toEl     = el('tl-date-to');   if (toEl)     toEl.value     = '';
+    const clear = id => { const e = el(id); if (e) e.value = ''; };
+    clear('tl-search');
+    clear('tl-date-from');
+    clear('tl-date-to');
+    clear('tl-done-from');
+    clear('tl-done-to');
 
     document.querySelectorAll('.tl-status-btn').forEach(b =>
       b.classList.toggle('active', b.dataset.status === 'all'));
 
-    _buildCatPicker(null);
+    _updateCategoryFilter();
     renderFilteredList();
   });
 }
@@ -292,7 +405,7 @@ function _init(user) {
   _unsubLec = subscribeLectures(user.uid, snap => {
     allLectures = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderFilteredList();
-    _buildCatPicker(_filters.tagId);
+    _updateCategoryFilter();
   }, err => console.error('[강비서] 강의 구독 오류:', err));
 
   // 할 일 실시간 구독
@@ -300,7 +413,7 @@ function _init(user) {
     allTodos = updated;
     renderStats();
     renderFilteredList();
-    _buildCatPicker(_filters.tagId);
+    _updateCategoryFilter();
   }, err => console.error('[강비서] Todo 구독 오류:', err));
 }
 
@@ -308,6 +421,7 @@ function _init(user) {
    인증 가드
 ════════════════════════════════════════ */
 authGuard(async user => {
+  currentUser = user;
   await initLectureModal(() => ({ allLectures, currentUser }));
   _init(user);
 }, {

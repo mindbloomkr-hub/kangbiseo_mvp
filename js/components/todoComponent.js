@@ -2,6 +2,14 @@
 import { escapeHtml, getTodayString, hexToRgba } from '../utils.js';
 import { toggleTodo, deleteTodo, postponeTodo, updateTodoDueDate, subscribeLectureTodos, subscribeGroupTodos } from '../services/todoService.js';
 
+function _fmtTimestamp(ts) {
+  if (!ts) return null;
+  try {
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  } catch { return null; }
+}
+
 /* ════════════════════════════════════════
    단일 항목 HTML 생성
 ════════════════════════════════════════ */
@@ -38,9 +46,12 @@ export function createTodoItemHTML(todo, allLectures = [], topicTags = []) {
     ? `<span class="todo-postpone-count" title="${count}회 미룸">+${count}</span>`
     : '';
 
-  const deadlineEl = todo.deadline && !todo.isDone
-    ? `<span class="todo-deadline${isToday ? ' todo-deadline--today' : ''}${isOverdue ? ' todo-deadline--overdue' : ''}">${todo.deadline}</span>`
-    : '';
+  const completedDateStr = todo.isDone ? _fmtTimestamp(todo.completedAt) : null;
+  const deadlineEl = todo.isDone
+    ? (completedDateStr ? `<span class="todo-deadline todo-deadline--done">완료 ${completedDateStr}</span>` : '')
+    : (todo.deadline
+        ? `<span class="todo-deadline${isToday ? ' todo-deadline--today' : ''}${isOverdue ? ' todo-deadline--overdue' : ''}">${todo.deadline}</span>`
+        : '');
 
   const hasMeta = badgeHtml || postponeBadge || deadlineEl;
 

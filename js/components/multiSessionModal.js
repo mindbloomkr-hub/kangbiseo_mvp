@@ -184,17 +184,6 @@ export function generateSessions(params) {
   return sessions.slice(0, total).map((s, i) => ({ ...s, sessionCurrent: i + 1 }));
 }
 
-/* ════════════════════════════════════════
-   CSS — <link> 주입 (multiSessionModal.css)
-════════════════════════════════════════ */
-function _injectStyleLink() {
-  if (document.getElementById('ms-style-link')) return;
-  const link = document.createElement('link');
-  link.id   = 'ms-style-link';
-  link.rel  = 'stylesheet';
-  link.href = '../css/multiSessionModal.css';
-  document.head.appendChild(link);
-}
 
 /* ════════════════════════════════════════
    HTML — components/multiSessionModal.html에서 지연 로드
@@ -253,7 +242,6 @@ let _feeLastEdited      = 'fee'; // 'fee' | 'fee-total'
  */
 export function initMultiSessionModal(getCtx) {
   _getCtx = getCtx;
-  _injectStyleLink();
 }
 
 /**
@@ -861,7 +849,8 @@ async function _commitBatch(commonData, sessionTotal) {
    충돌 확인 모달
 ════════════════════════════════════════ */
 function _openConflictModal({ session, check, conflictLec, common, sessionTotal }) {
-  document.getElementById('ms-cf-backdrop')?.remove();
+  const bd = document.getElementById('ms-cf-backdrop');
+  if (!bd) return;
 
   const stepLabel = check.step === 1
     ? '시간이 직접 겹칩니다'
@@ -876,11 +865,6 @@ function _openConflictModal({ session, check, conflictLec, common, sessionTotal 
   const cStart  = conflictLec != null ? (conflictLec.startTime != null ? conflictLec.startTime : (conflictLec.timeStart != null ? conflictLec.timeStart : '?')) : '?';
   const cEnd    = conflictLec != null ? (conflictLec.endTime   != null ? conflictLec.endTime   : (conflictLec.timeEnd   != null ? conflictLec.timeEnd   : '?')) : '?';
 
-  const bd = document.createElement('div');
-  bd.id        = 'ms-cf-backdrop';
-  bd.className = 'ms-cf-bd';
-  bd.setAttribute('role', 'dialog');
-  bd.setAttribute('aria-modal', 'true');
   bd.innerHTML = `
     <div class="ms-cf-modal">
       <div class="ms-cf-head">
@@ -913,12 +897,11 @@ function _openConflictModal({ session, check, conflictLec, common, sessionTotal 
       </div>
     </div>`;
 
-  document.body.appendChild(bd);
   requestAnimationFrame(() => bd.classList.add('open'));
 
   const close = () => {
     bd.classList.remove('open');
-    setTimeout(() => bd.remove(), 200);
+    setTimeout(() => { bd.innerHTML = ''; }, 200);
   };
 
   document.getElementById('ms-cf-x').addEventListener('click', close);

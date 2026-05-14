@@ -501,7 +501,7 @@ body {
 
 .timeline-item {
   display: flex;
-  gap: var(--space-3);
+  gap: var(--space-6);
   position: relative;
 }
 
@@ -651,7 +651,7 @@ body {
 ──────────────────────────────────────── */
 .tl-gap-row {
   display: flex;
-  gap: var(--space-3);
+  gap: var(--space-6);
   align-items: stretch;
   min-height: 52px;
 }
@@ -740,27 +740,61 @@ body {
   border-left: 3px solid #6b7280;
 }
 
-/* 현재 시간 줄 */
+/* ── 현재 시간 인디케이터 (NowBar) ── */
+@keyframes tl-now-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
+}
+
 .tl-now-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding-left: 67px;
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 10;
+  animation: tl-now-pulse 2.4s ease-in-out infinite;
 }
 
-.tl-now-line {
-  flex: 1;
-  height: 1.5px;
-  background: var(--color-primary-500);
-  opacity: 0.5;
-}
-
-.tl-now-label {
+/* 시간 뱃지 — 좌측 세로 레일 위에 떠 있는 캡슐 */
+.tl-now-bar::before {
+  content: attr(data-time);
+  position: absolute;
+  top: 0;
+  left: 80px;
+  transform: translate(-50%, -50%);
+  background: #2563eb;
+  color: #fff;
   font-size: 10px;
-  font-weight: var(--font-weight-bold);
-  color: var(--color-primary-500);
-  letter-spacing: 0.04em;
+  font-weight: 800;
+  font-family: var(--font-family-mono);
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 999px;
   white-space: nowrap;
+  line-height: 1.4;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.5), 0 0 0 2.5px rgba(37, 99, 235, 0.18);
+  z-index: 1;
+}
+
+/* 글로우 그라데이션 선 — 오른쪽으로 흐려짐 */
+.tl-now-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 66px;
+  right: 0;
+  height: 2px;
+  transform: translateY(-50%);
+  background: linear-gradient(
+    to right,
+    rgba(37, 99, 235, 0.95) 0%,
+    rgba(37, 99, 235, 0.55) 30%,
+    rgba(37, 99, 235, 0.15) 65%,
+    transparent 100%
+  );
+  box-shadow: 0 0 7px rgba(37, 99, 235, 0.4);
+  border-radius: 1px;
 }
 
 /* ── Responsive ── */
