@@ -22,7 +22,7 @@ import {
   escapeHtml, formatDateKo, calcDuration, classifyStatus,
   buildTimeOptions, updateDurationDisplay, syncEndTimeOptions, initTimeSelects,
   checkScheduleConflict, _geocode, positionPanel, getTodayString,
-  timeToMin, minToTime, calcPaymentDate,
+  timeToMin, minToTime, calcPaymentDate, resolveOriginAddr,
 } from '../utils.js';
 import { openKakaoAddress } from '../services/kakaoAddressService.js';
 
@@ -388,9 +388,11 @@ function _populateForm(lec) {
   set('af-setup-time',      (lec.setupTime  != null ? lec.setupTime  : ''));
   set('af-wrapup-time',     (lec.wrapupTime != null ? lec.wrapupTime : ''));
   set('af-supplies',        lec.supplies);
-  const onlineCb = document.getElementById('af-online');
-  const placeEl  = document.getElementById('af-place');
-  if (onlineCb) onlineCb.checked = (lec.isOnline != null ? lec.isOnline : false);
+  const onlineCb  = document.getElementById('af-online');
+  const fullDayCb = document.getElementById('af-full-day');
+  const placeEl   = document.getElementById('af-place');
+  if (onlineCb)  onlineCb.checked  = (lec.isOnline  != null ? lec.isOnline  : false);
+  if (fullDayCb) fullDayCb.checked = (lec.isFullDay != null ? lec.isFullDay : false);
   if (placeEl) {
     placeEl.disabled    = (lec.isOnline != null ? lec.isOnline : false);
     placeEl.value       = lec.isOnline ? '' : (lec.place != null ? lec.place : '');
@@ -797,6 +799,8 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
     ? '시간이 직접 겹칩니다'
     : check.step === 2
     ? '이동 버퍼 시간이 부족합니다'
+    : check.isFallback
+    ? '이동 시간 포함 시 도착이 늦습니다 (직선거리 추정)'
     : '이동 시간 포함 시 도착이 늦습니다';
 
     const _roleMap = { discussing: '논의 중인 강의', onhold: '보류 중인 강의', cancelled: '취소된 강의', needs_review: '검토 필요 강의' };
@@ -842,7 +846,7 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
             <span class="v">${wrapup}분</span>
           </div>
           <div class="lm-rv-row">
-            <span>🚚 예상 이동 시간${isOnlineCtx ? '' : ' (카카오)'}</span>
+            <span>🚚 예상 이동 시간${isOnlineCtx ? '' : (check.isFallback ? ' (직선 추정 ⚠️)' : ' (카카오)')}</span>
             <span class="v">${isOnlineCtx ? '💻 온라인 (이동 없음)' : `${travel}분`}</span>
           </div>
           <div class="lm-rv-row">
@@ -1124,14 +1128,19 @@ function _bindEvents() {
       bufferTime:  rawSched.bufferTime === 'custom' ? (Number(rawSched.bufferCustom) || 30) : (Number(rawSched.bufferTime) || 30),
       setupTime:   Number(rawSched.setupTime)  || 20,
       wrapupTime:  Number(rawSched.wrapupTime) || 15,
+      transport:   rawSched.transport          || 'car',
+      originAddr:  resolveOriginAddr(date),
     };
 
+    var _afFullDay = document.getElementById('af-full-day');
+    const isFullDay = _afFullDay != null ? _afFullDay.checked : false;
     const newLec = {
       date,
       startTime:  timeStart,
       endTime:    timeEnd,
       place,
       isOnline,
+      isFullDay,
       setupTime:  Number(get('af-setup-time'))  || 0,
       wrapupTime: Number(get('af-wrapup-time')) || 0,
     };
@@ -1168,6 +1177,7 @@ function _bindEvents() {
       supplies:       get('af-supplies'),
       place,
       isOnline,
+      isFullDay,
       classroom:      get('af-classroom'),
       parkingInfo:    get('af-parking'),
       managerName:    get('af-manager-name'),
@@ -1191,10 +1201,27 @@ function _bindEvents() {
     }
     console.log('[강비서] Check Result:', check);
 
-    if (check.status !== 'safe') {
+    if (check.status === 'risk') {
       const conflictLec = _findConflictLec(newLec, sameDayRaw, check);
       _openReviewModal(check, newLec, conflictLec, payload, currentUser);
       return;
+    }
+    if (check.status === 'warning') {
+      if (check.msg === 'public_transit') {
+        window.showToast?.('대중교통 기반 이동 시간 계산은 현재 준비 중입니다.', 'info');
+      } else if (check.msg === 'early_departure') {
+        const depTime = minToTime(((check.depMin % 1440) + 1440) % 1440);
+        window.showToast?.(
+          `⚠️ 출발지 기준 이동(${check.travelMin}분${check.isFallback ? ' 추정' : ''}) 포함 시 ${depTime} 이전 출발이 필요합니다.`,
+          'warning',
+        );
+      } else if (check.msg === 'late_return') {
+        const retTime = minToTime(((check.returnMin % 1440) + 1440) % 1440);
+        window.showToast?.(
+          `⚠️ 강의 후 귀가(${check.travelMin}분${check.isFallback ? ' 추정' : ''})까지 포함 시 ${retTime} 귀가 예정입니다.`,
+          'warning',
+        );
+      }
     }
 
     const submitBtn = document.getElementById('btn-form-submit');

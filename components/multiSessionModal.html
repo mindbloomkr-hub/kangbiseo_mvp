@@ -255,9 +255,14 @@
             <div class="ms-field" style="flex: 7;">
               <div style="display: flex; align-items: center; justify-content: space-between;">
                 <label class="ms-label" for="ms-place" style="margin-bottom: 0;">강의장 주소 *</label>
-                <label style="display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #2563eb; cursor: pointer; user-select: none;">
-                  <input type="checkbox" id="ms-online" style="width: 14px; height: 14px; accent-color: #2563eb; cursor: pointer;" />💻 온라인 수업
-                </label>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <label style="display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #2563eb; cursor: pointer; user-select: none;">
+                    <input type="checkbox" id="ms-online" style="width: 14px; height: 14px; accent-color: #2563eb; cursor: pointer;" />💻 온라인 수업
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #6b7280; cursor: pointer; user-select: none;" title="당일 일정 전체를 점유합니다 (이동 시간 계산에 반영됨)">
+                    <input type="checkbox" id="ms-full-day" style="width: 14px; height: 14px; accent-color: #6b7280; cursor: pointer;" />📅 종일 점유
+                  </label>
+                </div>
               </div>
               <div class="ms-addr-wrap" style="display: flex; gap: 5px; width: 100%;">
                 <button type="button" class="ms-addr-btn" id="ms-addr-search" style="flex-shrink: 0;">🔍 주소 검색</button>

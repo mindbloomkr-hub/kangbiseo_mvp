@@ -2,7 +2,8 @@
 import { subscribeLectures, authGuard } from '../api.js';
 import { subscribeTodos, addTodo, clearDoneTodos, postponeAllTodayTodos } from '../services/todoService.js';
 import { renderTodoList, bindTodoEvents } from '../components/todoComponent.js';
-import { DAY_KO, escapeHtml, getTodayString, fetchTravelMin, clearTravelCache, hexToRgba, timeToMin, minToTime, formatDateString, calcPaymentDate } from '../utils.js';
+import { DAY_KO, escapeHtml, fmt, getTodayString, fetchTravelMin, clearTravelCache, hexToRgba, timeToMin, minToTime, formatDateString, calcPaymentStatus, calculateSettlementStats } from '../utils.js';
+import { REVENUE_UNIT } from '../constants.js';
 import { initLectureModal, openModal, getTopicTags } from '../components/lectureModal.js';
 
 /* ════════════════════════════════════════
@@ -17,6 +18,35 @@ import { initLectureModal, openModal, getTopicTags } from '../components/lecture
     'background:rgba(124,58,237,.12);color:#7c3aed;font-size:10px;font-weight:700;',
     'margin-left:5px;vertical-align:middle;white-space:nowrap}',
     '.tl-card--multiday{border-left-style:dashed!important}',
+  ].join('');
+  document.head.appendChild(s);
+})();
+
+/* 출발지 선택기 + 임시 출발지 모달 CSS — 1회 주입 */
+(function _initDepSelectorCSS() {
+  if (document.getElementById('dep-selector-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'dep-selector-styles';
+  s.textContent = [
+    '.dep-chip{padding:4px 12px;border-radius:20px;border:1.5px solid #d1d5db;',
+    'background:#f9fafb;font-size:0.78rem;font-weight:600;color:#374151;cursor:pointer;',
+    'transition:all .15s;white-space:nowrap;line-height:1.4;}',
+    '.dep-chip:hover{background:#e5e7eb;border-color:#9ca3af;}',
+    '.dep-chip--selected{background:#2563c4;color:#fff;border-color:#2563c4;}',
+    '.dep-chip--selected:hover{background:#1d4ed8;border-color:#1d4ed8;}',
+    '.dep-chip--edit{border-style:dashed;}',
+    '.dep-chip--edit.dep-chip--selected{border-style:solid;}',
+    '.dep-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1200;',
+    'display:none;align-items:center;justify-content:center;padding:16px;}',
+    '.dep-modal-backdrop.dep-modal-open{display:flex;}',
+    '.dep-modal{background:#fff;border-radius:16px;width:100%;max-width:420px;',
+    'box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden;}',
+    '.dep-modal-hdr{display:flex;align-items:center;justify-content:space-between;',
+    'padding:16px 20px;border-bottom:1px solid #f3f4f6;}',
+    '.dep-modal-body{padding:20px;}',
+    '.dep-modal-ftr{display:flex;justify-content:flex-end;gap:8px;',
+    'padding:12px 20px;border-top:1px solid #f3f4f6;}',
+    '.tl-loading{padding:20px 0;text-align:center;color:#6b7280;font-size:0.85rem;}',
   ].join('');
   document.head.appendChild(s);
 })();
@@ -109,6 +139,7 @@ let todayLectures        = [];
 let tomorrowLectures     = [];
 let unsubscribeTodos     = null;
 let unsubscribeLectures  = null;
+const _tlVersions        = {};   // stale-render guard: tracks the latest render request per container
 
 function getDisplayName() {
   return localStorage.getItem('userNickname')
@@ -152,29 +183,7 @@ function renderGreeting() {
   }
 }
 
-/* ════════════════════════════════════════
-   결제 상태 헬퍼
-════════════════════════════════════════ */
-function _getPaymentDeadline(lec) {
-  if (lec.paymentDate) return lec.paymentDate;
-  if (lec.settlementCycle === 'after-completion' && lec.groupId) {
-    const lastDate = allLectures
-      .filter(l => l.groupId === lec.groupId)
-      .reduce((max, l) => { const d = (l.endDate != null ? l.endDate : (l.date != null ? l.date : '')); return d > max ? d : max; }, '');
-    const baseDate = lastDate || (lec.endDate != null ? lec.endDate : (lec.date != null ? lec.date : ''));
-    return baseDate ? calcPaymentDate(baseDate, 'after-completion', lastDate || null) : null;
-  }
-  const baseDate = (lec.endDate != null ? lec.endDate : (lec.date != null ? lec.date : ''));
-  return baseDate ? calcPaymentDate(baseDate, lec.settlementCycle || '', null) : null;
-}
-
-function _paymentStatus(lec, todayStr) {
-  if (lec.paidStatus === 'true' || lec.isPaid === true) return 'paid';
-  if (!_getFee(lec)) return 'na';          // 금액 없음 → 해당없음
-  const deadline = _getPaymentDeadline(lec);
-  if (!deadline) return 'pending';
-  return todayStr >= deadline ? 'overdue' : 'pending';
-}
+/* 결제 상태 헬퍼는 utils.js의 calcPaymentStatus / calculateSettlementStats를 사용 */
 
 /* ════════════════════════════════════════
    3. 상단 통계 카드
@@ -184,17 +193,10 @@ function renderStatBar() {
   if (!container) return;
 
   const totalFee = todayLectures.reduce((sum, l) => sum + _getFee(l), 0);
-  const now0     = new Date(); now0.setHours(0, 0, 0, 0);
   const todayStr = getTodayString();
 
-  const pastUnpaid  = allLectures.filter(l => {
-    const d = new Date(l.date); d.setHours(0, 0, 0, 0);
-    return !l.isPaid && d < now0;
-  });
-  const overdueLecs = pastUnpaid.filter(l => _paymentStatus(l, todayStr) === 'overdue');
-  const pendingLecs = pastUnpaid.filter(l => _paymentStatus(l, todayStr) === 'pending');
-  const overdueAmt  = overdueLecs.reduce((s, l) => s + _getFee(l), 0);
-  const pendingAmt  = pendingLecs.reduce((s, l) => s + _getFee(l), 0);
+  const { overdueLecs, pendingLecs, overdueAmt, pendingAmt } = calculateSettlementStats(allLectures, todayStr);
+  console.log('[home] overdueLecs:', overdueLecs.length, 'pendingLecs:', pendingLecs.length);
 
   const unpaidIconCls = overdueLecs.length > 0
     ? 'stat-icon--red'
@@ -208,8 +210,8 @@ function renderStatBar() {
       icon: '💳', iconCls: unpaidIconCls,
       value:  `${overdueLecs.length + pendingLecs.length}건`,
       label:  '미입금 정산',
-      delta:  overdueAmt > 0 ? `₩${(overdueAmt * 10000).toLocaleString()} 연체` : '',
-      delta2: pendingAmt > 0 ? `₩${(pendingAmt * 10000).toLocaleString()} 대기` : '',
+      delta:  overdueAmt > 0 ? `${fmt(overdueAmt)} 연체` : '',
+      delta2: pendingAmt > 0 ? `${fmt(pendingAmt)} 대기` : '',
     },
   ];
 
@@ -263,7 +265,7 @@ function renderBriefingCards() {
   container.innerHTML = todayLectures.map((l) => {
     const color      = getLectureColor(l);
     const mgrInitial = (l.managerName || '담').charAt(0);
-    const payStatus  = _paymentStatus(l, todayStr);
+    const payStatus  = calcPaymentStatus(l, todayStr, allLectures);
     const payChip    = (payStatus === 'paid' || payStatus === 'na')
       ? ''
       : payStatus === 'overdue'
@@ -297,7 +299,7 @@ function renderBriefingCards() {
             <div class="briefing-meta-item"><span class="briefing-meta-icon">🏢</span><span class="briefing-meta-text">${escapeHtml(l.client)}</span></div>
             <div class="briefing-meta-item"><span class="briefing-meta-icon">📍</span><span class="briefing-meta-text">${escapeHtml(l.place || '장소 미정')}</span></div>
             <div class="briefing-meta-item"><span class="briefing-meta-icon">⏱</span><span class="briefing-meta-text">${l.timeStart} ~ ${l.timeEnd}</span></div>
-            <div class="briefing-meta-item"><span class="briefing-meta-icon">💰</span><span class="briefing-meta-text">${_getFee(l) > 0 ? `₩${(_getFee(l)*10000).toLocaleString()}` : '해당없음'}</span></div>
+            <div class="briefing-meta-item"><span class="briefing-meta-icon">💰</span><span class="briefing-meta-text">${_getFee(l) > 0 ? `₩${(_getFee(l)*REVENUE_UNIT).toLocaleString()}` : '해당없음'}</span></div>
           </div>
         </div>
         <div class="briefing-footer">
@@ -333,6 +335,72 @@ function getEffectiveBufferTime() {
   const s = getDeviceScheduler();
   if (s.bufferTime === 'custom') return Number(s.bufferCustom) || 30;
   return Number(s.bufferTime) || 30;
+}
+
+/* ════════════════════════════════════════
+   일별 출발지 — localStorage 날짜 독립 설정
+   키: 'kangbiseo_daily_origins'
+   값: { "YYYY-MM-DD": { type: "home"|"office"|"other"|"custom", customAddr: "" } }
+════════════════════════════════════════ */
+function _loadDailyOrigins() {
+  try {
+    const raw = localStorage.getItem('kangbiseo_daily_origins');
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function _saveDailyOrigins(obj) {
+  localStorage.setItem('kangbiseo_daily_origins', JSON.stringify(obj));
+}
+
+function _getDailyOrigin(dateStr) {
+  return _loadDailyOrigins()[dateStr] || null;
+}
+
+/* P1: daily override → P2: defaultOriginType from MyPage → P3: 'home' fallback */
+function _getEffectiveOrigin(dateStr) {
+  const daily = _getDailyOrigin(dateStr);
+  if (daily) return daily;
+  const sched = getDeviceScheduler();
+  const defaultType = sched.defaultOriginType || 'home';
+  return { type: defaultType, customAddr: '' };
+}
+
+function _setDailyOrigin(dateStr, type, customAddr = '') {
+  const all = _loadDailyOrigins();
+  all[dateStr] = { type, customAddr };
+  _saveDailyOrigins(all);
+}
+
+/* 날짜에 해당하는 실제 출발 주소 문자열을 반환 */
+function _resolveOriginAddr(dateStr) {
+  const sched  = getDeviceScheduler();
+  const addrs  = sched.addresses || {};
+  const origin = _getEffectiveOrigin(dateStr);
+  if (origin.type === 'custom') return origin.customAddr || '';
+  return addrs[origin.type]?.trim() || addrs.home?.trim() || '';
+}
+
+/* 출발지 유형에 맞는 이모지 반환 */
+function _getOriginEmoji(dateStr) {
+  const type = _getEffectiveOrigin(dateStr).type;
+  return { home: '🏠', office: '🏢', other: '📍', custom: '📍' }[type] || '🏠';
+}
+
+/* 출발지 유형의 짧은 이름 반환 (카드 제목용) */
+function _getOriginLabel(dateStr) {
+  const origin = _getEffectiveOrigin(dateStr);
+  const NAMES = { home: '집', office: '사무실', other: '기타' };
+  if (origin.type === 'custom') {
+    const a = origin.customAddr || '';
+    return a ? (a.length > 10 ? a.slice(0, 10) + '…' : a) : '직접 입력';
+  }
+  return NAMES[origin.type] || '집';
+}
+
+/* containerId → 해당 타임라인을 새로고침하는 함수 반환 */
+function _getRefreshFn(containerId) {
+  return containerId === 'tomorrow-timeline-list' ? renderTomorrowTimeline : renderTimeline;
 }
 
 /* ════════════════════════════════════════
@@ -397,7 +465,7 @@ function _injectNowBar(container, nowMin, tlStartMin, tlEndMin) {
   bar.style.top = `${(pct * 100).toFixed(2)}%`;
 }
 
-async function renderTimelineInto(containerId, lectures, showNowBar) {
+async function renderTimelineInto(containerId, lectures, showNowBar, dateStr) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
@@ -412,8 +480,38 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
 
   const sched       = getDeviceScheduler();
   const bufferTime  = getEffectiveBufferTime();
-  const originAddr  = sched.originAddress?.trim() || '';
+  const _dStr       = dateStr || getTodayString();
+  const originAddr  = _resolveOriginAddr(_dStr);   // P1: custom → P2: selected type → P3: home
+  const originEmoji = _getOriginEmoji(_dStr);
   const hasOrigin   = !!originAddr;
+
+  // Stamp this render. Any earlier in-flight render for the same container is now stale.
+  const myVersion = (_tlVersions[containerId] = (_tlVersions[containerId] ?? 0) + 1);
+  // Show loading feedback immediately (synchronous DOM update before any await).
+  if (hasOrigin) {
+    container.innerHTML = '<div class="tl-loading">⏳ 이동 시간 계산 중…</div>';
+  }
+
+  // Precompute inline chip HTML for the departure card (used before the await)
+  const addrs         = sched.addresses || {};
+  const curOrigin     = _getEffectiveOrigin(_dStr);
+  const originLabel   = _getOriginLabel(_dStr);
+  const _CHIP_DEFS    = [
+    { type: 'home',   icon: '🏠', label: '집'    },
+    { type: 'office', icon: '🏢', label: '사무실' },
+    { type: 'other',  icon: '📍', label: '기타'   },
+  ];
+  const _customLbl = curOrigin.type === 'custom' && curOrigin.customAddr
+    ? `✏️ ${curOrigin.customAddr.length > 14 ? curOrigin.customAddr.slice(0, 14) + '…' : curOrigin.customAddr}`
+    : '✏️ 직접 입력';
+  const inlineChipsHtml = [
+    ..._CHIP_DEFS
+      .filter(c => (addrs[c.type] || '').trim())
+      .map(c => `<button type="button" class="dep-chip${curOrigin.type === c.type ? ' dep-chip--selected' : ''}"
+                         data-type="${c.type}">${c.icon} ${c.label}</button>`),
+    `<button type="button" class="dep-chip dep-chip--edit${curOrigin.type === 'custom' ? ' dep-chip--selected' : ''}"
+             data-type="custom">${_customLbl}</button>`,
+  ].join('');
 
   const firstLec = lectures[0];
   const lastLec  = lectures[lectures.length - 1];
@@ -477,9 +575,17 @@ if (hasOrigin && !suppressDeparture) {
         <div class="tl-time-col"><div class="tl-time">${depStr}</div></div>
         <div class="tl-track"><div class="tl-node tl-node--home"></div></div>
         <div class="tl-content">
-          <div class="tl-card tl-card--home-origin">
-            <div class="tl-card-title">🏠 출발</div>
-            <div class="tl-card-sub">${escapeHtml(originAddr)}</div>
+          <div class="tl-card tl-card--home-origin" data-dep-card="1">
+            <div class="dep-card-main">
+              <div class="dep-card-info">
+                <div class="tl-card-title">${originEmoji} ${escapeHtml(originLabel)} 출발</div>
+                <div class="tl-card-sub dep-card-addr">${escapeHtml(originAddr)}</div>
+              </div>
+              <button type="button" class="dep-edit-btn">출발지 수정</button>
+            </div>
+            <div class="dep-chip-group dep-chip-group--inline">
+              ${inlineChipsHtml}
+            </div>
           </div>
         </div>
       </div>`);
@@ -573,14 +679,40 @@ if (hasOrigin && !suppressDeparture) {
         <div class="tl-track"><div class="tl-node tl-node--home"></div></div>
         <div class="tl-content">
           <div class="tl-card tl-card--home-origin">
-            <div class="tl-card-title">🏠 귀가</div>
-            <div class="tl-card-sub">${escapeHtml(originAddr)}</div>
+            <div class="tl-card-title">${originEmoji} ${escapeHtml(originLabel)} 귀가</div>
+            <div class="tl-card-sub dep-card-addr">${escapeHtml(originAddr)}</div>
           </div>
         </div>
       </div>`);
   }
 
+  // Discard if a newer render has already started (rapid origin switches).
+  if (_tlVersions[containerId] !== myVersion) return;
+
   container.innerHTML = parts.join('');
+
+  // ── Departure card: edit toggle + inline chip selection ──
+  const depCard = container.querySelector('[data-dep-card]');
+  if (depCard) {
+    const chipGroup  = depCard.querySelector('.dep-chip-group--inline');
+    const refreshFn  = _getRefreshFn(containerId);
+    depCard.querySelector('.dep-edit-btn')?.addEventListener('click', () => {
+      chipGroup?.classList.toggle('dep-open');
+    });
+    chipGroup?.querySelectorAll('.dep-chip[data-type]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const type = btn.dataset.type;
+        if (type === 'custom') {
+          chipGroup?.classList.remove('dep-open');
+          openCustomOriginModal(_dStr, refreshFn);
+        } else {
+          _setDailyOrigin(_dStr, type, '');
+          refreshFn();
+        }
+      });
+    });
+  }
+
   container.querySelectorAll('.tl-card--lecture[data-id]').forEach(card => {
     card.addEventListener('click', () => openModal(card.dataset.id));
   });
@@ -591,8 +723,119 @@ if (hasOrigin && !suppressDeparture) {
   }
 }
 
-function renderTimeline()         { renderTimelineInto('timeline-list',          todayLectures,    true);  }
-function renderTomorrowTimeline() { renderTimelineInto('tomorrow-timeline-list', tomorrowLectures, false); }
+function _getTomorrowString() {
+  const t = new Date(); t.setDate(t.getDate() + 1);
+  return formatDateString(t);
+}
+
+function renderTimeline() {
+  renderTimelineInto('timeline-list', todayLectures, true, getTodayString());
+}
+
+function renderTomorrowTimeline() {
+  renderTimelineInto('tomorrow-timeline-list', tomorrowLectures, false, _getTomorrowString());
+}
+
+/* ════════════════════════════════════════
+   임시 출발지 모달 (해당 날짜만 적용)
+════════════════════════════════════════ */
+function openCustomOriginModal(dateStr, refreshFn) {
+  let backdrop = document.getElementById('dep-origin-modal');
+
+  function closeModal() {
+    if (backdrop) backdrop.classList.remove('dep-modal-open');
+  }
+
+  if (!backdrop) {
+    backdrop = document.createElement('div');
+    backdrop.id        = 'dep-origin-modal';
+    backdrop.className = 'dep-modal-backdrop';
+    backdrop.setAttribute('role', 'dialog');
+    backdrop.setAttribute('aria-modal', 'true');
+    backdrop.innerHTML = `
+      <div class="dep-modal">
+        <div class="dep-modal-hdr">
+          <span style="font-weight:700;font-size:0.95rem;">📍 이 날만 출발지 설정</span>
+          <button id="dep-modal-close" type="button" aria-label="닫기"
+                  style="background:none;border:none;cursor:pointer;font-size:1rem;
+                         color:#6b7280;padding:4px 8px;border-radius:6px;">✕</button>
+        </div>
+        <div class="dep-modal-body">
+          <p style="font-size:0.82rem;color:#6b7280;margin:0 0 12px;">
+            이 날짜에만 적용되는 출발 주소를 설정합니다.<br />
+            다른 날짜는 영향을 받지 않습니다.
+          </p>
+          <div style="display:flex;gap:8px;margin-bottom:6px;">
+            <input id="dep-custom-input" type="text"
+                   placeholder="주소를 입력하거나 검색하세요"
+                   style="flex:1;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;
+                          font-size:0.875rem;outline:none;box-sizing:border-box;"
+                   autocomplete="off" />
+            <button id="dep-kakao-btn" type="button"
+                    style="height:38px;padding:0 12px;white-space:nowrap;background:#6bb2f5;
+                           border:1.5px solid #5eadf8;border-radius:8px;font-size:0.75rem;
+                           font-weight:700;color:#3c1e1e;cursor:pointer;flex-shrink:0;">
+              🔍 검색
+            </button>
+          </div>
+          <p id="dep-modal-hint" style="font-size:0.75rem;color:#ef4444;min-height:1em;margin:0;"></p>
+        </div>
+        <div class="dep-modal-ftr">
+          <button id="dep-modal-cancel" type="button"
+                  style="padding:8px 16px;border-radius:8px;border:1.5px solid #d1d5db;
+                         background:#fff;cursor:pointer;font-size:0.85rem;color:#374151;">취소</button>
+          <button id="dep-modal-confirm" type="button"
+                  style="padding:8px 20px;border-radius:8px;border:none;background:#2563c4;
+                         color:#fff;cursor:pointer;font-size:0.85rem;font-weight:700;">확인</button>
+        </div>
+      </div>`;
+    document.body.appendChild(backdrop);
+
+    backdrop.addEventListener('click', e => { if (e.target === backdrop) closeModal(); });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && backdrop.classList.contains('dep-modal-open')) closeModal();
+    });
+    document.getElementById('dep-modal-close')?.addEventListener('click', closeModal);
+    document.getElementById('dep-modal-cancel')?.addEventListener('click', closeModal);
+    document.getElementById('dep-kakao-btn')?.addEventListener('click', () => {
+      if (typeof daum !== 'undefined' && daum.Postcode) {
+        new daum.Postcode({
+          oncomplete: data => {
+            const addr = data.roadAddress || data.jibunAddress || '';
+            if (addr) document.getElementById('dep-custom-input').value = addr;
+            document.getElementById('dep-modal-hint').textContent = '';
+          },
+        }).open();
+      } else {
+        document.getElementById('dep-modal-hint').textContent = '주소 검색 서비스를 불러오는 중입니다.';
+      }
+    });
+  }
+
+  // Populate with current custom address for this date
+  const current = _getDailyOrigin(dateStr);
+  const input   = document.getElementById('dep-custom-input');
+  if (input) input.value = current?.type === 'custom' ? (current.customAddr || '') : '';
+  document.getElementById('dep-modal-hint').textContent = '';
+  backdrop.classList.add('dep-modal-open');
+  setTimeout(() => input?.focus(), 60);
+
+  // Rebind confirm to current dateStr + refreshFn (swap node to clear old listener)
+  const oldBtn = document.getElementById('dep-modal-confirm');
+  const newBtn = oldBtn.cloneNode(true);
+  oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+  newBtn.addEventListener('click', () => {
+    const addr = (document.getElementById('dep-custom-input')?.value || '').trim();
+    if (!addr) {
+      document.getElementById('dep-modal-hint').textContent = '주소를 입력해 주세요.';
+      return;
+    }
+    _setDailyOrigin(dateStr, 'custom', addr);
+    closeModal();
+    refreshFn();
+  });
+  newBtn.addEventListener('keydown', e => { if (e.key === 'Enter') newBtn.click(); });
+}
 
 /* ════════════════════════════════════════
    6. 이번 주 일정

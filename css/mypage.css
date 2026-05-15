@@ -476,6 +476,30 @@
   color: var(--color-primary-600);
 }
 
+.transport-btn--disabled,
+.transport-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.transport-btn--disabled:hover,
+.transport-btn:disabled:hover {
+  border-color: var(--color-gray-200, #e5e7eb);
+  background: var(--color-bg-card, #fff);
+}
+
+.transport-btn-badge {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  background: var(--color-gray-100, #f3f4f6);
+  border: 1px solid var(--color-gray-200, #e5e7eb);
+  border-radius: 4px;
+  padding: 1px 5px;
+  letter-spacing: 0.02em;
+}
+
 /* 버퍼 타임 라디오 버튼 그룹 */
 .radio-chip-group {
   display: flex;

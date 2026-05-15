@@ -7,6 +7,7 @@ import {
 import {
   buildTimeOptions, initAllDateWithDay, checkScheduleConflict,
   formatDateKo, getTodayString, escapeHtml, timeToMin, formatDateString, calcPaymentDate, calcDuration,
+  resolveOriginAddr,
 } from '../utils.js';
 import { openKakaoAddress } from '../services/kakaoAddressService.js';
 import { getTopicTags, registerMsBulkTagUpdate, refreshMsTagPicker, bindMsTagPickerEvents } from './lectureModal.js';
@@ -226,7 +227,7 @@ let _selDow             = new Set([0]);
 let _selDays            = new Set();
 let _getCtx             = null;
 let _msTagId            = null;
-let _schedulerDefaults  = { setupTime: 0, wrapupTime: 0, bufferTime: 30, originAddress: '' };
+let _schedulerDefaults  = { setupTime: 0, wrapupTime: 0, bufferTime: 30, addresses: { home: '', office: '', other: '' } };
 let _msPendingTodos     = [];
 let _msRefreshPendingUI = null;
 let _feeLastEdited      = 'fee'; // 'fee' | 'fee-total'
@@ -288,7 +289,11 @@ async function _loadSchedulerSettings(uid) {
       if (d.setupTime     != null) _schedulerDefaults.setupTime     = Number(d.setupTime);
       if (d.wrapupTime    != null) _schedulerDefaults.wrapupTime    = Number(d.wrapupTime);
       if (d.bufferTime    != null) _schedulerDefaults.bufferTime    = Number(d.bufferTime);
-      if (d.originAddress != null) _schedulerDefaults.originAddress = d.originAddress;
+      if (d.addresses != null) {
+        _schedulerDefaults.addresses = { home: '', office: '', other: '', ...d.addresses };
+      } else if (d.originAddress != null) {
+        _schedulerDefaults.addresses = { home: d.originAddress, office: '', other: '' };
+      }
     }
     const setupEl  = document.getElementById('ms-setup-time');
     const wrapupEl = document.getElementById('ms-wrapup-time');
@@ -399,6 +404,7 @@ function _reset() {
   $('ms-parking').value       = '';
   $('ms-setup-time').value    = '';
   $('ms-wrapup-time').value   = '';
+  const _msFullDayCb = $('ms-full-day'); if (_msFullDayCb) _msFullDayCb.checked = false;
   $('ms-buffer-time').value   = '';
   $('ms-participants').value  = '';
   $('ms-group-info').value    = '';
@@ -856,6 +862,8 @@ function _openConflictModal({ session, check, conflictLec, common, sessionTotal 
     ? '시간이 직접 겹칩니다'
     : check.step === 2
     ? '버퍼 시간이 부족합니다'
+    : check.isFallback
+    ? '이동 시간 포함 시 도착이 늦습니다 (직선거리 추정)'
     : '이동 시간 포함 시 도착이 늦습니다';
 
   const { full: dateFull } = formatDateKo(session.date);
@@ -993,6 +1001,7 @@ async function _handleSave() {
     taxType,
     paymentDate:      $('ms-payment-date')?.value || null,
     isDocumented:     false,
+    isFullDay:        $('ms-full-day')?.checked ?? false,
     classroom:        $('ms-classroom').value.trim(),
     parking:          $('ms-parking').value.trim(),
     setupTime:        $('ms-setup-time').value.trim(),
@@ -1009,10 +1018,16 @@ async function _handleSave() {
   const setupMin    = parseInt(common.setupTime)  || 0;
   const wrapupMin   = parseInt(common.wrapupTime) || 0;
   const bufferInput = parseInt($('ms-buffer-time')?.value);
+  let _msTransport = 'car';
+  try {
+    const _msRaw = JSON.parse(localStorage.getItem('kangbiseo_device') ?? 'null');
+    _msTransport = _msRaw?.scheduler?.transport || 'car';
+  } catch {}
   const settings    = {
     bufferTime: (!isNaN(bufferInput) && bufferInput > 0) ? bufferInput : _schedulerDefaults.bufferTime,
-    setupTime:  setupMin,
-    wrapupTime: wrapupMin,
+    setupTime:  _schedulerDefaults.setupTime  || 20,
+    wrapupTime: _schedulerDefaults.wrapupTime || 15,
+    transport:  _msTransport,
   };
 
   for (let i = 0; i < _sessions.length; i++) {
@@ -1036,13 +1051,16 @@ async function _handleSave() {
       endTime:    s.timeEnd   || '',
       place:      _isOnline ? 'Online' : place,
       isOnline:   _isOnline,
+      isFullDay:  common.isFullDay ?? false,
       setupTime:  setupMin,
       wrapupTime: wrapupMin,
     };
 
+    const sessionSettings = { ...settings, originAddr: resolveOriginAddr(s.date) };
+
     let check;
     try {
-      check = await checkScheduleConflict(newLec, existingLecs, settings, allLectures);
+      check = await checkScheduleConflict(newLec, existingLecs, sessionSettings, allLectures);
     } catch (err) {
       console.error('[강비서] 충돌 검사 오류:', err);
       window.showToast?.('일정 충돌 검사 중 오류가 발생했습니다.', 'error');
@@ -1050,11 +1068,26 @@ async function _handleSave() {
       return;
     }
 
-    if (check.status !== 'safe') {
+    if (check.status === 'risk') {
       const conflictLec = _findConflictLec(newLec, sameDayRaw, check);
       _restoreBtn();
       _openConflictModal({ session: s, check, conflictLec, common, sessionTotal });
       return;
+    }
+    if (check.status === 'warning') {
+      if (check.msg === 'public_transit') {
+        window.showToast?.('대중교통 기반 이동 시간 계산은 현재 준비 중입니다.', 'info');
+      } else if (check.msg === 'early_departure') {
+        window.showToast?.(
+          `⚠️ 출발지 기준 이동(${check.travelMin}분${check.isFallback ? ' 추정' : ''}) 포함 시 이른 출발이 필요합니다.`,
+          'warning',
+        );
+      } else if (check.msg === 'late_return') {
+        window.showToast?.(
+          `⚠️ 강의 후 귀가(${check.travelMin}분${check.isFallback ? ' 추정' : ''})까지 포함 시 늦은 귀가가 예상됩니다.`,
+          'warning',
+        );
+      }
     }
   }
 

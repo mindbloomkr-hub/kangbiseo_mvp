@@ -198,9 +198,14 @@
               <div class="add-form-field" style="margin-top:var(--space-3)">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
                   <label class="add-form-label" for="af-place" style="margin-bottom:0">강의장 주소 <span class="required" id="af-place-required">*</span></label>
-                  <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#2563eb;cursor:pointer;user-select:none">
-                    <input type="checkbox" id="af-online" style="width:14px;height:14px;accent-color:#2563eb;cursor:pointer" /> 💻 온라인 수업
-                  </label>
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#2563eb;cursor:pointer;user-select:none">
+                      <input type="checkbox" id="af-online" style="width:14px;height:14px;accent-color:#2563eb;cursor:pointer" /> 💻 온라인 수업
+                    </label>
+                    <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#6b7280;cursor:pointer;user-select:none" title="당일 일정 전체를 점유합니다 (이동 시간 계산에 반영됨)">
+                      <input type="checkbox" id="af-full-day" style="width:14px;height:14px;accent-color:#6b7280;cursor:pointer" /> 📅 종일 점유
+                    </label>
+                  </div>
                 </div>
                 <div class="lm-addr-wrap">
                   <button type="button" class="lm-addr-btn" id="v-addr-search">🔍 주소 검색</button>

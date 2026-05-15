@@ -207,20 +207,65 @@
                 <!-- 출발지 주소 -->
                 <div class="scheduler-setting-row">
                   <div class="scheduler-row-header">
-                    <span class="scheduler-row-title">출발지 주소 (집 / 사무실)</span>
+                    <span class="scheduler-row-title">출발지 주소</span>
                   </div>
-                  <p class="scheduler-row-sub">입력 시 홈 타임라인에 집 출발·귀가 시각을 자동 계산합니다.</p>
-                  <div style="display:flex;align-items:center;gap:8px;">
-                    <button type="button" class="mp-addr-btn" id="addr-search"
-                            style="flex-shrink:0;padding:8px 14px;white-space:nowrap;">
-                      🔍 주소 검색
+                  <p class="scheduler-row-sub">입력 시 홈 타임라인에 출발·귀가 시각을 자동 계산합니다.</p>
+
+                  <!-- 집 -->
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                    <label style="display:flex;align-items:center;gap:4px;font-size:var(--font-size-sm);font-weight:600;color:var(--color-text-muted);width:80px;flex-shrink:0;cursor:pointer;"
+                           title="기본 출발지로 설정">
+                      <input type="radio" name="default-origin" id="default-origin-home" value="home"
+                             style="accent-color:var(--color-primary,#2563c4);flex-shrink:0;" />
+                      🏠 집
+                    </label>
+                    <button type="button" class="mp-addr-btn" id="addr-search-home"
+                            style="flex-shrink:0;">
+                      🔍 검색
                     </button>
-                    <input class="mp-input" type="text" id="origin-address-input"
-                           placeholder="주소 검색 버튼을 눌러 주소를 선택하세요"
+                    <input class="mp-input" type="text" id="address-input-home"
+                           placeholder="주소 검색 버튼을 눌러 선택하세요"
                            style="flex:1;box-sizing:border-box;"
-                           readonly
-                           autocomplete="off"
-                           aria-label="출발지 주소" />                    
+                           readonly autocomplete="off"
+                           aria-label="집 주소" />
+                  </div>
+
+                  <!-- 사무실 -->
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                    <label style="display:flex;align-items:center;gap:4px;font-size:var(--font-size-sm);font-weight:600;color:var(--color-text-muted);width:80px;flex-shrink:0;cursor:pointer;"
+                           title="기본 출발지로 설정">
+                      <input type="radio" name="default-origin" id="default-origin-office" value="office"
+                             style="accent-color:var(--color-primary,#2563c4);flex-shrink:0;" />
+                      🏢 사무실
+                    </label>
+                    <button type="button" class="mp-addr-btn" id="addr-search-office"
+                            style="flex-shrink:0;">
+                      🔍 검색
+                    </button>
+                    <input class="mp-input" type="text" id="address-input-office"
+                           placeholder="주소 검색 버튼을 눌러 선택하세요"
+                           style="flex:1;box-sizing:border-box;"
+                           readonly autocomplete="off"
+                           aria-label="사무실 주소" />
+                  </div>
+
+                  <!-- 기타 -->
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <label style="display:flex;align-items:center;gap:4px;font-size:var(--font-size-sm);font-weight:600;color:var(--color-text-muted);width:80px;flex-shrink:0;cursor:pointer;"
+                           title="기본 출발지로 설정">
+                      <input type="radio" name="default-origin" id="default-origin-other" value="other"
+                             style="accent-color:var(--color-primary,#2563c4);flex-shrink:0;" />
+                      📍 기타
+                    </label>
+                    <button type="button" class="mp-addr-btn" id="addr-search-other"
+                            style="flex-shrink:0;">
+                      🔍 검색
+                    </button>
+                    <input class="mp-input" type="text" id="address-input-other"
+                           placeholder="주소 검색 버튼을 눌러 선택하세요"
+                           style="flex:1;box-sizing:border-box;"
+                           readonly autocomplete="off"
+                           aria-label="기타 주소" />
                   </div>
                 </div>
 
@@ -229,20 +274,30 @@
                   <div class="scheduler-row-header">
                     <span class="scheduler-row-title">기본 이동 수단</span>
                   </div>
-                  <p class="scheduler-row-sub">선택한 이동 수단에 따라 주차 정보 알림 여부가 결정됩니다.</p>
+                  <!--
+                  <p class="scheduler-row-sub">선택한 이동 수단으로 이동하는 경우의 소요 시간을 연산합니다.</p>
+                  -->
 
                   <div class="transport-toggle-group" role="group" aria-label="이동 수단 선택">
                     <button class="transport-btn selected" id="transport-car"
                             data-transport="car" type="button">
                       <span class="transport-btn-icon">🚗</span>
                       <span class="transport-btn-label">자차</span>
+                      <!--
                       <span class="transport-btn-sub">주차 정보 알림 ON</span>
+                      -->
                     </button>
-                    <button class="transport-btn" id="transport-public"
-                            data-transport="public" type="button">
+                    <button class="transport-btn transport-btn--disabled" id="transport-public"
+                            data-transport="public" type="button"
+                            disabled
+                            aria-disabled="true"
+                            title="대중교통 기능 준비 중입니다.">
                       <span class="transport-btn-icon">🚇</span>
                       <span class="transport-btn-label">대중교통</span>
+                      <!--
                       <span class="transport-btn-sub">주차 정보 알림 OFF</span>
+                      -->
+                      <span class="transport-btn-badge">준비중</span>
                     </button>
                   </div>
                 </div>

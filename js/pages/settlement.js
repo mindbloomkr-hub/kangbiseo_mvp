@@ -2,7 +2,9 @@
 import { subscribeLectures, authGuard, db, getLectureCache, setLectureCache } from '../api.js';
 import {
   calcPaymentDate, getTodayString, escapeHtml, formatDateKo,
+  calculateSettlementStats, calcPaymentStatus,
 } from '../utils.js';
+import { REVENUE_UNIT, PROGRESS_CANCELLED } from '../constants.js';
 import { initLectureModal, openModal } from '../components/lectureModal.js';
 import {
   doc, updateDoc,
@@ -22,7 +24,7 @@ const SL_PAGE    = 30;
 const _filters = {
   dateFrom: '',
   dateTo:   '',
-  tab:      'all',   // 'all' | 'paid' | 'pending' | 'overdue' | 'na'
+  tab:      'all',   // 'all' | 'paid' | 'pending' | 'overdue' | 'scheduled' | 'na'
   search:   '',
 };
 
@@ -46,17 +48,6 @@ function _paymentDeadline(lec) {
   }
   const baseDate = (lec.endDate != null ? lec.endDate : (lec.date != null ? lec.date : ''));
   return baseDate ? calcPaymentDate(baseDate, lec.settlementCycle || '', null) : null;
-}
-
-function _paymentStatus(lec, today) {
-  const ps = lec.paidStatus || (lec.isPaid === true ? 'true' : 'false');
-  if (ps === 'true' || lec.isPaid === true) return 'paid';
-  if (ps === 'na') return 'na';
-  if (!_getFee(lec)) return 'na';          // 금액 없음 → 해당없음
-  // Prefer the stored paymentDate; fall back to calculated deadline
-  const deadline = lec.paymentDate || _paymentDeadline(lec);
-  if (!deadline) return 'pending';
-  return today >= deadline ? 'overdue' : 'pending';
 }
 
 /* ════════════════════════════════════════
@@ -126,16 +117,19 @@ function _applyPreset(preset) {
 function _filtered() {
   const today = getTodayString();
   return allLectures.filter(l => {
+    if (l.progressStatus === PROGRESS_CANCELLED) return false;
+
     const lDate  = (l.date != null ? l.date : '');
     if (_filters.dateFrom && lDate < _filters.dateFrom) return false;
     if (_filters.dateTo   && lDate > _filters.dateTo)   return false;
 
-    const status = _paymentStatus(l, today);
-    if (_filters.tab === 'na') {
+    const status = calcPaymentStatus(l, today, allLectures);
+    if (_filters.tab === 'all') {
+      if (status === 'na') return false;          // 'all'은 na 제외, scheduled 포함
+    } else if (_filters.tab === 'na') {
       if (status !== 'na') return false;
     } else {
-      if (status === 'na') return false;
-      if (_filters.tab !== 'all' && status !== _filters.tab) return false;
+      if (status !== _filters.tab) return false;
     }
 
     if (_filters.search) {
@@ -154,29 +148,18 @@ function renderStats() {
   if (!bar) return;
 
   const today = getTodayString();
-  const all   = allLectures;
+  const { totalAmt, totalCnt, paidAmt, pendingAmt, overdueAmt, paidCnt, pendingCnt, overdueCnt } =
+    calculateSettlementStats(allLectures, today);
+  console.log('[settlement] overdueCnt:', overdueCnt, 'pendingCnt:', pendingCnt);
 
-  let totalAmt = 0, paidAmt = 0, pendingAmt = 0, overdueAmt = 0;
-  let paidCnt  = 0, pendingCnt = 0, overdueCnt = 0;
-
-  for (const l of all) {
-    const fee    = _getFee(l);
-    const status = _paymentStatus(l, today);
-    if (status === 'na') continue;          // 금액 없는 항목은 집계 제외
-    totalAmt += fee;
-    if (status === 'paid')    { paidAmt    += fee; paidCnt++;    }
-    if (status === 'pending') { pendingAmt += fee; pendingCnt++; }
-    if (status === 'overdue') { overdueAmt += fee; overdueCnt++; }
-  }
-
-  const fmt = n => n > 0 ? `₩${(n * 10000).toLocaleString()}` : '₩0';
+  const fmt = n => n > 0 ? `₩${(n * REVENUE_UNIT).toLocaleString()}` : '₩0';
 
   bar.innerHTML = `
     <div class="sl-stat-card">
       <div class="sl-stat-icon sl-stat-icon--blue">📊</div>
       <div class="sl-stat-body">
         <div class="sl-stat-value">${fmt(totalAmt)}</div>
-        <div class="sl-stat-label">전체 강의 수익 (${all.length}건)</div>
+        <div class="sl-stat-label">전체 강의 수익 (${totalCnt}건)</div>
       </div>
     </div>
     <div class="sl-stat-card">
@@ -227,11 +210,11 @@ function _renderSlPagination(tbody, total) {
     tbody.closest('table')?.after(bar);
   }
   const totalPages = Math.max(1, Math.ceil(total / SL_PAGE));
-  if (totalPages <= 1) { bar.hidden = true; return; }
-  bar.hidden = false;
+  if (totalPages <= 1) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
   bar.innerHTML = `
     <button class="sl-pagination__btn" id="sl-pg-prev" ${_slPage === 0 ? 'disabled' : ''}>← 이전</button>
-    <span class="sl-pagination__info">${_slPage + 1} / ${totalPages}</span>
+    <span class="sl-pagination__info">${_slPage + 1}/${totalPages}</span>
     <button class="sl-pagination__btn" id="sl-pg-next" ${_slPage >= totalPages - 1 ? 'disabled' : ''}>다음 →</button>`;
   bar.querySelector('#sl-pg-prev')?.addEventListener('click', () => { _slPage--; render(); });
   bar.querySelector('#sl-pg-next')?.addEventListener('click', () => { _slPage++; render(); });
@@ -265,15 +248,18 @@ function renderTable() {
     return;
   }
 
+  const totalFilteredFee = rows.reduce((s, l) => s + _getFee(l), 0);
+  const summaryFeeStr    = totalFilteredFee > 0 ? `₩${(totalFilteredFee * REVENUE_UNIT).toLocaleString()}` : '₩0';
+
   const start = _slPage * SL_PAGE;
   const page  = rows.slice(start, start + SL_PAGE);
 
   tbody.innerHTML = page.map(l => {
     const fee                 = _getFee(l);
-    const status              = _paymentStatus(l, today);
+    const status              = calcPaymentStatus(l, today, allLectures);
     const expectedPaymentDate = l.paymentDate || _paymentDeadline(l);
     const dateStr             = l.date ? formatDateKo(l.date).main : '—';
-    const feeStr              = fee > 0 ? `₩${(fee * 10000).toLocaleString()}` : '—';
+    const feeStr              = fee > 0 ? `₩${(fee * REVENUE_UNIT).toLocaleString()}` : '—';
     const ddHtml              = _ddayHtml(expectedPaymentDate, today, status, fee);
 
     const statusBadge = status === 'paid'
@@ -282,13 +268,17 @@ function renderTable() {
         ? `<span class="sl-status-badge sl-status-badge--record">기록</span>`
         : status === 'overdue'
           ? `<span class="sl-status-badge sl-status-badge--overdue">🚨 연체${ddHtml}</span>`
-          : `<span class="sl-status-badge sl-status-badge--pending">⏳ 입금 대기${ddHtml}</span>`;
+          : status === 'scheduled'
+            ? `<span class="sl-status-badge sl-status-badge--scheduled">📅 미진행</span>`
+            : `<span class="sl-status-badge sl-status-badge--pending">⏳ 입금 대기${ddHtml}</span>`;
 
-    const isPaid  = status === 'paid';
-    const isNa    = status === 'na';
-    const rowCls  = status === 'overdue' ? ' class="sl-row--overdue"'
-                  : isNa                 ? ' class="sl-row--na"'
-                  : '';
+    const isPaid       = status === 'paid';
+    const isNa         = status === 'na';
+    const isScheduled  = status === 'scheduled';
+    const rowCls       = status === 'overdue'   ? ' class="sl-row--overdue"'
+                       : status === 'scheduled' ? ' class="sl-row--scheduled"'
+                       : isNa                   ? ' class="sl-row--na"'
+                       : '';
 
     return `
       <tr${rowCls} data-id="${escapeHtml(l.id)}">
@@ -296,19 +286,24 @@ function renderTable() {
         <td><div class="sl-cell-title" title="${escapeHtml(l.title)}">${escapeHtml(l.title)}</div></td>
         <td><div class="sl-cell-client" title="${escapeHtml(l.client || '')}">${escapeHtml(l.client || '—')}</div></td>
         <td class="sl-cell-amount">${feeStr}</td>
-        <td class="sl-cell-date">${isNa ? '—' : (expectedPaymentDate || '—')}</td>
+        <td class="sl-cell-date">${isNa || isScheduled ? '—' : (expectedPaymentDate || '—')}</td>
         <td>${statusBadge}</td>
         <td>
           <div class="sl-actions">
             <button class="sl-btn sl-btn--pay" data-id="${escapeHtml(l.id)}"
-                    ${isPaid || isNa ? 'disabled' : ''}>
-              ${isPaid ? '완료' : isNa ? '—' : '입금 확인'}
+                    ${isPaid || isNa || isScheduled ? 'disabled' : ''}>
+              ${isPaid ? '완료' : isNa ? '—' : isScheduled ? '미진행' : '입금 확인'}
             </button>
-            ${isNa ? '' : `<button class="sl-btn sl-btn--invoice" data-invoice-id="${escapeHtml(l.id)}">청구서</button>`}
+            ${isNa || isScheduled ? '' : `<button class="sl-btn sl-btn--invoice" data-invoice-id="${escapeHtml(l.id)}">청구서</button>`}
           </div>
         </td>
       </tr>`;
-  }).join('');
+  }).join('') + `
+    <tr class="sl-summary-row">
+      <td colspan="3" class="sl-summary-label">합계 ${rows.length}건</td>
+      <td class="sl-cell-amount sl-summary-amount">${summaryFeeStr}</td>
+      <td colspan="3"></td>
+    </tr>`;
 
   _renderSlPagination(tbody, rows.length);
 }
@@ -342,7 +337,7 @@ function _generateInvoice(id) {
 
   const deadline = _paymentDeadline(lec) || '—';
   const feeAmt   = _getFee(lec);
-  const fee      = feeAmt > 0 ? `₩${(feeAmt * 10000).toLocaleString()}` : '—';
+  const fee      = feeAmt > 0 ? `₩${(feeAmt * REVENUE_UNIT).toLocaleString()}` : '—';
   const dateStr  = lec.date ? formatDateKo(lec.date).full : '—';
 
   const win = window.open('', '_blank', 'width=700,height=900');
@@ -419,7 +414,7 @@ function _bindEvents() {
     if (!tab) return;
     _filters.tab = tab.dataset.tab;
     document.querySelectorAll('.sl-tab').forEach(t => {
-      t.classList.remove('active', 'active--paid', 'active--pending', 'active--overdue', 'active--na');
+      t.classList.remove('active', 'active--paid', 'active--pending', 'active--overdue', 'active--scheduled', 'active--na');
     });
     tab.classList.add('active');
     if (_filters.tab !== 'all') tab.classList.add(`active--${_filters.tab}`);
@@ -457,10 +452,10 @@ function _bindEvents() {
 function _applyUrlParams() {
   const params = new URLSearchParams(location.search);
   const filter = params.get('filter');
-  if (filter === 'overdue' || filter === 'pending' || filter === 'paid' || filter === 'na') {
+  if (filter === 'overdue' || filter === 'pending' || filter === 'paid' || filter === 'scheduled' || filter === 'na') {
     _filters.tab = filter;
     document.querySelectorAll('.sl-tab').forEach(t => {
-      t.classList.remove('active', 'active--paid', 'active--pending', 'active--overdue', 'active--na');
+      t.classList.remove('active', 'active--paid', 'active--pending', 'active--overdue', 'active--scheduled', 'active--na');
       if (t.dataset.tab === filter) {
         t.classList.add('active', `active--${filter}`);
       }

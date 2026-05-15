@@ -21,7 +21,8 @@ const DEFAULT_DEVICE = {
     setupTime:     20,
     wrapupTime:    15,
     parkingAlert:  true,
-    originAddress: '',
+    addresses: { home: '', office: '', other: '' },
+    defaultOriginType: 'home',
   },
   settlement: {
     hourlyRate:    30,
@@ -128,7 +129,12 @@ async function loadFirebaseProfile(uid) {
           device.scheduler.bufferTime = Number(d.bufferTime);
         }
       }
-      if (d.originAddress != null) device.scheduler.originAddress = d.originAddress;
+      if (d.addresses != null) {
+        device.scheduler.addresses = { home: '', office: '', other: '', ...d.addresses };
+      } else if (d.originAddress != null) {
+        device.scheduler.addresses = { home: d.originAddress, office: '', other: '' };
+      }
+      if (d.defaultOriginType != null) device.scheduler.defaultOriginType = d.defaultOriginType;
 
       // 정산 설정 — 기기를 넘어 동기화
       if (d.hourlyRate    != null) device.settlement.hourlyRate    = Number(d.hourlyRate);
@@ -251,7 +257,13 @@ function initScheduler() {
   const s = device.scheduler;
   setTransport(s.transport);
   document.querySelectorAll('.transport-btn').forEach(btn => {
-    btn.addEventListener('click', () => setTransport(btn.dataset.transport));
+    btn.addEventListener('click', () => {
+      if (btn.classList.contains('transport-btn--disabled')) {
+        showToast('대중교통 기능 준비 중입니다.', 'info');
+        return;
+      }
+      setTransport(btn.dataset.transport);
+    });
   });
   const bufVal = s.bufferTime === 'custom' ? 'custom' : String(s.bufferTime);
   const bufRadio = document.querySelector(`input[name="buffer-time"][value="${bufVal}"]`);
@@ -268,12 +280,22 @@ function initScheduler() {
   if (wrapupInput) wrapupInput.value = (s.wrapupTime != null ? s.wrapupTime : 15);
   const parkingCb = document.getElementById('parking-alert');
   if (parkingCb) parkingCb.checked = s.parkingAlert;
-  const originInput = document.getElementById('origin-address-input');
-  if (originInput) originInput.value = (s.originAddress != null ? s.originAddress : '');
+  const addrs = s.addresses || {};
+  const homeInput   = document.getElementById('address-input-home');
+  const officeInput = document.getElementById('address-input-office');
+  const otherInput  = document.getElementById('address-input-other');
+  if (homeInput)   homeInput.value   = addrs.home   || '';
+  if (officeInput) officeInput.value = addrs.office || '';
+  if (otherInput)  otherInput.value  = addrs.other  || '';
+  const defOriginRadio = document.querySelector(
+    `input[name="default-origin"][value="${s.defaultOriginType || 'home'}"]`
+  );
+  if (defOriginRadio) defOriginRadio.checked = true;
   updateParkingRow(s.transport);
 }
 
 function setTransport(value) {
+  if (value === 'public') return;
   device.scheduler.transport = value;
   document.querySelectorAll('.transport-btn').forEach(btn => {
     btn.classList.toggle('selected', btn.dataset.transport === value);
@@ -659,35 +681,43 @@ function initGcalImport() {
    출발지 주소 검색 (Kakao Postcode + Geocoder 검증)
 ════════════════════════════════════════ */
 function initAddressSearch() {
-  const btn   = document.getElementById('addr-search');
-  const input = document.getElementById('origin-address-input');
-  if (!btn || !input) return;
+  const slots = [
+    { btnId: 'addr-search-home',   inputId: 'address-input-home',   key: 'home'   },
+    { btnId: 'addr-search-office', inputId: 'address-input-office', key: 'office' },
+    { btnId: 'addr-search-other',  inputId: 'address-input-other',  key: 'other'  },
+  ];
 
-  btn.addEventListener('click', () => {
-    if (typeof daum === 'undefined' || !daum.Postcode) {
-      showToast('주소 검색 서비스를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.', 'error');
-      return;
-    }
+  slots.forEach(({ btnId, inputId, key }) => {
+    const btn   = document.getElementById(btnId);
+    const input = document.getElementById(inputId);
+    if (!btn || !input) return;
 
-    new daum.Postcode({
-      oncomplete: async function (data) {
-        // 도로명 주소 우선, 없으면 지번 주소
-        const addr = data.roadAddress || data.jibunAddress || '';
-        if (!addr) { showToast('카카오맵에서 인식할 수 없는 주소입니다. 다시 선택해주세요.', 'error'); return; }
+    btn.addEventListener('click', () => {
+      if (typeof daum === 'undefined' || !daum.Postcode) {
+        showToast('주소 검색 서비스를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.', 'error');
+        return;
+      }
 
-        // Kakao REST Geocoder로 좌표 변환 가능 여부 검증
-        const coords = await _geocode(addr);
-        if (!coords) {
-          input.value = '';
-          device.scheduler.originAddress = '';
-          showToast('카카오맵에서 인식할 수 없는 주소입니다. 다시 선택해주세요.', 'error');
-          return;
-        }
+      new daum.Postcode({
+        oncomplete: async function (data) {
+          const addr = data.roadAddress || data.jibunAddress || '';
+          if (!addr) { showToast('카카오맵에서 인식할 수 없는 주소입니다. 다시 선택해주세요.', 'error'); return; }
 
-        input.value = addr;
-        device.scheduler.originAddress = addr;
-      },
-    }).open();
+          const coords = await _geocode(addr);
+          if (!coords) {
+            input.value = '';
+            if (!device.scheduler.addresses) device.scheduler.addresses = { home: '', office: '', other: '' };
+            device.scheduler.addresses[key] = '';
+            showToast('카카오맵에서 인식할 수 없는 주소입니다. 다시 선택해주세요.', 'error');
+            return;
+          }
+
+          input.value = addr;
+          if (!device.scheduler.addresses) device.scheduler.addresses = { home: '', office: '', other: '' };
+          device.scheduler.addresses[key] = addr;
+        },
+      }).open();
+    });
   });
 }
 
@@ -728,7 +758,12 @@ function initFloatingSave() {
           ? (device.scheduler.bufferCustom || 45)
           : (device.scheduler.bufferTime   || 30),
         bufferIsCustom: device.scheduler.bufferTime === 'custom',
-        originAddress:  device.scheduler.originAddress || '',
+        addresses: {
+          home:   device.scheduler.addresses?.home   || '',
+          office: device.scheduler.addresses?.office || '',
+          other:  device.scheduler.addresses?.other  || '',
+        },
+        defaultOriginType: device.scheduler.defaultOriginType || 'home',
         // 정산 설정 (기기 간 동기화)
         hourlyRate:    device.settlement.hourlyRate    || 0,
         bankName:      device.settlement.bankName      || '',
@@ -770,8 +805,15 @@ function collectDeviceValues() {
   if (wrapupInput) device.scheduler.wrapupTime = Number(wrapupInput.value) || 0;
   const parkingCb = document.getElementById('parking-alert');
   if (parkingCb)  device.scheduler.parkingAlert = parkingCb.checked;
-  const originInputVal = document.getElementById('origin-address-input');
-  if (originInputVal) device.scheduler.originAddress = originInputVal.value.trim();
+  if (!device.scheduler.addresses) device.scheduler.addresses = { home: '', office: '', other: '' };
+  const homeEl   = document.getElementById('address-input-home');
+  const officeEl = document.getElementById('address-input-office');
+  const otherEl  = document.getElementById('address-input-other');
+  if (homeEl)   device.scheduler.addresses.home   = homeEl.value.trim();
+  if (officeEl) device.scheduler.addresses.office = officeEl.value.trim();
+  if (otherEl)  device.scheduler.addresses.other  = otherEl.value.trim();
+  const checkedOrigin = document.querySelector('input[name="default-origin"]:checked');
+  if (checkedOrigin) device.scheduler.defaultOriginType = checkedOrigin.value;
 
   device.settlement.hourlyRate    = Number(getVal('hourly-rate')) || 0;
   device.settlement.bankName      = getVal('bank-name');
