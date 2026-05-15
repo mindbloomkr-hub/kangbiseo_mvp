@@ -635,6 +635,51 @@
   padding: var(--space-6);
 }
 
+/* Modal mockup: macOS-style browser chrome */
+.lm-mockup-browser {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+
+.lm-mockup-topbar {
+  background: #f1f5f9;
+  padding: 9px 14px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.lm-mockup-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.lm-mockup-dot--red    { background: #ff5f57; }
+.lm-mockup-dot--yellow { background: #febc2e; }
+.lm-mockup-dot--green  { background: #28c840; }
+
+.lm-mockup-backdrop {
+  background: rgba(15, 23, 42, 0.62);
+  padding: 20px 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Contain lm-rv-modal sizing inside the mockup frame */
+.lm-mockup-backdrop .lm-rv-modal {
+  max-height: none;
+  max-width: none;
+  width: 100%;
+  border-radius: 14px;
+}
+.lm-mockup-backdrop .lm-rv-head  { border-radius: 14px 14px 0 0; }
+.lm-mockup-backdrop .lm-rv-body  { overflow: hidden; }
+
 /* Buffer timeline mock */
 .buffer-timeline {
   display: flex;
@@ -719,6 +764,89 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+/* Settlement status badges — mirrors settlement.css for the feature mock */
+.sl-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sl-status-badge--paid    { background: #d1fae5; color: #065f46; }
+.sl-status-badge--pending { background: #dbeafe; color: #1e40af; }
+.sl-status-badge--overdue { background: #fee2e2; color: #991b1b; }
+.sl-status-badge--record  { background: #f3f4f6; color: #6b7280; }
+
+.sl-dday {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+.sl-dday--safe    { background: #d1fae5; color: #065f46; }
+.sl-dday--warning { background: #fef3c7; color: #92400e; }
+.sl-dday--late    { background: #fee2e2; color: #991b1b; }
+
+/* Settlement table mockup — compact overrides scoped to the landing feature visual */
+.sl-tbl-mockup.sl-table-wrap {
+  border: none;
+  border-radius: 0;
+  background-image: none;
+}
+.sl-tbl-mockup .sl-table {
+  min-width: 0;
+  font-size: 11.5px;
+}
+.sl-tbl-mockup .sl-table th {
+  padding: 8px 10px;
+  font-size: 10px;
+}
+.sl-tbl-mockup .sl-table td {
+  padding: 9px 10px;
+}
+.sl-tbl-mockup .sl-cell-title {
+  max-width: 130px;
+  font-size: 11.5px;
+}
+.sl-tbl-mockup .sl-cell-client {
+  max-width: 90px;
+  font-size: 11px;
+}
+.sl-tbl-mockup .sl-btn {
+  padding: 4px 8px;
+  font-size: 10px;
+}
+
+/* Settlement table mockup header bar */
+.sl-tbl-mockup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-white);
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.sl-tbl-mockup-title {
+  font-size: 12px;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-gray-700);
+  letter-spacing: 0.01em;
+}
+.sl-tbl-mockup-pills {
+  display: flex;
+  gap: 5px;
 }
 
 .status-board-item {

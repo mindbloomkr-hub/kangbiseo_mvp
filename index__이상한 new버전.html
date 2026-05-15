@@ -65,15 +65,13 @@
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="강비서 — 프리랜서 강사를 위한 스마트 일정·정산 비서 서비스. 예측 교통 기반 타임라인, 최적 출발 시간 제안, 정산 현황 대시보드." />
+  <meta name="description" content="강비서 — 프리랜서 강사를 위한 스마트 일정·정산 비서 서비스. 버퍼타임 자동계산, 강의 상태 관리, 결과보고서 자동화." />
   <title>강비서 | 프리랜서 강사를 위한 스마트 일정 비서</title>
 
   <!-- Styles -->
   <link rel="stylesheet" href="css/reset.css" />
   <link rel="stylesheet" href="css/variables.css" />
   <link rel="stylesheet" href="css/common.css" />
-  <link rel="stylesheet" href="css/modal.css" />
-  <link rel="stylesheet" href="css/settlement.css" />
   <link rel="stylesheet" href="css/landing.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -94,12 +92,28 @@
     -->
       
       <nav class="header-nav" aria-label="주요 메뉴">
+        <a href="#pillars" class="nav-link">5대 기능</a>
         <a href="#features" class="nav-link">기능 소개</a>
         <a href="#" id="btn-contact-open" class="nav-link">문의하기</a>
-        <!-- <a href="#testimonials" class="nav-link">사용 후기</a> -->
         <a href="login.html" class="btn btn--ghost btn--sm">로그인</a>
         <a href="login.html" class="btn btn--primary btn--sm">무료로 시작하기</a>
       </nav>
+      <!-- 모바일 햄버거 버튼 -->
+      <button class="hamburger-btn" id="hamburger-btn" aria-label="메뉴 열기" aria-expanded="false" aria-controls="mobile-nav">
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+      </button>
+    </div>
+    <!-- 모바일 드롭다운 내비게이션 -->
+    <div class="mobile-nav" id="mobile-nav" role="navigation" aria-label="모바일 메뉴" hidden>
+      <a href="#pillars"  class="mobile-nav-link">5대 기능</a>
+      <a href="#features" class="mobile-nav-link">기능 소개</a>
+      <a href="#pain-points" class="mobile-nav-link">도입 배경</a>
+      <a href="#" id="btn-contact-open-mobile" class="mobile-nav-link">문의하기</a>
+      <div class="mobile-nav-divider"></div>
+      <a href="login.html" class="mobile-nav-link">로그인</a>
+      <a href="login.html" class="btn btn--primary mobile-nav-cta">지금 무료 체험하기 →</a>
     </div>
   </header>
 
@@ -124,7 +138,7 @@
         </h1>
 
         <p class="hero-subtitle">
-          미래 교통 예측 기반 출발 시간 제안부터 일정 충돌 경고, 정산 현황 관리까지.<br />
+          이동 버퍼타임 자동계산부터 결과보고서 작성, 정산 입금 체크까지.<br />
           강사님의 행정 업무를 통째로 대신합니다.
         </p>
 
@@ -177,35 +191,18 @@
             <div class="preview-panel-body">
               <div class="timeline-wrapper">
 
-                <!-- 🏠 출발 -->
+                <!-- 집 출발 -->
                 <div class="timeline-item">
                   <div class="tl-time-col">
-                    <div class="tl-time">07:30</div>
+                    <div class="tl-time">08:30</div>
                   </div>
                   <div class="tl-track">
                     <div class="tl-node tl-node--home"></div>
                   </div>
                   <div class="tl-content">
-                    <div class="tl-card tl-card--home-origin">
-                      <div class="tl-card-title">🏠 출발</div>
-                      <div class="tl-card-sub">서울 마포구 공덕동</div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 출발 → 강의1 이동 정보 -->
-                <div class="tl-gap-row">
-                  <div class="tl-time-col">
-                    <div class="tl-time" style="color:#9ca3af;"></div>
-                  </div>
-                  <div class="tl-track tl-gap-track"></div>
-                  <div class="tl-content">
-                    <div class="tl-gap-card tl-gap-card--info">
-                      <span class="tl-gap-icon">🚗</span>
-                      <div class="tl-gap-info">
-                        <div class="tl-gap-main">이동 35분 · 버퍼 30분 · 준비 20분</div>
-                        <div class="tl-gap-sub">출발 후 총 85분 확보</div>
-                      </div>
+                    <div class="tl-card tl-card--home">
+                      <span class="tl-card-title">집 출발</span>
+                      <span class="tl-card-sub">상암동까지 약 35분 예상 (대중교통 기준)</span>
                     </div>
                   </div>
                 </div>
@@ -213,32 +210,33 @@
                 <!-- 강의 1 -->
                 <div class="timeline-item">
                   <div class="tl-time-col">
-                    <div class="tl-time">09:00</div>
+                    <div class="tl-time">09:30</div>
                   </div>
                   <div class="tl-track">
-                    <div class="tl-node" style="background:#2563eb;border-color:#2563eb;"></div>
+                    <div class="tl-node tl-node--lecture"></div>
                   </div>
                   <div class="tl-content">
-                    <div class="tl-card tl-card--lecture" style="background:rgba(37,99,235,0.1);border:1px solid rgba(37,99,235,0.3);border-left:3px solid #2563eb;cursor:pointer;">
+                    <div class="tl-card tl-card--lecture">
                       <div class="tl-card-title">LG CNS 디지털 전환 교육</div>
-                      <div class="tl-card-sub">서울 강서구 마곡중앙8로 71 · 09:00~12:00</div>
+                      <div class="tl-card-sub">상암동 LG CNS 본사 3F · 2시간 30분</div>
+                      <span class="tl-card-badge tl-card-badge--lecture">강의</span>
                     </div>
                   </div>
                 </div>
 
-                <!-- 강의1 → 강의2 이동 버퍼 -->
-                <div class="tl-gap-row">
+                <!-- 이동 버퍼 -->
+                <div class="timeline-item">
                   <div class="tl-time-col">
-                    <div class="tl-time" style="color:#9ca3af;">12:00</div>
+                    <div class="tl-time">12:00</div>
                   </div>
-                  <div class="tl-track tl-gap-track"></div>
+                  <div class="tl-track">
+                    <div class="tl-node tl-node--buffer"></div>
+                  </div>
                   <div class="tl-content">
-                    <div class="tl-gap-card tl-gap-card--ok">
-                      <span class="tl-gap-icon">🚗</span>
-                      <div class="tl-gap-info">
-                        <div class="tl-gap-main">정리 10분 · 이동 45분 · 버퍼 30분 · 준비 15분</div>
-                        <div class="tl-gap-sub">필요 100분 · 실제 확보 시간 120분</div>
-                      </div>
+                    <div class="tl-card tl-card--buffer">
+                      <div class="tl-card-title">🚗 이동 버퍼 타임</div>
+                      <div class="tl-card-sub">상암 → 여의도 · 예상 40분 (혼잡 고려)</div>
+                      <span class="tl-card-badge tl-card-badge--buffer">이동</span>
                     </div>
                   </div>
                 </div>
@@ -249,45 +247,29 @@
                     <div class="tl-time">14:00</div>
                   </div>
                   <div class="tl-track">
-                    <div class="tl-node" style="background:#16a34a;border-color:#16a34a;"></div>
+                    <div class="tl-node tl-node--lecture"></div>
                   </div>
                   <div class="tl-content">
-                    <div class="tl-card tl-card--lecture" style="background:rgba(22,163,74,0.1);border:1px solid rgba(22,163,74,0.3);border-left:3px solid #16a34a;cursor:pointer;">
+                    <div class="tl-card tl-card--lecture">
                       <div class="tl-card-title">신한은행 MZ세대 소통 워크숍</div>
-                      <div class="tl-card-sub">서울 중구 세종대로9길 20 · 14:00~16:00</div>
+                      <div class="tl-card-sub">여의도 신한은행 본점 · 2시간</div>
+                      <span class="tl-card-badge tl-card-badge--lecture">강의</span>
                     </div>
                   </div>
                 </div>
 
-                <!-- 강의2 → 귀가 이동 정보 -->
-                <div class="tl-gap-row">
-                  <div class="tl-time-col">
-                    <div class="tl-time" style="color:#9ca3af;">16:00</div>
-                  </div>
-                  <div class="tl-track tl-gap-track"></div>
-                  <div class="tl-content">
-                    <div class="tl-gap-card tl-gap-card--info">
-                      <span class="tl-gap-icon">🏠</span>
-                      <div class="tl-gap-info">
-                        <div class="tl-gap-main">정리 15분 · 이동 45분</div>
-                        <div class="tl-gap-sub">귀가 예정 17:15</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 🏠 귀가 -->
+                <!-- 귀가 -->
                 <div class="timeline-item">
                   <div class="tl-time-col">
-                    <div class="tl-time">17:15</div>
+                    <div class="tl-time">16:30</div>
                   </div>
                   <div class="tl-track">
-                    <div class="tl-node tl-node--home"></div>
+                    <div class="tl-node tl-node--done"></div>
                   </div>
                   <div class="tl-content">
-                    <div class="tl-card tl-card--home-origin">
-                      <div class="tl-card-title">🏠 귀가</div>
-                      <div class="tl-card-sub">서울 마포구 공덕동</div>
+                    <div class="tl-card tl-card--home">
+                      <span class="tl-card-title">귀가 · 오늘 일정 완료 🎉</span>
+                      <br><span class="tl-card-sub">총 강의 2건 · 예상 수익 ₩830,000</span>
                     </div>
                   </div>
                 </div>
@@ -310,6 +292,27 @@
 
 
   <!-- ══════════════════════════════════════
+       TRUST STRIP
+  ══════════════════════════════════════ -->
+  <div class="trust-strip" aria-label="서비스 신뢰 지표">
+    <div class="container">
+      <span class="trust-strip-label">강비서의 기술</span>
+      <div class="trust-strip-items">
+        <div class="trust-strip-item"><span class="trust-strip-icon">🔒</span>Firebase 데이터 암호화</div>
+        <div class="trust-strip-sep" aria-hidden="true">·</div>
+        <div class="trust-strip-item"><span class="trust-strip-icon">🗺️</span>카카오 교통 API 연동</div>
+        <div class="trust-strip-sep" aria-hidden="true">·</div>
+        <div class="trust-strip-item"><span class="trust-strip-icon">📱</span>모바일 완벽 지원</div>
+        <div class="trust-strip-sep" aria-hidden="true">·</div>
+        <div class="trust-strip-item"><span class="trust-strip-icon">✈️</span>오프라인 캐싱 지원</div>
+        <div class="trust-strip-sep" aria-hidden="true">·</div>
+        <div class="trust-strip-item"><span class="trust-strip-icon">🇰🇷</span>국내 강사 전용 설계</div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════
        PAIN POINTS
   ══════════════════════════════════════ -->
   <section class="pain-points section" id="pain-points">
@@ -323,42 +326,117 @@
       <div class="pain-grid">
 
         <div class="pain-card">
-          <div class="pain-icon">🚨</div>
-          <h3>지각 한 번이 계약 한 건을 날립니다</h3>
+          <div class="pain-icon">🗺️</div>
+          <h3>이동 시간 계산 실수</h3>
           <p>
-            구글 맵이 보여주는 건 '지금' 교통 상황입니다. 다음 주 목요일 오후 1시의
-            실제 혼잡도는 알 수 없습니다. 여유 있다고 판단해 수락한 일정이,
-            당일 막히는 도로 앞에서 식은땀으로 돌아옵니다.
+            오전 강의 끝나고 오후 강의까지 이동 시간이 충분한지 매번 직접 계산해야 합니다.
+            지각이라도 하면 강사 신뢰도가 한 번에 무너집니다.
           </p>
           <div class="pain-quote">
-            "20분이면 된다고 생각했는데, 당일 정체로 50분이 걸렸어요. 10분 지각하고 나서 그 기업과 재계약이 안 됐습니다."
+            "수원에서 강남으로 이동하다가 오후 강의에 15분 늦었어요. 그 뒤로 그 기업과 관계가 어색해졌습니다."
           </div>
         </div>
 
         <div class="pain-card">
           <div class="pain-icon">💸</div>
-          <h3>통장 내역과 강의 목록, 수기 대조의 소모</h3>
+          <h3>정산 미입금 체크 스트레스</h3>
           <p>
-            강의처가 늘수록 입금 확인이 곧 '수사'가 됩니다. 어떤 기관은 여러 강의를
-            한 번에 송금하고, 어떤 기관은 분할 입금합니다. 매달 통장 내역과 강의 목록을
-            한 줄씩 맞춰보며 몇 시간을 소모합니다.
+            강의처가 10곳이 넘어가면 어디서 언제 돈이 들어왔는지 파악이 안 됩니다.
+            뒤늦게 발견한 미입금은 묻는 것도 눈치가 보입니다.
           </p>
           <div class="pain-quote">
-            "강의가 12건이면 입금 대조만 반나절이에요. 비슷한 금액이 며칠 텀으로 들어오면 어디 건지도 모르겠더라고요."
+            "엑셀로 관리하다 보니 입금 예정일 지난 건 2개월 뒤에야 알았어요. 청구하기도 민망했죠."
           </div>
         </div>
 
         <div class="pain-card">
-          <div class="pain-icon">🗂️</div>
-          <h3>기관이 늘수록 머릿속이 터질 것 같습니다</h3>
+          <div class="pain-icon">📄</div>
+          <h3>결과보고서 작성의 반복 피로</h3>
           <p>
-            담당자 연락처, 강의 확정 여부, 정산 예정일이 카카오톡·메모앱·엑셀에
-            분산됩니다. 새 강의 의뢰가 올 때마다 기존 일정과 충돌하지 않는지
-            모든 앱을 열어 직접 확인해야 합니다.
+            기업마다 요구하는 양식이 달라도, 결국 넣는 내용은 비슷합니다.
+            강의 끝난 직후 지친 상태에서 보고서까지 작성하면 체력이 바닥납니다.
           </p>
           <div class="pain-quote">
-            "기관이 8곳 넘으니까 어느 날 어디 강의가 있는지 헷갈리기 시작했어요. 일정 확인 문자가 올 때마다 긴장됩니다."
+            "강의 후 보고서 3장을 써야 했어요. 매번 비슷한 내용인데 처음부터 다시 타이핑합니다."
           </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════════════
+       5 PILLARS FEATURE SHOWCASE
+  ══════════════════════════════════════ -->
+  <section class="pillars section" id="pillars">
+    <div class="container">
+      <div class="section-label">5대 핵심 기능</div>
+      <h2 class="section-heading">강사 업무의 모든 것을<br /><em>한 곳에서 관리하세요</em></h2>
+      <p class="section-subheading">
+        일정부터 정산, 캘린더, 행정 처리까지 — 강비서의 5가지 핵심 기능이 강사님의 모든 업무를 책임집니다.
+      </p>
+
+      <div class="pillars-grid">
+
+        <div class="pillar-card pillar-card--primary">
+          <div class="pillar-card-icon">🏠</div>
+          <div class="pillar-card-number">01</div>
+          <h3 class="pillar-card-title">대시보드</h3>
+          <p class="pillar-card-desc">오늘의 강의 브리핑, 타임스케줄, 할 일 목록을 한눈에. 아침마다 하루를 완벽하게 준비하세요.</p>
+          <ul class="pillar-feature-list">
+            <li>오늘 · 내일 타임스케줄 자동 생성</li>
+            <li>이동 버퍼타임 실시간 계산</li>
+            <li>오늘의 할 일 & 미루기 기능</li>
+          </ul>
+        </div>
+
+        <div class="pillar-card">
+          <div class="pillar-card-icon">📚</div>
+          <div class="pillar-card-number">02</div>
+          <h3 class="pillar-card-title">강의 관리</h3>
+          <p class="pillar-card-desc">강의 등록부터 상태 추적, 결과보고서 작성까지. 모든 강의 정보를 체계적으로 관리합니다.</p>
+          <ul class="pillar-feature-list">
+            <li>강의 등록 · 수정 · 상태 관리</li>
+            <li>결과보고서 자동 초안 생성</li>
+            <li>강의처별 이력 및 담당자 관리</li>
+          </ul>
+        </div>
+
+        <div class="pillar-card">
+          <div class="pillar-card-icon">📆</div>
+          <div class="pillar-card-number">03</div>
+          <h3 class="pillar-card-title">캘린더</h3>
+          <p class="pillar-card-desc">월·주·일 단위로 강의 일정을 시각화합니다. 일정 충돌을 사전에 감지하고 경고합니다.</p>
+          <ul class="pillar-feature-list">
+            <li>월간 / 주간 강의 캘린더</li>
+            <li>일정 충돌 사전 감지 알림</li>
+            <li>이번 주 강의 요약 한눈에</li>
+          </ul>
+        </div>
+
+        <div class="pillar-card">
+          <div class="pillar-card-icon">💰</div>
+          <div class="pillar-card-number">04</div>
+          <h3 class="pillar-card-title">정산 관리</h3>
+          <p class="pillar-card-desc">입금 예정일 설정, 미입금 자동 감지, 월별 수익 통계. 돈 걱정 없이 강의에만 집중하세요.</p>
+          <ul class="pillar-feature-list">
+            <li>강의별 입금 예정일 관리</li>
+            <li>미입금 자동 감지 및 알림</li>
+            <li>월별 · 기관별 수익 통계</li>
+          </ul>
+        </div>
+
+        <div class="pillar-card pillar-card--last">
+          <div class="pillar-card-icon">📋</div>
+          <div class="pillar-card-number">05</div>
+          <h3 class="pillar-card-title">행정 처리</h3>
+          <p class="pillar-card-desc">강의계획서, 결과보고서 등 반복되는 서류 작업을 자동화합니다.</p>
+          <ul class="pillar-feature-list">
+            <li>결과보고서 PDF 출력</li>
+            <li>강의 계획서 자동 생성</li>
+            <li>세금계산서 발행 이력 관리</li>
+          </ul>
         </div>
 
       </div>
@@ -437,54 +515,54 @@
   ══════════════════════════════════════ -->
   <section class="solution section" id="solution">
     <div class="container">
-      <div class="section-label">강비서의 핵심 기능</div>
-      <h2 class="section-heading">강의 등록 하나로<br /><em>일정과 정산이 자동으로 연결됩니다</em></h2>
+      <div class="section-label">강비서의 해법</div>
+      <h2 class="section-heading">강의 등록 하나로<br /><em>모든 행정이 연결됩니다</em></h2>
       <p class="section-subheading">
-        강비서는 일정 관리와 정산을 하나의 흐름으로 연결합니다. 강의 정보를 한 번만 입력하면 타임라인·출발 시간·정산 현황이 자동으로 구성됩니다.
+        강비서는 일정·정산·보고서를 하나의 흐름으로 연결합니다. 강의 정보를 한 번만 입력하면 나머지는 자동으로 처리됩니다.
       </p>
 
       <div class="solution-grid">
 
         <div class="solution-step">
           <div class="solution-step-number">01</div>
-          <div class="solution-step-icon">📋</div>
-          <h3>강의 정보 통합 등록</h3>
-          <p>강의명, 기관, 일시, 장소, 교실, 강의료, 담당자 연락처를 한 화면에서 입력합니다. 한 번 등록한 정보가 타임라인과 정산 대시보드에 자동으로 반영됩니다.</p>
+          <div class="solution-step-icon">📌</div>
+          <h3>강의 정보 한 번에 등록</h3>
+          <p>강의명, 기관, 날짜, 시간, 장소, 강의료, 담당자를 한 화면에서 입력합니다. 이 정보가 일정·정산·보고서의 기반이 됩니다.</p>
         </div>
 
         <div class="solution-step">
           <div class="solution-step-number">02</div>
-          <div class="solution-step-icon">📅</div>
-          <h3>예측 교통 기반 하루 타임라인</h3>
-          <p>카카오 모빌리티 API의 미래 교통 예측 데이터를 사용해 강의 당일 흐름을 시각화합니다. 강의·이동·버퍼 구간이 타임라인 형태로 한눈에 표시됩니다.</p>
+          <div class="solution-step-icon">🗺️</div>
+          <h3>버퍼타임 자동 계산 및 경고</h3>
+          <p>강의 간 이동 시간을 자동으로 계산해 스케줄에 반영합니다. 이동 시간이 부족하면 즉시 경고를 띄워 일정 충돌을 방지합니다.</p>
         </div>
 
         <div class="solution-step">
           <div class="solution-step-number">03</div>
-          <div class="solution-step-icon">🗺️</div>
-          <h3>정확한 최적 출발 시간 제안</h3>
-          <p>현재 교통이 아닌 강의 시간대의 예측 데이터로 이동 시간을 산출합니다. 이동·버퍼·준비 시간을 역산해 언제 출발해야 제시간에 도착하는지 정확하게 안내합니다.</p>
+          <div class="solution-step-icon">💰</div>
+          <h3>정산 상태 자동 추적</h3>
+          <p>입금 예정일을 설정하면 미입금 상태를 자동으로 감지하고 알림을 보냅니다. 더 이상 입금을 잊지 않아도 됩니다.</p>
         </div>
 
         <div class="solution-step">
           <div class="solution-step-number">04</div>
-          <div class="solution-step-icon">⚠️</div>
-          <h3>일정 충돌 자동 감지 및 경고</h3>
-          <p>이동 시간·버퍼 시간·준비·정리 시간, 세 가지를 합산해 연속 강의 간 실제 여유를 계산합니다. 여유가 부족하면 즉시 충돌 경고를 표시합니다.</p>
+          <div class="solution-step-icon">📄</div>
+          <h3>결과보고서 초안 자동 생성</h3>
+          <p>강의 종료 후 등록된 정보를 기반으로 결과보고서 초안을 자동으로 만들어 드립니다. 내용만 다듬어 바로 제출할 수 있습니다.</p>
         </div>
 
         <div class="solution-step">
           <div class="solution-step-number">05</div>
-          <div class="solution-step-icon">💳</div>
-          <h3>정산 현황 수동 관리 대시보드</h3>
-          <p>강의별 입금 완료·대기·연체 상태를 한 화면에서 직접 확인하고 업데이트합니다. 기관·기간별 필터로 정산 현황을 즉시 조회할 수 있습니다.</p>
+          <div class="solution-step-icon">📊</div>
+          <h3>월별 수익·강의 통계</h3>
+          <p>이달의 강의 횟수, 총 강의료, 주요 강의처 현황을 한눈에 파악합니다. 사업 계획과 세금 신고 준비에 바로 활용 가능합니다.</p>
         </div>
 
         <div class="solution-step">
           <div class="solution-step-number">06</div>
           <div class="solution-step-icon">📱</div>
-          <h3>모바일 최적화 현장 대시보드</h3>
-          <p>이동 중이나 강의 현장에서도 오늘의 타임라인, 담당자 연락처, 강의 세부 정보를 즉시 확인합니다. 모바일에서도 모든 기능을 완전히 사용할 수 있습니다.</p>
+          <h3>모바일에서도 빠른 확인</h3>
+          <p>강의 직전에도 오늘 일정, 담당자 연락처, 준비물을 모바일로 즉시 확인할 수 있습니다. 노트북 없이도 현장에서 바로 사용 가능합니다.</p>
         </div>
 
       </div>
@@ -497,8 +575,8 @@
   ══════════════════════════════════════ -->
   <section class="features section" id="features">
     <div class="container">
-      <div class="section-label">핵심 기능 상세</div>
-      <h2 class="section-heading">일정 예측부터 정산 관리까지<br /><em>강사 행정을 하나로 묶습니다</em></h2>
+      <div class="section-label">핵심 기능</div>
+      <h2 class="section-heading">강사님의 하루를<br /><em>더 가볍게 만드는 기능들</em></h2>
 
       <div class="features-list">
 
@@ -506,363 +584,144 @@
         <div class="feature-row">
           <div class="feature-content">
             <div class="feature-label">⏱ 스마트 일정 관리</div>
-            <h3 class="feature-title">미래 교통 예측으로<br />최적 출발 시간을 안내해 드려요</h3>
+            <h3 class="feature-title">이동 버퍼타임을<br />자동으로 계산해 드려요</h3>
             <p class="feature-desc">
-              단순 거리 계산이 아닌 강의 시간대의 예측 교통 데이터를 기반으로 정확한 이동 시간을 산출합니다.
-              예상 이동 시간·버퍼 타임·강의 준비·정리 시간까지 합산해 최적 출발 시간을 제안하고,
-              이 세 가지 요소를 기준으로 충돌이 감지되면 즉시 경고를 발송합니다.
+              강의 장소 간 이동 시간을 시스템이 자동으로 계산하여 스케줄에 반영합니다.
+              일정이 촘촘하게 잡혀 있어도 이동 가능 여부를 즉시 확인할 수 있습니다.
             </p>
             <ul class="feature-check-list">
               <li class="feature-check-item">
                 <span class="feature-check-icon">✓</span>
-                강의 시간대 예측 교통 데이터 기반 이동 시간 산출
+                강의 간 이동 시간 자동 삽입 및 시각화
               </li>
               <li class="feature-check-item">
                 <span class="feature-check-icon">✓</span>
-                이동 + 버퍼 + 준비·정리 시간 합산 → 최적 출발 시간 제안
+                이동 시간 부족 시 스케줄 충돌 경고 알림
               </li>
               <li class="feature-check-item">
                 <span class="feature-check-icon">✓</span>
-                세 가지 요소 기준 충돌 감지 시 즉시 경고 알림
+                출발지·도착지 기반 예상 소요 시간 표시
               </li>
             </ul>
           </div>
           <div class="feature-visual">
-            <div class="preview-panel-header">
-              <span class="preview-panel-title">⏱ 오늘의 타임스케줄</span>
-              <span class="preview-panel-date" id="preview-today-date"></span>
+            <div class="feature-visual-header">
+              <span>📅</span>
+              <span class="feature-visual-title">오늘의 일정 타임라인</span>
             </div>
-            <div class="preview-panel-body">
-              <div class="timeline-wrapper">
+            <div class="feature-visual-body">
+              <div class="buffer-timeline">
 
-                <!-- 🏠 출발 -->
-                <div class="timeline-item">
-                  <div class="tl-time-col">
-                    <div class="tl-time">07:30</div>
+                <div class="timeline-slot">
+                  <div class="timeline-time">09:00</div>
+                  <div class="timeline-track">
+                    <div class="timeline-node timeline-node--lecture"></div>
+                    <div class="timeline-connector"></div>
                   </div>
-                  <div class="tl-track">
-                    <div class="tl-node tl-node--home"></div>
-                  </div>
-                  <div class="tl-content">
-                    <div class="tl-card tl-card--home-origin">
-                      <div class="tl-card-title">🏠 출발</div>
-                      <div class="tl-card-sub">서울 마포구 공덕동</div>
-                    </div>
+                  <div class="timeline-content timeline-content--lecture">
+                    <div class="timeline-content-title">LG CNS 디지털 전환 교육</div>
+                    <div class="timeline-content-sub">마포구 상암동 · 3시간</div>
                   </div>
                 </div>
 
-                <!-- 출발 → 강의1 이동 정보 -->
-                <div class="tl-gap-row">
-                  <div class="tl-time-col">
-                    <div class="tl-time" style="color:#9ca3af;"></div>
+                <div class="timeline-slot">
+                  <div class="timeline-time">12:00</div>
+                  <div class="timeline-track">
+                    <div class="timeline-node timeline-node--buffer"></div>
+                    <div class="timeline-connector"></div>
                   </div>
-                  <div class="tl-track tl-gap-track"></div>
-                  <div class="tl-content">
-                    <div class="tl-gap-card tl-gap-card--info">
-                      <span class="tl-gap-icon">🚗</span>
-                      <div class="tl-gap-info">
-                        <div class="tl-gap-main">이동 35분 · 버퍼 30분 · 준비 20분</div>
-                        <div class="tl-gap-sub">출발 후 총 85분 확보</div>
-                      </div>
-                    </div>
+                  <div class="timeline-content timeline-content--buffer">
+                    <div class="timeline-content-title">🚗 이동 버퍼 타임</div>
+                    <div class="timeline-content-sub">상암 → 여의도 · 예상 35분</div>
                   </div>
                 </div>
 
-                <!-- 강의 1 -->
-                <div class="timeline-item">
-                  <div class="tl-time-col">
-                    <div class="tl-time">09:00</div>
+                <div class="timeline-slot">
+                  <div class="timeline-time">14:00</div>
+                  <div class="timeline-track">
+                    <div class="timeline-node timeline-node--lecture"></div>
                   </div>
-                  <div class="tl-track">
-                    <div class="tl-node" style="background:#2563eb;border-color:#2563eb;"></div>
-                  </div>
-                  <div class="tl-content">
-                    <div class="tl-card tl-card--lecture" style="background:rgba(37,99,235,0.1);border:1px solid rgba(37,99,235,0.3);border-left:3px solid #2563eb;cursor:pointer;">
-                      <div class="tl-card-title">LG CNS 디지털 전환 교육</div>
-                      <div class="tl-card-sub">서울 강서구 마곡중앙8로 71 · 09:00~12:00</div>
-                    </div>
+                  <div class="timeline-content timeline-content--lecture">
+                    <div class="timeline-content-title">신한은행 MZ세대 소통 워크숍</div>
+                    <div class="timeline-content-sub">여의도 본점 · 2시간</div>
                   </div>
                 </div>
 
-                <!-- 강의1 → 강의2 이동 버퍼 -->
-                <div class="tl-gap-row">
-                  <div class="tl-time-col">
-                    <div class="tl-time" style="color:#9ca3af;">12:00</div>
-                  </div>
-                  <div class="tl-track tl-gap-track"></div>
-                  <div class="tl-content">
-                    <div class="tl-gap-card tl-gap-card--ok">
-                      <span class="tl-gap-icon">🚗</span>
-                      <div class="tl-gap-info">
-                        <div class="tl-gap-main">정리 10분 · 이동 45분 · 버퍼 30분 · 준비 15분</div>
-                        <div class="tl-gap-sub">필요 100분 · 실제 확보 시간 120분</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 강의 2 -->
-                <div class="timeline-item">
-                  <div class="tl-time-col">
-                    <div class="tl-time">14:00</div>
-                  </div>
-                  <div class="tl-track">
-                    <div class="tl-node" style="background:#16a34a;border-color:#16a34a;"></div>
-                  </div>
-                  <div class="tl-content">
-                    <div class="tl-card tl-card--lecture" style="background:rgba(22,163,74,0.1);border:1px solid rgba(22,163,74,0.3);border-left:3px solid #16a34a;cursor:pointer;">
-                      <div class="tl-card-title">신한은행 MZ세대 소통 워크숍</div>
-                      <div class="tl-card-sub">서울 중구 세종대로9길 20 · 14:00~16:00</div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 강의2 → 귀가 이동 정보 -->
-                <div class="tl-gap-row">
-                  <div class="tl-time-col">
-                    <div class="tl-time" style="color:#9ca3af;">16:00</div>
-                  </div>
-                  <div class="tl-track tl-gap-track"></div>
-                  <div class="tl-content">
-                    <div class="tl-gap-card tl-gap-card--info">
-                      <span class="tl-gap-icon">🏠</span>
-                      <div class="tl-gap-info">
-                        <div class="tl-gap-main">정리 15분 · 이동 45분</div>
-                        <div class="tl-gap-sub">귀가 예정 17:15</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 🏠 귀가 -->
-                <div class="timeline-item">
-                  <div class="tl-time-col">
-                    <div class="tl-time">17:15</div>
-                  </div>
-                  <div class="tl-track">
-                    <div class="tl-node tl-node--home"></div>
-                  </div>
-                  <div class="tl-content">
-                    <div class="tl-card tl-card--home-origin">
-                      <div class="tl-card-title">🏠 귀가</div>
-                      <div class="tl-card-sub">서울 마포구 공덕동</div>
-                    </div>
-                  </div>
-                </div>
-
-              </div><!-- /.timeline-wrapper -->
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Feature 2: 정산 대시보드 -->
+        <!-- Feature 2: 정산 관리 -->
         <div class="feature-row reverse">
           <div class="feature-content">
-            <div class="feature-label">💰 정산 대시보드</div>
-            <h3 class="feature-title">입금 완료·미입금 상태를<br />한 화면에서 관리하세요</h3>
+            <div class="feature-label">💰 정산 투명성</div>
+            <h3 class="feature-title">미입금 강의를<br />자동으로 잡아드려요</h3>
             <p class="feature-desc">
-              강의별 정산 예정일, 입금 금액, 상태를 통합 대시보드에서 한눈에 파악합니다.
-              입금 완료·대기·연체 항목을 직접 필터링하고 상태를 즉시 업데이트할 수 있습니다.
+              강의별 입금 예정일을 설정하면, 기한이 지나도 입금되지 않은 건을 자동으로 감지하여
+              알림을 보냅니다. 정산 누락 걱정에서 해방됩니다.
             </p>
             <ul class="feature-check-list">
               <li class="feature-check-item">
                 <span class="feature-check-icon">✓</span>
-                입금 완료·대기·연체 상태를 한 화면에서 직접 관리
+                강의별 입금 예정일·실제 입금일 관리
               </li>
               <li class="feature-check-item">
                 <span class="feature-check-icon">✓</span>
-                기관·강의명·기간별 필터로 정산 현황 즉시 조회
+                미입금 현황 대시보드 한눈에 확인
               </li>
               <li class="feature-check-item">
                 <span class="feature-check-icon">✓</span>
-                월별 총 수익 및 정산 현황 요약 집계
+                월별 총 수익 및 미수금 자동 집계
               </li>
             </ul>
           </div>
           <div class="feature-visual">
             <div class="feature-visual-header">
               <span>💳</span>
-              <span class="feature-visual-title">4월 정산 현황 대시보드</span>
-            </div>
-            <div class="feature-visual-body" style="padding:0;">
-
-              <!-- Dashboard mini-header: title + status filter pills -->
-              <div class="sl-tbl-mockup-header">
-                <span class="sl-tbl-mockup-title">📋 4월 정산 현황</span>
-                <div class="sl-tbl-mockup-pills">
-                  <button class="sl-tab active" tabindex="-1" style="padding:4px 10px;font-size:10px;cursor:default;">전체 4</button>
-                  <button class="sl-tab active--paid" tabindex="-1" style="padding:4px 10px;font-size:10px;cursor:default;">완료 2</button>
-                  <button class="sl-tab active--overdue" tabindex="-1" style="padding:4px 10px;font-size:10px;cursor:default;">연체 1</button>
-                </div>
-              </div>
-
-              <!-- sl-table: exact class hierarchy from settlement.html -->
-              <div class="sl-table-wrap sl-tbl-mockup">
-                <table class="sl-table" aria-label="정산 내역 미리보기">
-                  <thead>
-                    <tr>
-                      <th>날짜</th>
-                      <th>강의명</th>
-                      <th>기관</th>
-                      <th>금액</th>
-                      <th>정산 예정일</th>
-                      <th>상태</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-
-                    <!-- Row 1: 삼성전자 — 입금 완료 -->
-                    <tr>
-                      <td class="sl-cell-date">04/05</td>
-                      <td><div class="sl-cell-title">리더십 코칭 프로그램</div></td>
-                      <td class="sl-cell-client">삼성전자</td>
-                      <td class="sl-cell-amount">₩480,000</td>
-                      <td class="sl-cell-date">04/10</td>
-                      <td><span class="sl-status-badge sl-status-badge--paid">입금 완료</span></td>
-                    </tr>
-
-                    <!-- Row 2: 현대모비스 — 입금 완료 -->
-                    <tr>
-                      <td class="sl-cell-date">04/12</td>
-                      <td><div class="sl-cell-title">협업 워크숍</div></td>
-                      <td class="sl-cell-client">현대모비스</td>
-                      <td class="sl-cell-amount">₩360,000</td>
-                      <td class="sl-cell-date">04/15</td>
-                      <td><span class="sl-status-badge sl-status-badge--paid">입금 완료</span></td>
-                    </tr>
-
-                    <!-- Row 3: 서울시 평생교육원 — 연체 + D+3 -->
-                    <tr class="sl-row--overdue">
-                      <td class="sl-cell-date">04/14</td>
-                      <td><div class="sl-cell-title">평생교육 강의</div></td>
-                      <td class="sl-cell-client">서울시 평생교육원</td>
-                      <td class="sl-cell-amount">₩220,000</td>
-                      <td class="sl-cell-date">04/18</td>
-                      <td>
-                        <div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;">
-                          <span class="sl-status-badge sl-status-badge--overdue">연체</span>
-                          <span class="sl-dday sl-dday--late">D+3</span>
-                        </div>
-                      </td>
-                    </tr>
-
-                    <!-- Row 4: 카카오엔터 — 입금 대기 -->
-                    <tr>
-                      <td class="sl-cell-date">04/21</td>
-                      <td><div class="sl-cell-title">OKR 실전 워크숍</div></td>
-                      <td class="sl-cell-client">카카오엔터</td>
-                      <td class="sl-cell-amount">₩550,000</td>
-                      <td class="sl-cell-date">04/30</td>
-                      <td><span class="sl-status-badge sl-status-badge--pending">입금 대기</span></td>
-                    </tr>
-
-                  </tbody>
-                </table>
-              </div>
-
-            </div>
-          </div>
-        </div>
-
-        <!-- Feature 3: 일정 충돌 감지 -->
-        <div class="feature-row">
-          <div class="feature-content">
-            <div class="feature-label">⚠️ 리스크 관리</div>
-            <h3 class="feature-title">일정 충돌을 미리 감지하고<br />즉시 경고해 드려요</h3>
-            <p class="feature-desc">
-              강의 간 이동 시간뿐만 아니라 준비 및 정리 시간까지 계산합니다.
-              물리적으로 시간이 부족한 일정이 등록되면 타임라인에 즉시 경고를 표시하여
-              실수를 방지합니다.
-            </p>
-            <ul class="feature-check-list">
-              <li class="feature-check-item">
-                <span class="feature-check-icon">✓</span>
-                이동 + 버퍼 + 준비 시간 합산 분석
-              </li>
-              <li class="feature-check-item">
-                <span class="feature-check-icon">✓</span>
-                일정 등록 단계에서 즉시 충돌 경고 알림
-              </li>
-              <li class="feature-check-item">
-                <span class="feature-check-icon">✓</span>
-                지각 방지를 위한 여유 시간 확보 가이드
-              </li>
-            </ul>
-          </div>
-          <div class="feature-visual">
-            <div class="feature-visual-header" style="background: #dc2626;">
-              <span>⚠️</span>
-              <span class="feature-visual-title">일정 충돌 검토</span>
-              <button class="lm-rv-x" aria-label="닫기" tabindex="-1">✕</button>
+              <span class="feature-visual-title">4월 정산 현황</span>
             </div>
             <div class="feature-visual-body">
-              <!-- Body -->
-              <div class="lm-rv-body" style="background: #ffffff;">
+              <div class="status-board">
 
-                <!-- VS card grid -->
-                <div class="lm-rv-vs">
-
-                  <!-- 기존 확정 강의 (ext) -->
-                  <div class="lm-rv-card lm-rv-card--ext">
-                    <p class="lm-rv-role">기존 확정 강의</p>
-                    <p class="lm-rv-time">13:00 ~ 15:00</p>
-                    <p class="lm-rv-lec-title">현대모비스 협업 워크숍</p>
-                    <p class="lm-rv-client">🏢 현대모비스</p>
-                    <p class="lm-rv-place">📍 서울 강남구 테헤란로 203</p>
+                <div class="status-board-item">
+                  <div class="status-board-info">
+                    <div class="status-board-name">삼성전자 — 리더십 코칭</div>
+                    <div class="status-board-meta">입금 예정 04/10 · ₩480,000</div>
                   </div>
-
-                  <div class="lm-rv-vs-badge">VS</div>
-
-                  <!-- 입력 중인 새 강의 (new → conflict state) -->
-                  <div class="lm-rv-card lm-rv-card--new">
-                    <p class="lm-rv-role">입력 중인 새 강의</p>
-                    <p class="lm-rv-time">16:00 ~ 18:00</p>
-                    <p class="lm-rv-lec-title">삼성전자 리더십 코칭</p>
-                    <p class="lm-rv-client">🏢 삼성전자</p>
-                    <p class="lm-rv-place">📍 경기 수원시 영통구 삼성로 129</p>
-                  </div>
-
+                  <span class="status-chip status-chip--done">입금완료</span>
                 </div>
 
-                <!-- Breakdown -->
-                <div class="lm-rv-breakdown">
-                  <p class="lm-rv-bd-title">🚨 지연 분석</p>
-                  <div class="lm-rv-row">
-                    <span>🚚 예상 이동 시간 (카카오)</span>
-                    <span class="v">48분</span>
+                <div class="status-board-item">
+                  <div class="status-board-info">
+                    <div class="status-board-name">현대모비스 — 협업 워크숍</div>
+                    <div class="status-board-meta">입금 예정 04/15 · ₩360,000</div>
                   </div>
-                  <div class="lm-rv-row">
-                    <span>⚙️ 강의 정리 및 세팅 시간</span>
-                    <span class="v">30분</span>
-                  </div>
-                  <div class="lm-rv-gap lm-rv-gap--req">
-                    <span>📋 필요 여유 시간</span>
-                    <span class="v">78분 필요</span>
-                  </div>
-                  <div class="lm-rv-gap lm-rv-gap--act">
-                    <span>⏳ 실제 확보된 여유</span>
-                    <span class="v">60분 확보</span>
-                  </div>
-                  <div class="lm-rv-delay">
-                    <span class="lm-rv-delay-label">🚩 최종 지연 예상</span>
-                    <span class="lm-rv-delay-value">18분 부족</span>
-                  </div>
+                  <span class="status-chip status-chip--done">입금완료</span>
                 </div>
 
-              </div><!-- /.lm-rv-body -->
+                <div class="status-board-item">
+                  <div class="status-board-info">
+                    <div class="status-board-name">서울시 평생교육원 — 강의</div>
+                    <div class="status-board-meta">입금 예정 04/18 · ₩220,000</div>
+                  </div>
+                  <span class="status-chip status-chip--unpaid">미입금 D+3</span>
+                </div>
 
-              <!-- Footer buttons -->
-              <div class="lm-rv-foot"  style="background: #ffffff;">
-                <button class="lm-rv-btn lm-rv-btn--back" tabindex="-1">← 수정하기</button>
-                <button class="lm-rv-btn lm-rv-btn--pending" tabindex="-1">보류로 저장</button>
-                <button class="lm-rv-btn lm-rv-btn--force" tabindex="-1">일정 조정하기</button>
+                <div class="status-board-item">
+                  <div class="status-board-info">
+                    <div class="status-board-name">카카오엔터 — OKR 교육</div>
+                    <div class="status-board-meta">입금 예정 04/30 · ₩550,000</div>
+                  </div>
+                  <span class="status-chip status-chip--scheduled">예정</span>
+                </div>
+
               </div>
-</div>
+            </div>
           </div>
         </div>
 
-        <!--
-        Feature 4: 결과보고서 — 랜딩페이지에서 미노출 (추후 공개 예정)
+        <!-- Feature 3: 결과보고서 -->
         <div class="feature-row">
           <div class="feature-content">
             <div class="feature-label">📄 행정 자동화</div>
@@ -927,7 +786,84 @@
             </div>
           </div>
         </div>
-        -->
+
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════════════
+       SKELETON UI SHOWCASE
+  ══════════════════════════════════════ -->
+  <section class="skeleton-showcase section" id="skeleton-showcase">
+    <div class="container">
+      <div class="section-label">즉각적인 반응성</div>
+      <h2 class="section-heading">데이터를 불러오는 동안에도<br /><em>끊김 없는 경험</em></h2>
+      <p class="section-subheading">
+        강비서는 데이터 로딩 중에도 스켈레톤 UI로 레이아웃을 미리 보여줍니다. 버벅임 없는 앱처럼 느껴집니다.
+      </p>
+
+      <div class="skeleton-demo-grid">
+
+        <div class="skeleton-demo-panel" aria-hidden="true">
+          <div class="skeleton-demo-header">
+            <span class="skeleton-demo-icon">⏱</span>
+            <span class="skeleton-demo-title">로딩 중…</span>
+          </div>
+          <div class="skeleton-demo-body">
+            <div class="sk-stat-row">
+              <div class="sk-stat-card shimmer"></div>
+              <div class="sk-stat-card shimmer"></div>
+              <div class="sk-stat-card shimmer"></div>
+            </div>
+            <div class="sk-timeline">
+              <div class="sk-tl-item">
+                <div class="sk-tl-time shimmer"></div>
+                <div class="sk-tl-dot shimmer"></div>
+                <div class="sk-tl-card shimmer"></div>
+              </div>
+              <div class="sk-tl-item">
+                <div class="sk-tl-time shimmer"></div>
+                <div class="sk-tl-dot shimmer"></div>
+                <div class="sk-tl-card sk-tl-card--short shimmer"></div>
+              </div>
+              <div class="sk-tl-item">
+                <div class="sk-tl-time shimmer"></div>
+                <div class="sk-tl-dot shimmer"></div>
+                <div class="sk-tl-card shimmer"></div>
+              </div>
+              <div class="sk-tl-item">
+                <div class="sk-tl-time shimmer"></div>
+                <div class="sk-tl-dot shimmer"></div>
+                <div class="sk-tl-card sk-tl-card--short shimmer"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="skeleton-demo-desc">
+          <div class="sk-feature-item">
+            <div class="sk-feature-icon">⚡</div>
+            <div>
+              <div class="sk-feature-title">즉각적인 레이아웃 렌더링</div>
+              <div class="sk-feature-text">데이터가 오기 전에도 화면 구조가 먼저 나타납니다. 빈 화면 대기 없이 앱처럼 느껴집니다.</div>
+            </div>
+          </div>
+          <div class="sk-feature-item">
+            <div class="sk-feature-icon">✨</div>
+            <div>
+              <div class="sk-feature-title">Shimmer 애니메이션</div>
+              <div class="sk-feature-text">로딩 중임을 자연스럽게 표현하는 반짝이는 애니메이션으로 대기 피로를 줄입니다.</div>
+            </div>
+          </div>
+          <div class="sk-feature-item">
+            <div class="sk-feature-icon">📱</div>
+            <div>
+              <div class="sk-feature-title">느린 네트워크에서도 부드럽게</div>
+              <div class="sk-feature-text">3G 환경에서도 빈 화면 대신 스켈레톤이 표시되어 이탈률을 낮춥니다.</div>
+            </div>
+          </div>
+        </div>
 
       </div>
     </div>
@@ -952,23 +888,23 @@
           <div class="ba-panel-body">
             <div class="ba-item">
               <div class="ba-icon ba-icon--bad">✕</div>
-              <span class="ba-text--bad">구글 맵 현재 교통 기준으로 일정 수락 — 당일 정체는 예측 불가</span>
+              <span class="ba-text--bad">구글 캘린더, 엑셀, 메모앱을 왔다갔다하며 일정 파악</span>
             </div>
             <div class="ba-item">
               <div class="ba-icon ba-icon--bad">✕</div>
-              <span class="ba-text--bad">이동 시간 빗나가 오후 강의 지각 — 쌓아온 신뢰 한 번에 손상</span>
+              <span class="ba-text--bad">이동 시간을 직접 계산하다 오후 강의에 지각 위기</span>
             </div>
             <div class="ba-item">
               <div class="ba-icon ba-icon--bad">✕</div>
-              <span class="ba-text--bad">통장 내역과 강의 목록 수기 대조 — 매달 반나절이 사라짐</span>
+              <span class="ba-text--bad">미입금 여부를 일일이 통장 내역과 대조해서 확인</span>
             </div>
             <div class="ba-item">
               <div class="ba-icon ba-icon--bad">✕</div>
-              <span class="ba-text--bad">미입금 건, 몇 달 뒤에야 발견 — 뒤늦게 청구하기도 민망</span>
+              <span class="ba-text--bad">강의 후 지친 몸으로 결과보고서를 처음부터 타이핑</span>
             </div>
             <div class="ba-item">
               <div class="ba-icon ba-icon--bad">✕</div>
-              <span class="ba-text--bad">일정·정산·연락처가 앱 3개에 분산 — 매번 찾아다니는 정보</span>
+              <span class="ba-text--bad">담당자 연락처를 카카오톡 검색으로 뒤져가며 확인</span>
             </div>
           </div>
         </div>
@@ -985,23 +921,23 @@
           <div class="ba-panel-body">
             <div class="ba-item">
               <div class="ba-icon ba-icon--good">✓</div>
-              <span class="ba-text--good">강의 시간대 예측 교통 기반 — 최적 출발 시간 자동 제안</span>
+              <span class="ba-text--good">오늘의 강의·이동·정산 현황을 앱 하나로 한눈에 파악</span>
             </div>
             <div class="ba-item">
               <div class="ba-icon ba-icon--good">✓</div>
-              <span class="ba-text--good">이동·버퍼·준비 시간 합산해 충돌 감지 → 즉시 경고로 지각 방지</span>
+              <span class="ba-text--good">버퍼타임 자동 계산으로 일정 충돌 걱정 없이 이동</span>
             </div>
             <div class="ba-item">
               <div class="ba-icon ba-icon--good">✓</div>
-              <span class="ba-text--good">입금 완료·대기·연체 상태를 대시보드 한 화면에서 파악</span>
+              <span class="ba-text--good">미입금 알림으로 정산 누락 없이 수익 100% 수령</span>
             </div>
             <div class="ba-item">
               <div class="ba-icon ba-icon--good">✓</div>
-              <span class="ba-text--good">정산 누락 없이 — 강의 수익을 빠짐없이 확인하고 관리</span>
+              <span class="ba-text--good">강의 종료 후 버튼 하나로 결과보고서 초안 완성</span>
             </div>
             <div class="ba-item">
               <div class="ba-icon ba-icon--good">✓</div>
-              <span class="ba-text--good">강의·이동·정산·담당자 정보를 앱 하나로 통합 관리</span>
+              <span class="ba-text--good">강의처별 담당자·연락처·이전 강의 이력 즉시 조회</span>
             </div>
           </div>
         </div>
@@ -1080,6 +1016,79 @@
 
 
   <!-- ══════════════════════════════════════
+       SPECIAL FEATURES
+  ══════════════════════════════════════ -->
+  <section class="special-features section" id="features-special">
+    <div class="container">
+      <div class="section-label">숨겨진 강점</div>
+      <h2 class="section-heading">다른 앱에는 없는<br /><em>강비서만의 기술</em></h2>
+      <p class="section-subheading">
+        사용자 경험을 위해 깊이 고민한 두 가지 기술적 특징입니다.
+      </p>
+
+      <div class="sf-grid">
+
+        <div class="sf-card">
+          <div class="sf-card-icon-wrap sf-card-icon-wrap--kakao">
+            <span class="sf-card-icon">💬</span>
+          </div>
+          <h3 class="sf-card-title">카카오톡 인앱 브라우저<br />자동 리디렉트</h3>
+          <p class="sf-card-desc">
+            카카오톡에서 강비서 링크를 열면 자동으로 외부 브라우저(Chrome/Safari)로 이동합니다.
+            인앱 브라우저의 로그인 제한과 기능 오작동 문제를 원천적으로 차단합니다.
+          </p>
+          <div class="sf-code-block">
+            <div class="sf-code-header">
+              <span class="sf-code-dot"></span>
+              <span class="sf-code-dot"></span>
+              <span class="sf-code-dot"></span>
+              <span class="sf-code-title">index.html — KakaoTalk 감지 로직</span>
+            </div>
+            <pre class="sf-code-body"><code>if (userAgent.includes('kakaotalk')) {
+  location.href =
+    'kakaotalk://web/openExternal'
+    + '?url=' + encodeURIComponent(url);
+}</code></pre>
+          </div>
+          <div class="sf-tag-list">
+            <span class="sf-tag">카카오톡 UX</span>
+            <span class="sf-tag">자동 리디렉트</span>
+            <span class="sf-tag">로그인 안정성</span>
+          </div>
+        </div>
+
+        <div class="sf-card">
+          <div class="sf-card-icon-wrap sf-card-icon-wrap--offline">
+            <span class="sf-card-icon">✈️</span>
+          </div>
+          <h3 class="sf-card-title">오프라인 캐싱<br />지하철에서도 사용 가능</h3>
+          <p class="sf-card-desc">
+            Service Worker 기반 오프라인 캐싱으로, 인터넷이 끊겨도 오늘의 강의 일정과 담당자 연락처를 확인할 수 있습니다.
+            지하철이나 지하 강의실에서도 걱정 없습니다.
+          </p>
+          <div class="sf-offline-demo">
+            <div class="sf-offline-status sf-offline-status--on">
+              <span class="sf-offline-dot sf-offline-dot--on"></span>
+              온라인 — 실시간 데이터 동기화 중
+            </div>
+            <div class="sf-offline-status sf-offline-status--off">
+              <span class="sf-offline-dot sf-offline-dot--off"></span>
+              오프라인 — 캐시된 데이터로 정상 표시
+            </div>
+          </div>
+          <div class="sf-tag-list">
+            <span class="sf-tag">Service Worker</span>
+            <span class="sf-tag">오프라인 지원</span>
+            <span class="sf-tag">PWA</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════════════
        FINAL CTA
   ══════════════════════════════════════ -->
   <section class="final-cta section--lg" id="cta">
@@ -1088,10 +1097,9 @@
         지금 바로 시작해 보세요.<br />
         첫 1개월은 무료입니다.
       </h2>
-      <p class="section-subheading" style="margin-bottom:4px;">
-        카드 등록 없이 바로 시작할 수 있습니다.</p> 
-      <p class="section-subheading" style="margin-top:4px;">가입 후 30일간 모든 기능을 제한 없이 사용해 보세요.</p>
-      
+      <p class="section-subheading">
+        카드 등록 없이 바로 시작할 수 있습니다. 가입 후 30일간 모든 기능을 제한 없이 사용해 보세요.
+      </p>
 
       <a href="login.html" class="btn btn--hero-primary btn--lg">
         지금 무료 체험 시작하기 →
