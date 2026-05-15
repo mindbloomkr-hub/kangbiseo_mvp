@@ -360,6 +360,7 @@ function _offsetDate(dateStr, days) {
 }
 
 // Kakao Local API: 주소 → { x(lng), y(lat) }
+// cache: 'no-store' — 브라우저 HTTP 캐시가 좌표를 오래된 값으로 반환하는 것을 방지
 export async function _geocode(addr) {
   if (!addr?.trim()) return null;
   const key = addr.trim();
@@ -367,7 +368,7 @@ export async function _geocode(addr) {
   try {
     const r = await fetch(
       `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(key)}`,
-      { headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` } }
+      { headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` }, cache: 'no-store' }
     );
     const j   = await r.json();
     const doc = j.documents?.[0];
@@ -377,17 +378,28 @@ export async function _geocode(addr) {
   } catch { _geocodeCache.set(key, null); return null; }
 }
 
+// ISO 8601 → Kakao Future Directions API 출발 시각 형식 (YYYYMMDDHHMM)
+// "2026-05-15T07:20:00" → "202605150720"
+function _toFutureTime(iso) {
+  const [d, t] = iso.split('T');
+  const [hh, mm] = (t || '').split(':');
+  return `${d.replace(/-/g, '')}${hh || '00'}${mm || '00'}`;
+}
+
 // Kakao Navi API: 두 장소 간 이동 소요 시간(분), 실패 시 null
-// originTime:  ISO 8601 출발 시각 — "2026-05-06T09:30:00" (departure-based)
-// arrivalTime: ISO 8601 도착 목표 시각 — "2026-05-06T08:10:00" (arrival-based predictive routing)
+// originTime:  ISO 8601 출발 시각 — "2026-05-06T09:30:00" → Future Directions API 사용
+// arrivalTime: ISO 8601 도착 목표 시각 — "2026-05-06T08:10:00" → 일반 Directions API 사용
 // arrivalTime가 있으면 arrival_time 파라미터를 사용하고, originTime보다 우선 적용된다.
 export async function fetchTravelMin(placeA, placeB, originTime = null, arrivalTime = null) {
   const a = placeA?.trim() || '';
   const b = placeB?.trim() || '';
   if (!a || !b || a === b) return 0;
   if (a === 'Online' || b === 'Online') return 0;
+  // Kakao는 ISO 8601을 엄격하게 검증 — 날짜 구분자가 점(.)이면 파라미터를 무시함
+  const safeOrigin  = originTime  ? originTime.replace(/\./g, '-')  : null;
+  const safeArrival = arrivalTime ? arrivalTime.replace(/\./g, '-') : null;
   // 시각 포함 시 방향 · 시각 모두 캐시 키에 포함 (대칭 키 사용 불가)
-  const timeKey = arrivalTime ? `ARR:${arrivalTime}` : (originTime ? `DEP:${originTime}` : '');
+  const timeKey = safeArrival ? `ARR:${safeArrival}` : (safeOrigin ? `DEP:${safeOrigin}` : '');
   const cacheKey = timeKey
     ? `${a}|||${b}|||${timeKey}`
     : (a < b ? `${a}|||${b}` : `${b}|||${a}`);
@@ -395,17 +407,45 @@ export async function fetchTravelMin(placeA, placeB, originTime = null, arrivalT
   try {
     const [orig, dest] = await Promise.all([_geocode(a), _geocode(b)]);
     if (!orig || !dest) { _travelCache.set(cacheKey, null); return null; }
-    let url = `https://apis-navi.kakaomobility.com/v1/directions?origin=${orig.x},${orig.y}&destination=${dest.x},${dest.y}`;
-    if (arrivalTime)      url += `&priority=TIME&arrival_time=${encodeURIComponent(arrivalTime)}`;
-    else if (originTime)  url += `&priority=TIME&origin_time=${encodeURIComponent(originTime)}`;
-    const r = await fetch(url, { headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` } });
-    const j    = await r.json();
-    const secs = j.routes?.[0]?.summary?.duration;
-    const val  = secs != null ? Math.ceil(secs / 60) : null;
+
+    // 출발 시각 지정 → Future Directions API (/v1/future/directions, YYYYMMDDHHMM 형식)
+    // arrival_time 또는 시각 없음 → 일반 Directions API (/v1/directions)
+    const coords = `origin=${orig.x},${orig.y}&destination=${dest.x},${dest.y}`;
+    const url = safeOrigin
+      ? `https://apis-navi.kakaomobility.com/v1/future/directions?${coords}&departure_time=${_toFutureTime(safeOrigin)}`
+      : safeArrival
+        ? `https://apis-navi.kakaomobility.com/v1/directions?${coords}&priority=TIME&arrival_time=${safeArrival}`
+        : `https://apis-navi.kakaomobility.com/v1/directions?${coords}`;
+
+    // cache: 'no-store' — 브라우저 HTTP 캐시가 이전 결과를 반환하는 것을 방지
+    const _call = () => fetch(url, { headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` }, cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { const s = j.routes?.[0]?.summary?.duration; return s != null ? Math.ceil(s / 60) : null; });
+
+    let val = await _call();
+
+    // 오전 출발인데 야간 조회 결과가 40분 미만 → departure_time 무시 의심, 재시도 1회
+    if (safeOrigin && val != null) {
+      const depHour = parseInt((safeOrigin.split('T')[1] || '12').split(':')[0], 10);
+      if (depHour < 10 && new Date().getHours() >= 20 && val < 40) {
+        console.warn(
+          '[강비서] ⚠️ departure_time 예측 의심 — 오전 %d시 출발이지만 %d분 결과 (현재 %d시). ' +
+          '좌표 origin(%s,%s) → dest(%s,%s). 캐시 삭제 후 재시도.',
+          depHour, val, new Date().getHours(), orig.x, orig.y, dest.x, dest.y
+        );
+        _travelCache.delete(cacheKey);
+        try { val = (await _call()) ?? val; } catch {}
+        console.log('[강비서] departure_time 재시도 결과: %d분', val);
+      }
+    }
+
     _travelCache.set(cacheKey, val);
     return val;
   } catch { _travelCache.set(cacheKey, null); return null; }
 }
+
+// 캐시 강제 초기화 (페이지 초기화 또는 날짜 변경 시 호출)
+export function clearTravelCache() { _travelCache.clear(); }
 
 // Firestore 형식(timeStart/timeEnd) 또는 정규화 형식(startTime/endTime) 통일
 function _normLec(l) {

@@ -2,7 +2,7 @@
 import { subscribeLectures, authGuard } from '../api.js';
 import { subscribeTodos, addTodo, clearDoneTodos, postponeAllTodayTodos } from '../services/todoService.js';
 import { renderTodoList, bindTodoEvents } from '../components/todoComponent.js';
-import { DAY_KO, escapeHtml, getTodayString, fetchTravelMin, hexToRgba, timeToMin, minToTime, formatDateString, calcPaymentDate } from '../utils.js';
+import { DAY_KO, escapeHtml, getTodayString, fetchTravelMin, clearTravelCache, hexToRgba, timeToMin, minToTime, formatDateString, calcPaymentDate } from '../utils.js';
 import { initLectureModal, openModal, getTopicTags } from '../components/lectureModal.js';
 
 /* ════════════════════════════════════════
@@ -50,6 +50,19 @@ function _sliceLectureForDay(lec, dayStr) {
 const _ts = lec => (lec._sliceStart != null ? lec._sliceStart : (lec.startTime != null ? lec.startTime : (lec.timeStart != null ? lec.timeStart : '')));
 const _te = lec => (lec._sliceEnd   != null ? lec._sliceEnd   : (lec.endTime   != null ? lec.endTime   : (lec.timeEnd   != null ? lec.timeEnd   : '')));
 const _td = lec => (lec._sliceDate  != null ? lec._sliceDate  : (lec.date      != null ? lec.date      : ''));
+
+/* ISO 8601 출발 시각 문자열 생성
+   - 날짜 구분자를 점(.)→하이픈(-) 정규화 (Kakao 엄격 파싱 대응)
+   - HH:MM 형식 시간을 받아 HH:MM:SS로 변환
+   - 시각이 1440분(24:00) 이상이면 다음 날 00:00으로 진급 */
+function _buildDepartureISO(dateStr, timeStr) {
+  const date = (dateStr || '').replace(/\./g, '-');
+  const tMin = timeToMin(timeStr || '00:00');
+  if (tMin < 1440) return `${date}T${minToTime(tMin)}:00`;
+  const [y, mo, d] = date.split('-').map(Number);
+  const dt = new Date(y, mo - 1, d + 1);
+  return `${formatDateString(dt)}T00:00:00`;
+}
 
 /* ════════════════════════════════════════
    수수료 읽기 헬퍼 — feeTotal 우선, fee 폴백
@@ -405,23 +418,25 @@ async function renderTimelineInto(containerId, lectures, showNowBar) {
   const firstLec = lectures[0];
   const lastLec  = lectures[lectures.length - 1];
 
-  // Fetch all travel times using arrival_time predictive routing:
-  // Target Arrival = lecture start - setup - buffer (time we must be at the venue)
+  // Fetch all travel times using departure_time predictive routing (lecture date, not query time)
   const firstSetup  = Number(firstLec.setupTime != null ? firstLec.setupTime : (sched.setupTime != null ? sched.setupTime : 20));
   const lastWrapup  = Number(lastLec.wrapupTime != null ? lastLec.wrapupTime : (sched.wrapupTime != null ? sched.wrapupTime : 15));
 
+  // departure_time = endTime of previous lecture (exact predictive slot, lecture date)
   const interLecPromises = lectures.slice(0, -1).map((lec, i) => {
-    const next    = lectures[i + 1];
-    const setup2  = Number(next.setupTime != null ? next.setupTime : (sched.setupTime != null ? sched.setupTime : 20));
-    const targetArrivalMin = timeToMin(_ts(next)) - setup2 - bufferTime;
-    const arrivalTimeISO   = `${_td(next)}T${minToTime(targetArrivalMin)}:00`;
-    return fetchTravelMin(lec.place, next.place, null, arrivalTimeISO);
+    const next         = lectures[i + 1];
+    const departureISO = _buildDepartureISO(_td(lec), _te(lec));
+    return fetchTravelMin(lec.place, next.place, departureISO, null);
   });
 
-  const firstTargetArrivalMin = timeToMin(_ts(firstLec)) - firstSetup - bufferTime;
-  const firstArrivalTimeISO   = `${_td(firstLec)}T${minToTime(firstTargetArrivalMin)}:00`;
+  // Home → first: departure estimate = startTime − setup − buffer on the lecture's actual date
+  const roughDepartureMin  = Math.floor((timeToMin(_ts(firstLec)) - firstSetup - bufferTime) / 10) * 10;
+  const firstDepartureISO  = _buildDepartureISO(_td(firstLec), minToTime(roughDepartureMin));
+  // Return: departure = endTime of last lecture + wrapup, on the lecture's actual date
+  const returnDepartureMin = timeToMin(_te(lastLec)) + lastWrapup;
+  const returnDepartureISO = _buildDepartureISO(_td(lastLec), minToTime(returnDepartureMin));
   const homePromises = hasOrigin
-    ? [fetchTravelMin(originAddr, firstLec.place, null, firstArrivalTimeISO), fetchTravelMin(lastLec.place, originAddr)]
+    ? [fetchTravelMin(originAddr, firstLec.place, firstDepartureISO, null), fetchTravelMin(lastLec.place, originAddr, returnDepartureISO, null)]
     : [Promise.resolve(null), Promise.resolve(null)];
 
   const [travelMins, [travelToFirst, travelToHome]] = await Promise.all([
@@ -815,6 +830,7 @@ _renderSidebarTodos();
 ════════════════════════════════════════ */
 authGuard(async user => {
   currentUser = user;
+  clearTravelCache(); // 이전 세션에서 현재 시각 기준으로 캐싱된 phantom 결과 제거
   await initLectureModal(() => ({ allLectures, currentUser }));
   renderGreeting();
   initLectures(user.uid);
