@@ -1,5 +1,5 @@
 // js/pages/home.js — 홈 대시보드 (Firestore 실시간 연동)
-import { subscribeLectures, authGuard } from '../api.js';
+import { subscribeLectures, authGuard, syncUserProfile } from '../api.js';
 import { subscribeTodos, addTodo, clearDoneTodos, postponeAllTodayTodos } from '../services/todoService.js';
 import { renderTodoList, bindTodoEvents } from '../components/todoComponent.js';
 import { DAY_KO, escapeHtml, fmt, calcFee, getTodayString, fetchTravelMin, clearTravelCache, hexToRgba, timeToMin, minToTime, formatDateString, calcPaymentStatus, calculateSettlementStats } from '../utils.js';
@@ -1287,6 +1287,82 @@ renderWeekly();
 _renderSidebarTodos();
 
 /* ════════════════════════════════════════
+   백그라운드 스케줄러 설정 Firestore → localStorage 동기화
+   - 인증 후 비동기 실행, 실패해도 페이지에 영향 없음
+   - localStorage가 비어 있거나(새 기기) Firestore 값이 다를 때만 업데이트 후 재렌더
+════════════════════════════════════════ */
+async function _syncSchedulerFromFirestore(uid) {
+  try {
+    const profile = await syncUserProfile(uid);
+    if (!profile) return;
+
+    const raw    = localStorage.getItem('kangbiseo_device');
+    const device = raw ? JSON.parse(raw) : {};
+    const sched  = device.scheduler || {};
+    let changed  = false;
+
+    // addresses (home / office / other)
+    if (profile.addresses != null) {
+      const local = sched.addresses || {};
+      const fs    = profile.addresses;
+      if ((fs.home   || '') !== (local.home   || '')
+       || (fs.office || '') !== (local.office || '')
+       || (fs.other  || '') !== (local.other  || '')) {
+        sched.addresses = { home: fs.home || '', office: fs.office || '', other: fs.other || '' };
+        changed = true;
+      }
+    } else if (profile.originAddress && !(sched.addresses?.home)) {
+      // 구버전 단일 originAddress 필드 → addresses.home 마이그레이션
+      sched.addresses = { home: profile.originAddress, office: '', other: '' };
+      changed = true;
+    }
+
+    // defaultOriginType
+    if (profile.defaultOriginType != null
+        && profile.defaultOriginType !== (sched.defaultOriginType || 'home')) {
+      sched.defaultOriginType = profile.defaultOriginType;
+      changed = true;
+    }
+
+    // bufferTime (custom 여부 포함 비교)
+    if (profile.bufferTime != null) {
+      const fsIsCustom = !!profile.bufferIsCustom;
+      const fsBuffer   = Number(profile.bufferTime);
+      const lsIsCustom = sched.bufferTime === 'custom';
+      const lsBuffer   = lsIsCustom
+        ? (Number(sched.bufferCustom) || 45)
+        : (Number(sched.bufferTime)   || 30);
+      if (fsIsCustom !== lsIsCustom || fsBuffer !== lsBuffer) {
+        if (fsIsCustom) { sched.bufferTime = 'custom'; sched.bufferCustom = fsBuffer; }
+        else            { sched.bufferTime = fsBuffer; }
+        changed = true;
+      }
+    }
+
+    // setupTime
+    if (profile.setupTime != null
+        && Number(profile.setupTime) !== (sched.setupTime ?? 20)) {
+      sched.setupTime = Number(profile.setupTime);
+      changed = true;
+    }
+
+    // wrapupTime
+    if (profile.wrapupTime != null
+        && Number(profile.wrapupTime) !== (sched.wrapupTime ?? 15)) {
+      sched.wrapupTime = Number(profile.wrapupTime);
+      changed = true;
+    }
+
+    if (!changed) return;
+
+    device.scheduler = sched;
+    localStorage.setItem('kangbiseo_device', JSON.stringify(device));
+    renderTimeline();
+    renderTomorrowTimeline();
+  } catch { /* silent — 백그라운드 동기화 오류는 무시 */ }
+}
+
+/* ════════════════════════════════════════
    인증 상태 감지 — 권한 가드 + 구독 시작
 ════════════════════════════════════════ */
 authGuard(async user => {
@@ -1296,6 +1372,7 @@ authGuard(async user => {
   renderGreeting();
   initLectures(user.uid);
   initTodos(user.uid);
+  _syncSchedulerFromFirestore(user.uid); // 백그라운드 — await 없이 fire-and-forget
 }, {
   withModal: true,
   cleanupFn: () => { unsubscribeTodos?.(); unsubscribeLectures?.(); },
