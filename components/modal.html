@@ -11,9 +11,9 @@
           <span class="modal-meta-item">📅 <span id="modal-date-meta"></span></span>
           <span class="modal-meta-item">🏢 <span id="modal-client-meta"></span></span>
         </div>
-        <p id="modal-form-subtitle" style="display:none;font-size:var(--font-size-sm);color:var(--color-text-muted);margin-top:4px;"></p>
+        <p class="modal-form-subtitle" id="modal-form-subtitle" style="display:none;"></p>
       </div>
-      <button class="modal-close" id="modal-close-btn" aria-label="닫기">✕</button>
+      <button class="btn-close" id="modal-close-btn" aria-label="닫기">✕</button>
     </div>
 
     <div class="modal-body">
@@ -164,8 +164,10 @@
                 <div class="add-form-field"><label class="add-form-label" for="af-time-end">종료 시간 <span class="required">*</span></label><select class="add-form-input" id="af-time-end" required></select></div>
                 <div class="add-form-field"><label class="add-form-label">총 강의 시간</label><input class="add-form-input add-form-input--readonly" type="text" id="af-duration-computed" readonly placeholder="자동 계산" /></div>
               </div>
-              <div class="add-form-field" style="margin-top:var(--space-3)">
+              <div class="add-form-grid add-form-grid--title" style="margin-top:var(--space-3)">
                 <div class="add-form-field" style="min-width: 0;"><label class="add-form-label" for="af-title">강의명 <span class="required">*</span></label><input class="add-form-input" type="text" id="af-title" placeholder="예) AI 비즈니스 활용 특강" required style="width: 100%; box-sizing: border-box;" /></div>
+                <div class="add-form-field"><label class="add-form-label" for="af-session-current">현재 회차</label><input class="add-form-input" type="number" id="af-session-current" placeholder="예) 1" min="1" /></div>
+                <div class="add-form-field"><label class="add-form-label" for="af-session-total">총 회차</label><input class="add-form-input" type="number" id="af-session-total" placeholder="예) 4" min="1" /></div>
               </div>
               <!--
               <div style="display: grid !important; grid-template-columns: 3fr 1fr 1fr !important; gap: var(--space-4) !important; margin-top: var(--space-3) !important; width: 100%;">
@@ -191,8 +193,6 @@
                 <div class="add-form-field"><label class="add-form-label" for="af-fee">(당 회차) 강사료 (만원)</label><input class="add-form-input" type="number" id="af-fee" placeholder="예) 50" min="0" required /></div>
               </div>
               <div class="add-form-grid add-form-grid--3" style="margin-top:var(--space-2)">
-                <div class="add-form-field"><label class="add-form-label" for="af-session-current">현재 회차</label><input class="add-form-input" type="number" id="af-session-current" placeholder="예) 1" min="1" /></div>
-                <div class="add-form-field"><label class="add-form-label" for="af-session-total">총 회차</label><input class="add-form-input" type="number" id="af-session-total" placeholder="예) 4" min="1" /></div>
                 <div class="add-form-field" id="af-fee-total-wrap" style="display:none"><label class="add-form-label">총 강사료 (자동계산)</label><input class="add-form-input add-form-input--readonly" type="text" id="af-fee-total" readonly placeholder="자동 계산" /></div>
               </div>
               <div class="add-form-field" style="margin-top:var(--space-3)">
@@ -225,11 +225,29 @@
                 <div class="add-form-field"><label class="add-form-label" for="af-participants">수강 인원 (명)</label><input class="add-form-input" type="number" id="af-participants" placeholder="20" min="1" /></div>
                 <div class="add-form-field"><label class="add-form-label" for="af-group-info">그룹 구성</label><input class="add-form-input" type="text" id="af-group-info" placeholder="예) 5조 4명씩" /></div>
               </div>              
-              <div class="add-form-field" style="margin-top:var(--space-3)"><label class="add-form-label" for="af-supplies">준비물</label><input class="add-form-input" type="text" id="af-supplies" placeholder="예) 마커, A4용지, 스티커" /></div>
+              <div class="add-form-field" style="margin-top:var(--space-3)">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                  <label class="add-form-label" style="margin-bottom:0">준비물</label>
+                  <span id="af-supplies-quick-save-wrap" style="display:none">
+                    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:#6b7280;font-weight:500">
+                      <input type="checkbox" id="af-supplies-save-default" style="width:12px;height:12px;cursor:pointer;accent-color:#2563c4" />
+                      이 주제 기본 준비물로 저장
+                    </label>
+                  </span>
+                </div>
+                <div id="af-supplies-presets-wrap" class="supplies-presets-wrap" style="display:none">
+                  <p class="supplies-presets-label">이 주제 기본 준비물 <span>(체크 해제 시 제외)</span></p>
+                  <div id="af-supplies-presets-list" class="supplies-preset-grid"></div>
+                </div>
+                <div class="supplies-chip-wrap" id="af-supplies-wrap">
+                  <div class="supplies-chip-list" id="af-supplies-chip-list"></div>
+                  <input class="supplies-chip-input" type="text" id="af-supplies-input" placeholder="추가 준비물 입력 후 Enter" maxlength="50" />
+                </div>
+              </div>
             </div>
             <div>
               <div class="add-form-section-title">담당자 정보</div>
-              <div class="add-form-grid add-form-grid--3">
+              <div class="add-form-grid add-form-grid--manager">
                 <div class="add-form-field"><label class="add-form-label" for="af-manager-name">이름</label><input class="add-form-input" type="text" id="af-manager-name" placeholder="예) 홍길동" /></div>
                 <div class="add-form-field"><label class="add-form-label" for="af-manager-phone">연락처</label><input class="add-form-input" type="tel" id="af-manager-phone" placeholder="예) 010-1234-5678" /></div>
                 <div class="add-form-field"><label class="add-form-label" for="af-manager-email">이메일</label><input class="add-form-input" type="email" id="af-manager-email" placeholder="예) hong@company.com" /></div>

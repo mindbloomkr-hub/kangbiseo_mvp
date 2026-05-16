@@ -2,8 +2,7 @@
 import { subscribeLectures, authGuard } from '../api.js';
 import { subscribeTodos, addTodo, clearDoneTodos, postponeAllTodayTodos } from '../services/todoService.js';
 import { renderTodoList, bindTodoEvents } from '../components/todoComponent.js';
-import { DAY_KO, escapeHtml, fmt, getTodayString, fetchTravelMin, clearTravelCache, hexToRgba, timeToMin, minToTime, formatDateString, calcPaymentStatus, calculateSettlementStats } from '../utils.js';
-import { REVENUE_UNIT } from '../constants.js';
+import { DAY_KO, escapeHtml, fmt, calcFee, getTodayString, fetchTravelMin, clearTravelCache, hexToRgba, timeToMin, minToTime, formatDateString, calcPaymentStatus, calculateSettlementStats } from '../utils.js';
 import { initLectureModal, openModal, getTopicTags } from '../components/lectureModal.js';
 
 /* ════════════════════════════════════════
@@ -94,12 +93,6 @@ function _buildDepartureISO(dateStr, timeStr) {
   return `${formatDateString(dt)}T00:00:00`;
 }
 
-/* ════════════════════════════════════════
-   수수료 읽기 헬퍼 — feeTotal 우선, fee 폴백
-════════════════════════════════════════ */
-function _getFee(lec) {
-  return Number(lec.feeTotal != null ? lec.feeTotal : (lec.fee != null ? lec.fee : 0));
-}
 
 /* ════════════════════════════════════════
    강의별 색상 — topicTag 색상 우선, 없으면 중립 회색
@@ -140,6 +133,57 @@ let tomorrowLectures     = [];
 let unsubscribeTodos     = null;
 let unsubscribeLectures  = null;
 const _tlVersions        = {};   // stale-render guard: tracks the latest render request per container
+const _suppliesState     = {};   // key: `${lecId}:${itemId}` → boolean (in-page checkbox state)
+const _suppliesLoaded    = new Set(); // lecture IDs already hydrated from localStorage this session
+
+function _loadSuppliesFromStorage(lecId) {
+  try {
+    const raw = localStorage.getItem(`gb_supplies_${lecId}`);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (!Array.isArray(saved)) return;
+    saved.forEach(({ id, isChecked }) => {
+      if (id != null) _suppliesState[`${lecId}:${id}`] = isChecked;
+    });
+  } catch {}
+}
+
+function _saveSuppliesState(lecId, card) {
+  try {
+    const cbs  = card.querySelectorAll('.supplies-check-cb');
+    const items = [...cbs].map(cb => ({ id: cb.dataset.itemId, isChecked: cb.checked }));
+    localStorage.setItem(`gb_supplies_${lecId}`, JSON.stringify(items));
+  } catch {}
+}
+
+function _cleanupSuppliesStorage(allLecs) {
+  try {
+    const todayStr = getTodayString();
+    const validIds = new Set(
+      allLecs.filter(l => (l.endDate || l.date || '') >= todayStr).map(l => l.id)
+    );
+    const toDelete = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith('gb_supplies_')) continue;
+      if (!validIds.has(key.slice('gb_supplies_'.length))) toDelete.push(key);
+    }
+    toDelete.forEach(k => localStorage.removeItem(k));
+  } catch {}
+}
+
+function _parseSupplies(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.map((s, i) => ({
+      id:        s.id != null ? s.id : (i + 1),
+      name:      typeof s === 'string' ? s : (s.name || ''),
+      isChecked: s.isChecked ?? false,
+    })).filter(s => s.name);
+  }
+  return String(raw).split(/[,;]+/).map(s => s.trim()).filter(Boolean)
+    .map((name, i) => ({ id: i + 1, name, isChecked: false }));
+}
 
 function getDisplayName() {
   return localStorage.getItem('userNickname')
@@ -192,7 +236,7 @@ function renderStatBar() {
   const container = document.getElementById('stat-bar');
   if (!container) return;
 
-  const totalFee = todayLectures.reduce((sum, l) => sum + _getFee(l), 0);
+  const totalFee = todayLectures.reduce((sum, l) => sum + calcFee(l), 0);
   const todayStr = getTodayString();
 
   const { overdueLecs, pendingLecs, overdueAmt, pendingAmt } = calculateSettlementStats(allLectures, todayStr);
@@ -246,7 +290,7 @@ function renderStatBar() {
 }
 
 /* ════════════════════════════════════════
-   4. 오늘의 강의 브리핑 카드
+   4. 오늘의 강의 브리핑 카드 (아코디언)
 ════════════════════════════════════════ */
 function renderBriefingCards() {
   const container = document.getElementById('briefing-list');
@@ -262,61 +306,206 @@ function renderBriefingCards() {
   }
 
   const todayStr = getTodayString();
-  container.innerHTML = todayLectures.map((l) => {
-    const color      = getLectureColor(l);
-    const mgrInitial = (l.managerName || '담').charAt(0);
-    const payStatus  = calcPaymentStatus(l, todayStr, allLectures);
-    const payChip    = (payStatus === 'paid' || payStatus === 'na')
-      ? ''
-      : payStatus === 'overdue'
-        ? `<span class="status-chip" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;margin-left:4px">연체</span>`
-        : `<span class="status-chip" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;margin-left:4px">입금 대기</span>`;
-    const startDate   = (l.startDate != null ? l.startDate : (l.date != null ? l.date : ''));
-    const endDate     = (l.endDate   != null ? l.endDate   : (l.date != null ? l.date : ''));
-    const isMultiDay  = startDate && endDate && startDate !== endDate;
-    const fmtDate     = d => { const [,m,day] = d.split('-'); const dow = ['일','월','화','수','목','금','토'][new Date(d).getDay()]; return `${m}/${day}(${dow})`; };
-    const dateDisplay = isMultiDay
-      ? `${fmtDate(startDate)} ${l.timeStart} ~ ${fmtDate(endDate)} ${l.timeEnd}`
-      : `${l.timeStart} – ${l.timeEnd}`;
-    const _tag      = l.topicTagId != null ? getTopicTags().find(t => t.id === l.topicTagId) : null;
-    let topicChip   = '';
+
+  container.innerHTML = todayLectures.map((l, idx) => {
+    const color     = getLectureColor(l);
+    const payStatus = calcPaymentStatus(l, todayStr, allLectures);
+
+    // Topic tag chip
+    const _tag = l.topicTagId != null ? getTopicTags().find(t => t.id === l.topicTagId) : null;
+    let topicChipHtml = '';
     if (_tag) {
       const _bg = (_tag.color != null ? _tag.color : '#7c3aed');
       const [_r, _g, _b] = [parseInt(_bg.slice(1,3),16), parseInt(_bg.slice(3,5),16), parseInt(_bg.slice(5,7),16)];
       const _fg = (0.299*_r + 0.587*_g + 0.114*_b) > 160 ? '#374151' : '#ffffff';
-      topicChip = `<span class="status-chip status-chip--topic" style="background:${_bg};color:${_fg};margin-left:auto;">${escapeHtml(_tag.name)}</span>`;
+      topicChipHtml = `<span class="briefing-topic-chip" style="background:${_bg};color:${_fg};">${escapeHtml(_tag.name)}</span>`;
     }
-    return `
-      <div class="lecture-briefing-card" data-id="${escapeHtml(l.id)}"
-           style="cursor:pointer;position:relative;border-left:4px solid ${color};">
-        <div class="briefing-body" style="padding-left:8px;">
-          <div class="briefing-row-top">
-            <span class="briefing-time">${dateDisplay}</span>
-            ${topicChip}
+
+    // Payment chip
+    let payChipHtml = '';
+    if (payStatus === 'overdue') {
+      payChipHtml = `<span class="briefing-pay-chip briefing-pay-chip--overdue">연체</span>`;
+    } else if (payStatus === 'pending') {
+      payChipHtml = `<span class="briefing-pay-chip briefing-pay-chip--pending">입금대기</span>`;
+    }
+
+    // Time display
+    const startDate  = (l.startDate != null ? l.startDate : (l.date != null ? l.date : ''));
+    const endDate    = (l.endDate   != null ? l.endDate   : (l.date != null ? l.date : ''));
+    const isMultiDay = startDate && endDate && startDate !== endDate;
+    const fmtDate    = d => { const [,m,day] = d.split('-'); const dow = ['일','월','화','수','목','금','토'][new Date(d).getDay()]; return `${m}/${day}(${dow})`; };
+    const timeRange  = isMultiDay
+      ? `${fmtDate(startDate)} ${l.timeStart || ''} ~ ${fmtDate(endDate)} ${l.timeEnd || ''}`
+      : `${l.timeStart || ''} – ${l.timeEnd || ''}`;
+
+    // Duration
+    let durationHtml = '';
+    if (l.timeStart && l.timeEnd) {
+      const dur = timeToMin(l.timeEnd) - timeToMin(l.timeStart);
+      if (dur > 0) {
+        const h = Math.floor(dur / 60), m = dur % 60;
+        durationHtml = h > 0 && m > 0 ? `${h}시간 ${m}분` : h > 0 ? `${h}시간` : `${m}분`;
+      }
+    }
+
+    // Session info
+    const sessionHtml = (l.sessionCurrent && l.sessionTotal)
+      ? `<span class="briefing-session">${l.sessionCurrent}/${l.sessionTotal}회차</span>`
+      : '';
+
+    // Fee
+    const fee    = calcFee(l);
+    const feeHtml = fee > 0 ? `${fmt(fee)}원` : '';
+
+    // Parking
+    const parkingHtml = l.parkingInfo
+      ? `<div class="briefing-loc-item">🚗 ${escapeHtml(l.parkingInfo)}</div>`
+      : '';
+      
+    // Time bar
+    const tbParts = [];
+    if (l.setupTime)  tbParts.push(`<span>🔧 준비&nbsp;${l.setupTime}분</span>`);
+    /*if (l.timeStart)  tbParts.push(`<span class="briefing-tb-main">▶&nbsp;${l.timeStart}</span>`);
+    if (l.timeEnd)    tbParts.push(`<span class="briefing-tb-main">■&nbsp;${l.timeEnd}</span>`);*/
+    if (durationHtml) tbParts.push(`<span>⏱ &nbsp;${durationHtml}</span>`);
+    if (l.wrapupTime) tbParts.push(`<span>📦 정리&nbsp;${l.wrapupTime}분</span>`);
+    tbParts.push(`<span>💸 &nbsp;${feeHtml}</span>`);
+    const timeBarHtml = tbParts.length > 0
+      ? `<div class="briefing-timebar">${tbParts.map(part => `<div class="briefing-tb-cell">${part}</div>`).join('')}</div>`
+      : '';    
+
+    // Class info
+    const ciItems = [];
+    if (l.participants) ciItems.push(`<div class="briefing-ci-item"><span>👥</span><span>${escapeHtml(String(l.participants))}명</span></div>`);
+    if (l.groupInfo)    ciItems.push(`<div class="briefing-ci-item"><span>👤</span><span>${escapeHtml(l.groupInfo)}</span></div>`);
+    const classInfoHtml = ciItems.length > 0
+      ? `<div class="briefing-class-info">${ciItems.join('')}</div>`
+      : '';
+
+    // Highlight boxes — supplies as interactive checklist
+    const _supItems = _parseSupplies(l.supplies);
+    if (!_suppliesLoaded.has(l.id)) {
+      _suppliesLoaded.add(l.id);
+      _loadSuppliesFromStorage(l.id);
+    }
+    let suppliesHtml = '';
+    if (_supItems.length > 0) {
+      const checkedCount = _supItems.filter(s => {
+        const key = `${l.id}:${s.id}`;
+        return _suppliesState[key] !== undefined ? _suppliesState[key] : s.isChecked;
+      }).length;
+      const supTotal = _supItems.length;
+      const pct      = supTotal > 0 ? Math.round(checkedCount / supTotal * 100) : 0;
+      suppliesHtml = `
+        <div class="briefing-highlight briefing-highlight--supplies">
+          <span class="briefing-hl-icon">⚠️</span>
+          <div style="flex:1;min-width:0">
+            <strong>준비물</strong>
+            <div class="supplies-progress">
+              <span class="supplies-progress-text">챙김: ${checkedCount}/${supTotal}</span>
+              <div class="supplies-progress-bar-wrap"><div class="supplies-progress-bar" style="width:${pct}%"></div></div>
+            </div>
+            <div class="supplies-checklist">
+              ${_supItems.map(item => {
+                const key       = `${l.id}:${item.id}`;
+                const isChecked = _suppliesState[key] !== undefined ? _suppliesState[key] : item.isChecked;
+                return `<label class="supplies-check-item${isChecked ? ' is-checked' : ''}">` +
+                  `<input type="checkbox" class="supplies-check-cb" ` +
+                  `data-lec-id="${escapeHtml(l.id)}" data-item-id="${escapeHtml(String(item.id))}" ${isChecked ? 'checked' : ''} />` +
+                  `<span>${escapeHtml(item.name)}</span></label>`;
+              }).join('')}
+            </div>
           </div>
-          <div class="briefing-title">${escapeHtml(l.title)}</div>
-          <div class="briefing-meta-grid">
-            <div class="briefing-meta-item"><span class="briefing-meta-icon">🏢</span><span class="briefing-meta-text">${escapeHtml(l.client)}</span></div>
-            <div class="briefing-meta-item"><span class="briefing-meta-icon">📍</span><span class="briefing-meta-text">${escapeHtml(l.place || '장소 미정')}</span></div>
-            <div class="briefing-meta-item"><span class="briefing-meta-icon">⏱</span><span class="briefing-meta-text">${l.timeStart} ~ ${l.timeEnd}</span></div>
-            <div class="briefing-meta-item"><span class="briefing-meta-icon">💰</span><span class="briefing-meta-text">${_getFee(l) > 0 ? `₩${(_getFee(l)*REVENUE_UNIT).toLocaleString()}` : '해당없음'}</span></div>
-          </div>
+        </div>`;
+    }
+    const memoHtml = l.memo
+      ? `<div class="briefing-highlight briefing-highlight--memo"><span class="briefing-hl-icon">📝</span><div><strong>메모</strong><p>${escapeHtml(l.memo)}</p></div></div>`
+      : '';
+
+    // Manager / footer
+    const mgrInitial = (l.managerName || '담').charAt(0);
+    const footerHtml = `
+      <div class="briefing-footer">
+        <div class="briefing-manager">
+          <div class="briefing-manager-avatar" style="background:${color};">${escapeHtml(mgrInitial)}</div>
+          <span>담당자 · ${escapeHtml(l.managerName || '미등록')}</span>
         </div>
-        <div class="briefing-footer">
-          <div class="briefing-manager">
-            <div class="briefing-manager-avatar" style="background:${color};">${escapeHtml(mgrInitial)}</div>
-            <span>담당자 · ${escapeHtml(l.managerName || '미등록')}</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          ${l.managerPhone ? `<button class="briefing-contact-btn" data-phone="${escapeHtml(l.managerPhone)}">📞 연락하기</button>` : ''}
+          <button class="briefing-detail-btn" data-id="${escapeHtml(l.id)}">📋 상세보기</button>
+        </div>
+      </div>`;
+
+    // Row 3: session/payment chips only — chevron is in location row
+    const row3Inner = [sessionHtml, payChipHtml].filter(Boolean).join('');
+    const row3Html  = row3Inner ? `<div class="briefing-header-row3">${row3Inner}</div>` : '';
+
+
+    return `
+      <div class="lecture-briefing-card${idx === 0 ? ' is-expanded' : ''}" data-id="${escapeHtml(l.id)}" style="border-left:4px solid ${color};">
+        <div class="briefing-card-header">
+          <div class="briefing-header-row1">
+            ${topicChipHtml}
+            <span class="briefing-time">${timeRange}</span>
+            <span class="briefing-client" style="margin-left:auto;">🏢 ${escapeHtml(l.client || '')}</span>
           </div>
-          ${l.managerPhone
-            ? `<button class="briefing-contact-btn" onclick="event.stopPropagation();window.location.href='tel:${l.managerPhone}'">📞 연락하기</button>`
-            : ''}
+          <div class="briefing-header-row2">
+            <span class="briefing-title">${escapeHtml(l.title)}</span>
+            <span class="briefing-topic">${escapeHtml(l.topic || '')}</span>
+          </div>
+          <div class="briefing-header-row-loc">
+            ${l.place    ? `<span class="briefing-loc-item">📍 ${escapeHtml(l.place)}</span>`    : ''}
+            ${l.classroom ? `<span class="briefing-loc-item">🚪 ${escapeHtml(l.classroom)}</span>` : ''}
+            <span class="briefing-chevron">▼</span>
+          </div>
+          ${row3Html}
+        </div>
+        <div class="briefing-card-body">
+          ${parkingHtml}
+          ${timeBarHtml}
+          ${classInfoHtml}
+          ${suppliesHtml}
+          ${memoHtml}
+          ${footerHtml}
         </div>
       </div>`;
   }).join('');
 
-  container.querySelectorAll('.lecture-briefing-card[data-id]').forEach(card => {
-    card.addEventListener('click', () => openModal(card.dataset.id));
-  });
+  if (!container.dataset.delegated) {
+    container.dataset.delegated = '1';
+    container.addEventListener('click', e => {
+      // Supplies checkbox toggle (must be first so it doesn't bubble to accordion)
+      if (e.target.classList.contains('supplies-check-cb')) {
+        const cb     = e.target;
+        const lecId  = cb.dataset.lecId;
+        const itemId = cb.dataset.itemId;
+        _suppliesState[`${lecId}:${itemId}`] = cb.checked;
+        cb.closest('.supplies-check-item')?.classList.toggle('is-checked', cb.checked);
+        const card = cb.closest('.lecture-briefing-card');
+        if (card) {
+          const allCbs      = card.querySelectorAll('.supplies-check-cb');
+          const checkedNow  = [...allCbs].filter(c => c.checked).length;
+          const totalNow    = allCbs.length;
+          const pctNow      = totalNow > 0 ? Math.round(checkedNow / totalNow * 100) : 0;
+          const progText    = card.querySelector('.supplies-progress-text');
+          const progBar     = card.querySelector('.supplies-progress-bar');
+          if (progText) progText.textContent = `챙김: ${checkedNow}/${totalNow}`;
+          if (progBar)  progBar.style.width  = `${pctNow}%`;
+          _saveSuppliesState(lecId, card);
+        }
+        return;
+      }
+
+      const phoneBtn = e.target.closest('.briefing-contact-btn[data-phone]');
+      if (phoneBtn) { window.location.href = `tel:${phoneBtn.dataset.phone}`; return; }
+
+      const detailBtn = e.target.closest('.briefing-detail-btn[data-id]');
+      if (detailBtn) { openModal(detailBtn.dataset.id); return; }
+
+      const header = e.target.closest('.briefing-card-header');
+      if (header) header.closest('.lecture-briefing-card')?.classList.toggle('is-expanded');
+    });
+  }
 }
 
 /* ════════════════════════════════════════
@@ -444,25 +633,47 @@ function _createTimelineCard(lec, isDone) {
 }
 
 /* ════════════════════════════════════════
-   현재 시간 바 — 선형 시간-비율 기반 위치
-   top% = (nowMin - tlStartMin) / (tlEndMin - tlStartMin) * 100
+   현재 시간 바 — DOM offsetTop 기반 위치 추적
+   각 행의 data-start-min / data-end-min 속성을 읽어
+   nowMin이 속한 행 내부의 로컬 비율로 픽셀 위치를 계산한다.
 ════════════════════════════════════════ */
-function _injectNowBar(container, nowMin, tlStartMin, tlEndMin) {
-  const totalDuration = tlEndMin - tlStartMin;
-  if (totalDuration <= 0) return;
+function _injectNowBar(container, nowMin) {
+  const rows = [...container.querySelectorAll('[data-start-min][data-end-min]')];
+  if (rows.length === 0) return;
 
   const now    = new Date();
   const nowStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
-  const clamped = Math.min(Math.max(nowMin, tlStartMin), tlEndMin);
-  const pct     = (clamped - tlStartMin) / totalDuration;
-
+  container.style.position = 'relative';
   const bar = document.createElement('div');
   bar.className    = 'tl-now-bar';
   bar.dataset.time = nowStr;
-  container.style.position = 'relative';
   container.appendChild(bar);
-  bar.style.top = `${(pct * 100).toFixed(2)}%`;
+
+  const firstRow = rows[0];
+  const lastRow  = rows[rows.length - 1];
+
+  if (nowMin <= Number(firstRow.dataset.startMin)) {
+    bar.style.top = `${firstRow.offsetTop}px`;
+    return;
+  }
+  if (nowMin >= Number(lastRow.dataset.endMin)) {
+    bar.style.top = `${lastRow.offsetTop + lastRow.offsetHeight}px`;
+    return;
+  }
+
+  for (const row of rows) {
+    const start = Number(row.dataset.startMin);
+    const end   = Number(row.dataset.endMin);
+    if (nowMin >= start && nowMin < end) {
+      const ratio     = start === end ? 0 : (nowMin - start) / (end - start);
+      const targetTop = row.offsetTop + row.offsetHeight * ratio;
+      bar.style.top   = `${Math.round(targetTop)}px`;
+      return;
+    }
+  }
+
+  bar.style.top = `${lastRow.offsetTop + lastRow.offsetHeight}px`;
 }
 
 async function renderTimelineInto(containerId, lectures, showNowBar, dateStr) {
@@ -575,7 +786,7 @@ if (hasOrigin && !suppressDeparture) {
         <div class="tl-time-col"><div class="tl-time">${depStr}</div></div>
         <div class="tl-track"><div class="tl-node tl-node--home"></div></div>
         <div class="tl-content">
-          <div class="tl-card tl-card--home-origin" data-dep-card="1">
+          <div class="tl-card tl-card--home-origin" data-dep-card="1" data-date="${_dStr}">
             <div class="dep-card-main">
               <div class="dep-card-info">
                 <div class="tl-card-title">${originEmoji} ${escapeHtml(originLabel)} 출발</div>
@@ -594,7 +805,7 @@ if (hasOrigin && !suppressDeparture) {
     const t2f = (travelToFirst != null ? travelToFirst : 0);
     const totalMargin = t2f + bufferTime + firstSetup;
     parts.push(`
-      <div class="tl-gap-row">
+      <div class="tl-gap-row" data-start-min="${departureMin}" data-end-min="${timeToMin(_ts(firstLec))}">
         <div class="tl-time-col"></div>
         <div class="tl-track tl-gap-track"></div>
         <div class="tl-content">
@@ -633,7 +844,7 @@ if (hasOrigin && !suppressDeparture) {
         : `이동 ${travelMin}분 · 도착 예정 ${arrivalStr}`;
 
       parts.push(`
-        <div class="tl-gap-row${isWarn ? ' tl-gap-row--warn' : ''}">
+        <div class="tl-gap-row${isWarn ? ' tl-gap-row--warn' : ''}" data-start-min="${timeToMin(_te(lec))}" data-end-min="${timeToMin(_ts(next))}">
           <div class="tl-time-col">
             <div class="tl-time" style="color:#9ca3af;">${depStr}</div>
           </div>
@@ -659,7 +870,7 @@ if (hasOrigin && !suppressDeparture) {
     const retStr   = minToTime(returnMin);
 
     parts.push(`
-      <div class="tl-gap-row">
+      <div class="tl-gap-row" data-start-min="${timeToMin(_te(lastLec))}" data-end-min="${returnMin}">
         <div class="tl-time-col">
           <div class="tl-time" style="color:#9ca3af;">${depStr}</div>
         </div>
@@ -691,36 +902,42 @@ if (hasOrigin && !suppressDeparture) {
 
   container.innerHTML = parts.join('');
 
-  // ── Departure card: edit toggle + inline chip selection ──
-  const depCard = container.querySelector('[data-dep-card]');
-  if (depCard) {
-    const chipGroup  = depCard.querySelector('.dep-chip-group--inline');
-    const refreshFn  = _getRefreshFn(containerId);
-    depCard.querySelector('.dep-edit-btn')?.addEventListener('click', () => {
-      chipGroup?.classList.toggle('dep-open');
-    });
-    chipGroup?.querySelectorAll('.dep-chip[data-type]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const type = btn.dataset.type;
+  // ── Event delegation (bound once per container) ──────────────────────────
+  if (!container.dataset.delegated) {
+    container.dataset.delegated = '1';
+    const refreshFn = _getRefreshFn(containerId);
+    container.addEventListener('click', e => {
+      // Departure card: toggle chip panel
+      const editBtn = e.target.closest('.dep-edit-btn');
+      if (editBtn) {
+        editBtn.closest('[data-dep-card]')
+          ?.querySelector('.dep-chip-group--inline')
+          ?.classList.toggle('dep-open');
+        return;
+      }
+
+      // Departure card: select origin type chip
+      const chip = e.target.closest('.dep-chip[data-type]');
+      if (chip) {
+        const type    = chip.dataset.type;
+        const depCard = chip.closest('[data-dep-card]');
+        const dateStr = depCard?.dataset.date || getTodayString();
         if (type === 'custom') {
-          chipGroup?.classList.remove('dep-open');
-          openCustomOriginModal(_dStr, refreshFn);
+          depCard?.querySelector('.dep-chip-group--inline')?.classList.remove('dep-open');
+          openCustomOriginModal(dateStr, refreshFn);
         } else {
-          _setDailyOrigin(_dStr, type, '');
+          _setDailyOrigin(dateStr, type, '');
           refreshFn();
         }
-      });
+        return;
+      }
+
+      // Lecture card: open modal
+      const lecCard = e.target.closest('.tl-card--lecture[data-id]');
+      if (lecCard) openModal(lecCard.dataset.id);
     });
   }
-
-  container.querySelectorAll('.tl-card--lecture[data-id]').forEach(card => {
-    card.addEventListener('click', () => openModal(card.dataset.id));
-  });
-  if (showNowBar) {
-    const tlStartMin = timeToMin(_ts(firstLec));
-    const tlEndMin   = timeToMin(_te(lastLec));
-    _injectNowBar(container, nowMin, tlStartMin, tlEndMin);
-  }
+  if (showNowBar) _injectNowBar(container, nowMin);
 }
 
 function _getTomorrowString() {
@@ -900,7 +1117,7 @@ function renderWeekly() {
   });
 
   const weekTotal    = Object.values(dateToLectures).flat().length;
-  const weekTotalFee = Object.values(dateToLectures).flat().reduce((s, l) => s + _getFee(l), 0);
+  const weekTotalFee = Object.values(dateToLectures).flat().reduce((s, l) => s + calcFee(l), 0);
   const daysWithLec  = Object.keys(dateToLectures).length;
 
   if (summaryEl) {
@@ -918,6 +1135,7 @@ function initLectures(uid) {
   if (unsubscribeLectures) unsubscribeLectures();
   unsubscribeLectures = subscribeLectures(uid, snapshot => {
     allLectures = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    _cleanupSuppliesStorage(allLectures);
 
     const todayStr    = getTodayString();
     const tomorrowObj = new Date(); tomorrowObj.setDate(tomorrowObj.getDate() + 1);

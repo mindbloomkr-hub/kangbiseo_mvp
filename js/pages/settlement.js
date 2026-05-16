@@ -1,10 +1,11 @@
 // js/pages/settlement.js — 정산 관리 페이지
 import { subscribeLectures, authGuard, db, getLectureCache, setLectureCache } from '../api.js';
 import {
-  calcPaymentDate, getTodayString, escapeHtml, formatDateKo,
+  calcPaymentDate, calcFee, fmt, resolvePaymentDeadline,
+  getTodayString, escapeHtml, formatDateKo,
   calculateSettlementStats, calcPaymentStatus,
 } from '../utils.js';
-import { REVENUE_UNIT, PROGRESS_CANCELLED } from '../constants.js';
+import { PROGRESS_CANCELLED } from '../constants.js';
 import { initLectureModal, openModal } from '../components/lectureModal.js';
 import {
   doc, updateDoc,
@@ -28,27 +29,6 @@ const _filters = {
   search:   '',
 };
 
-/* ════════════════════════════════════════
-   수수료 읽기 헬퍼 — feeTotal 우선, fee 폴백
-════════════════════════════════════════ */
-function _getFee(lec) {
-  return Number(lec.feeTotal != null ? lec.feeTotal : (lec.fee != null ? lec.fee : 0));
-}
-
-/* ════════════════════════════════════════
-   결제 상태 계산
-════════════════════════════════════════ */
-function _paymentDeadline(lec) {
-  if (lec.settlementCycle === 'after-completion' && lec.groupId) {
-    const lastDate = allLectures
-      .filter(l => l.groupId === lec.groupId)
-      .reduce((max, l) => { const d = (l.endDate != null ? l.endDate : (l.date != null ? l.date : '')); return d > max ? d : max; }, '');
-    const baseDate = lastDate || (lec.endDate != null ? lec.endDate : (lec.date != null ? lec.date : ''));
-    return baseDate ? calcPaymentDate(baseDate, 'after-completion', lastDate || null) : null;
-  }
-  const baseDate = (lec.endDate != null ? lec.endDate : (lec.date != null ? lec.date : ''));
-  return baseDate ? calcPaymentDate(baseDate, lec.settlementCycle || '', null) : null;
-}
 
 /* ════════════════════════════════════════
    D-day 계산
@@ -81,22 +61,22 @@ function _applyPreset(preset) {
   const y     = now.getFullYear();
   const m     = now.getMonth();
   const pad   = n => String(n).padStart(2, '0');
-  const fmt   = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const fmtD  = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 
   let from = '', to = '';
 
   if (preset === 'this-month') {
     from = `${y}-${pad(m+1)}-01`;
-    to   = fmt(new Date(y, m+1, 0));
+    to   = fmtD(new Date(y, m+1, 0));
   } else if (preset === 'last-month') {
     from = `${y}-${pad(m === 0 ? 12 : m)}-01`;
     const lm = m === 0 ? new Date(y-1, 12, 0) : new Date(y, m, 0);
-    to   = fmt(lm);
+    to   = fmtD(lm);
     if (m === 0) from = `${y-1}-12-01`;
   } else if (preset === 'quarter') {
     const qStart = Math.floor(m / 3) * 3;
     from = `${y}-${pad(qStart+1)}-01`;
-    to   = fmt(new Date(y, qStart+3, 0));
+    to   = fmtD(new Date(y, qStart+3, 0));
   } else {
     from = '';
     to   = '';
@@ -151,8 +131,6 @@ function renderStats() {
   const { totalAmt, totalCnt, paidAmt, pendingAmt, overdueAmt, paidCnt, pendingCnt, overdueCnt } =
     calculateSettlementStats(allLectures, today);
   console.log('[settlement] overdueCnt:', overdueCnt, 'pendingCnt:', pendingCnt);
-
-  const fmt = n => n > 0 ? `₩${(n * REVENUE_UNIT).toLocaleString()}` : '₩0';
 
   bar.innerHTML = `
     <div class="sl-stat-card">
@@ -248,18 +226,18 @@ function renderTable() {
     return;
   }
 
-  const totalFilteredFee = rows.reduce((s, l) => s + _getFee(l), 0);
-  const summaryFeeStr    = totalFilteredFee > 0 ? `₩${(totalFilteredFee * REVENUE_UNIT).toLocaleString()}` : '₩0';
+  const totalFilteredFee = rows.reduce((s, l) => s + calcFee(l), 0);
+  const summaryFeeStr    = fmt(totalFilteredFee);
 
   const start = _slPage * SL_PAGE;
   const page  = rows.slice(start, start + SL_PAGE);
 
   tbody.innerHTML = page.map(l => {
-    const fee                 = _getFee(l);
+    const fee                 = calcFee(l);
     const status              = calcPaymentStatus(l, today, allLectures);
-    const expectedPaymentDate = l.paymentDate || _paymentDeadline(l);
+    const expectedPaymentDate = resolvePaymentDeadline(l, allLectures);
     const dateStr             = l.date ? formatDateKo(l.date).main : '—';
-    const feeStr              = fee > 0 ? `₩${(fee * REVENUE_UNIT).toLocaleString()}` : '—';
+    const feeStr              = fee > 0 ? fmt(fee) : '—';
     const ddHtml              = _ddayHtml(expectedPaymentDate, today, status, fee);
 
     const statusBadge = status === 'paid'
@@ -335,9 +313,9 @@ function _generateInvoice(id) {
   const lec = allLectures.find(l => l.id === id);
   if (!lec) return;
 
-  const deadline = _paymentDeadline(lec) || '—';
-  const feeAmt   = _getFee(lec);
-  const fee      = feeAmt > 0 ? `₩${(feeAmt * REVENUE_UNIT).toLocaleString()}` : '—';
+  const deadline = resolvePaymentDeadline(lec, allLectures) || '—';
+  const feeAmt   = calcFee(lec);
+  const fee      = feeAmt > 0 ? fmt(feeAmt) : '—';
   const dateStr  = lec.date ? formatDateKo(lec.date).full : '—';
 
   const win = window.open('', '_blank', 'width=700,height=900');

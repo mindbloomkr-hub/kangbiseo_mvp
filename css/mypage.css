@@ -741,12 +741,24 @@
 /* 카테고리 영역 */
 .topic-add-row {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
   background: var(--color-bg-subtle);
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
+}
+
+.topic-input-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.topic-color-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .topic-add-input {
@@ -769,8 +781,28 @@
 
 .color-preset-group {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
+}
+
+.color-show-more-btn {
+  align-self: flex-start;
+  padding: 2px var(--space-3);
+  height: 28px;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-family: var(--font-family-base);
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.color-show-more-btn:hover {
+  border-color: var(--color-primary-500);
+  color: var(--color-primary-500);
 }
 
 .color-preset {
@@ -1071,7 +1103,7 @@
 /* ════════════════════════════════
    RESPONSIVE
 ════════════════════════════════ */
-@media (max-width: 768px) {
+@media (max-width: 1080px) {
   .mypage-layout {
     grid-template-columns: 1fr;
   }
@@ -1138,7 +1170,7 @@
     bottom: var(--space-6);
   }
 
-  .topic-add-row {
+  .topic-input-line {
     flex-wrap: wrap;
   }
 }

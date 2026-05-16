@@ -40,10 +40,7 @@
   flex-shrink: 0;
 }
 
-.sl-stat-icon--blue   { background: var(--color-primary-100); }
-.sl-stat-icon--green  { background: var(--color-success-100); }
-.sl-stat-icon--yellow { background: var(--color-warning-100); }
-.sl-stat-icon--red    { background: var(--color-danger-100); }
+/* icon background colors → common.css */
 
 .sl-stat-body { min-width: 0; }
 

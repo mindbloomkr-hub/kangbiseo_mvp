@@ -18,12 +18,12 @@
 <div class="ms-bd" id="ms-bd" role="dialog" aria-modal="true" aria-label="연속 강의 일괄 등록">
   <div class="ms-modal">
 
-    <div class="ms-head">
+    <div class="modal-header">
       <div>
-        <p class="ms-head-title">📅 연속 강의 일괄 등록</p>
-        <p class="ms-head-sub">반복 일정을 자동 생성하고 한 번에 저장하세요.</p>
+        <p class="modal-title">📅 연속 강의 일괄 등록</p>
+        <p class="modal-form-subtitle">반복 일정을 자동 생성하고 한 번에 저장하세요.</p>
       </div>
-      <button class="ms-x" id="ms-x" aria-label="닫기">✕</button>
+      <button class="btn-close" id="ms-x" aria-label="닫기">✕</button>
     </div>
 
     <div class="ms-body">
@@ -310,8 +310,15 @@
           </div>
           </div>
           <div class="ms-field ms-field--full"  style="margin-top:var(--space-4)">
-            <label class="ms-label" for="ms-supplies">준비물</label>
-            <textarea class="ms-textarea" id="ms-supplies" placeholder="필요한 준비물을 입력하세요" rows="2"></textarea>
+            <label class="ms-label">준비물</label>
+            <div id="ms-supplies-presets-wrap" class="supplies-presets-wrap" style="display:none">
+              <p class="supplies-presets-label">이 주제 기본 준비물 <span>(체크 해제 시 제외)</span></p>
+              <div id="ms-supplies-presets-list" class="supplies-preset-grid"></div>
+            </div>
+            <div class="supplies-chip-wrap" id="ms-supplies-wrap">
+              <div class="supplies-chip-list" id="ms-supplies-chip-list"></div>
+              <input class="supplies-chip-input" type="text" id="ms-supplies-input" placeholder="추가 준비물 입력 후 Enter" maxlength="50" />
+            </div>
           </div>
         </div>
       </div>

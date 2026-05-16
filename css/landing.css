@@ -1356,8 +1356,10 @@
 }
 
 @media (max-width: 768px) {
-  .hamburger-btn { display: flex; }
-  .header-nav    { display: none; }
+  .hamburger-btn           { display: none; }
+  .header-nav              { display: flex; }
+  .header-nav .btn--primary { display: none; }
+  .header-nav .btn--ghost  { display: inline-flex; }
 }
 
 /* ════════════════════════════════
@@ -1773,4 +1775,63 @@
 
 @media (max-width: 768px) {
   .sf-grid { grid-template-columns: 1fr; }
+}
+
+/* ════════════════════════════════
+   MOBILE: .feature-visual overflow fix
+════════════════════════════════ */
+@media (max-width: 767px) {
+  .feature-visual {
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  /* Reduce body padding so inner content doesn't overflow */
+  .feature-visual .feature-visual-body {
+    padding: var(--space-3);
+  }
+
+  .feature-visual .preview-panel-body {
+    padding: var(--space-3);
+  }
+
+  /* Shrink VS badge column and badge size */
+  .feature-visual .lm-rv-vs {
+    grid-template-columns: 1fr 24px 1fr;
+    gap: 4px;
+  }
+
+  .feature-visual .lm-rv-vs-badge {
+    width: 24px;
+    height: 24px;
+    font-size: 7px;
+  }
+
+  /* Allow wrapping inside conflict review cards */
+  .feature-visual .lm-rv-time {
+    font-size: 13px;
+    white-space: normal;
+  }
+
+  .feature-visual .lm-rv-lec-title,
+  .feature-visual .lm-rv-client,
+  .feature-visual .lm-rv-place {
+    white-space: normal;
+  }
+
+  .feature-visual .lm-rv-body {
+    padding: 12px;
+  }
+
+  /* Wrap footer buttons so they don't overflow narrow screens */
+  .feature-visual .lm-rv-foot {
+    padding: 10px 12px;
+    flex-wrap: wrap;
+  }
+
+  .feature-visual .lm-rv-btn {
+    font-size: 12px;
+    padding: 10px 6px;
+  }
 }

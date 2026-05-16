@@ -7,10 +7,11 @@ import {
 import {
   buildTimeOptions, initAllDateWithDay, checkScheduleConflict,
   formatDateKo, getTodayString, escapeHtml, timeToMin, formatDateString, calcPaymentDate, calcDuration,
-  resolveOriginAddr,
+  resolveOriginAddr, formatConflictWarning,
 } from '../utils.js';
+import { PROGRESS_SCHEDULED } from '../constants.js';
 import { openKakaoAddress } from '../services/kakaoAddressService.js';
-import { getTopicTags, registerMsBulkTagUpdate, refreshMsTagPicker, bindMsTagPickerEvents } from './lectureModal.js';
+import { getTopicTags, registerMsBulkTagUpdate, refreshMsTagPicker, bindMsTagPickerEvents, getTopicDefaultSupplies } from './lectureModal.js';
 import { addTodo } from '../services/todoService.js';
 import { renderTodoUI } from './todoComponent.js';
 
@@ -80,6 +81,30 @@ function _syncMsDuration() {
   if (el) el.value = (start && end) ? (calcDuration(start, end) || '—') : '';
 }
 
+
+function _renderMsChips() {
+  const list = document.getElementById('ms-supplies-chip-list');
+  if (!list) return;
+  list.innerHTML = _msSupplies.map(item =>
+    `<span class="supplies-chip" data-id="${item.id}">` +
+    `${escapeHtml(item.name)}` +
+    `<button type="button" class="supplies-chip-remove" data-id="${item.id}" aria-label="삭제">×</button>` +
+    `</span>`
+  ).join('');
+}
+
+function _renderMsPresets() {
+  const wrap = document.getElementById('ms-supplies-presets-wrap');
+  const list = document.getElementById('ms-supplies-presets-list');
+  if (!wrap || !list) return;
+  if (_msPresets.length === 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  list.innerHTML = _msPresets.map(item =>
+    `<label class="supplies-preset-item${item.included ? ' is-checked' : ''}" data-preset-id="${item.id}">` +
+    `<input type="checkbox" class="supplies-preset-cb" data-preset-id="${item.id}" ${item.included ? 'checked' : ''} />` +
+    `<span>${escapeHtml(item.name)}</span></label>`
+  ).join('');
+}
 
 /* ════════════════════════════════════════
    일정 생성 엔진
@@ -231,6 +256,8 @@ let _schedulerDefaults  = { setupTime: 0, wrapupTime: 0, bufferTime: 30, address
 let _msPendingTodos     = [];
 let _msRefreshPendingUI = null;
 let _feeLastEdited      = 'fee'; // 'fee' | 'fee-total'
+let _msSupplies         = []; // [{id, name, isChecked}]
+let _msPresets          = []; // [{id, name, included}]
 
 /* ════════════════════════════════════════
    공개 API
@@ -408,7 +435,8 @@ function _reset() {
   $('ms-buffer-time').value   = '';
   $('ms-participants').value  = '';
   $('ms-group-info').value    = '';
-  $('ms-supplies').value      = '';
+  _msSupplies = [];
+  _renderMsChips();
   $('ms-manager-name').value  = '';
   $('ms-manager-phone').value = '';
   $('ms-manager-email').value = '';
@@ -586,6 +614,27 @@ function _bindEvents() {
   $('ms-fee-total').addEventListener('input', () => _syncFee('fee-total'));
   $('ms-total').addEventListener('input',     () => _syncFee('total'));
 
+  // Supplies chip input
+  $('ms-supplies-wrap')?.addEventListener('click', e => {
+    const removeBtn = e.target.closest('.supplies-chip-remove');
+    if (removeBtn) {
+      const idStr  = removeBtn.dataset.id;
+      _msSupplies  = _msSupplies.filter(s => String(s.id) !== idStr);
+      _renderMsChips();
+      return;
+    }
+    $('ms-supplies-input')?.focus();
+  });
+  $('ms-supplies-input')?.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const name = e.target.value.trim();
+    if (!name) return;
+    _msSupplies.push({ id: Date.now(), name, isChecked: false });
+    _renderMsChips();
+    e.target.value = '';
+  });
+
   // Kakao address search
   $('ms-addr-search').addEventListener('click', () => openKakaoAddress('ms-place'));
 
@@ -612,6 +661,20 @@ function _bindEvents() {
     _msTagId = tagId;
     _sessions.forEach(s => { s.topicTagId = tagId; });
     if ($('ms-tbody')) _reRenderTableBody();
+    const defs = getTopicDefaultSupplies(tagId);
+    _msPresets = defs.map((d, i) => ({ id: i + 1, name: d.name, included: true }));
+    _renderMsPresets();
+  });
+
+  $('ms-supplies-presets-list')?.addEventListener('change', e => {
+    const cb = e.target.closest('.supplies-preset-cb');
+    if (!cb) return;
+    const presetId = Number(cb.dataset.presetId);
+    const preset = _msPresets.find(p => p.id === presetId);
+    if (preset) {
+      preset.included = cb.checked;
+      cb.closest('.supplies-preset-item')?.classList.toggle('is-checked', cb.checked);
+    }
   });
   bindMsTagPickerEvents();
 
@@ -966,6 +1029,11 @@ async function _handleSave() {
   const place = $('ms-place').value.trim();
   if (!place)  { window.showToast?.('강의장 주소를 입력하세요.', 'warn'); _restoreBtn(); return; }
 
+  const _msIncluded    = _msPresets.filter(p => p.included);
+  const _msMerged      = [
+    ..._msIncluded.map((p, i) => ({ id: i + 1, name: p.name, isChecked: false })),
+    ..._msSupplies.map((s, j) => ({ id: _msIncluded.length + j + 1, name: s.name, isChecked: false })),
+  ];
   const groupId        = `grp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const sessionTotal   = _sessions.length;
   const _psEl = $('ms-paid-status');
@@ -993,7 +1061,7 @@ async function _handleSave() {
     fee:              feePerSession,
     feeTotal:         feeTotalCalc,
     settlementCycle,
-    progressStatus:   $('ms-progress').value || 'scheduled',
+    progressStatus:   $('ms-progress').value || PROGRESS_SCHEDULED,
     topicTagId:       _msTagId,
     sessionTotal,
     isPaid,
@@ -1008,7 +1076,7 @@ async function _handleSave() {
     wrapupTime:       $('ms-wrapup-time').value.trim(),
     participants:     Number($('ms-participants').value) || 0,
     groupInfo:        $('ms-group-info').value.trim(),
-    supplies:         $('ms-supplies').value.trim(),
+    supplies:         _msMerged,
     managerName:      $('ms-manager-name').value.trim(),
     managerPhone:     $('ms-manager-phone').value.trim(),
     managerEmail:     $('ms-manager-email').value.trim(),
@@ -1075,19 +1143,8 @@ async function _handleSave() {
       return;
     }
     if (check.status === 'warning') {
-      if (check.msg === 'public_transit') {
-        window.showToast?.('대중교통 기반 이동 시간 계산은 현재 준비 중입니다.', 'info');
-      } else if (check.msg === 'early_departure') {
-        window.showToast?.(
-          `⚠️ 출발지 기준 이동(${check.travelMin}분${check.isFallback ? ' 추정' : ''}) 포함 시 이른 출발이 필요합니다.`,
-          'warning',
-        );
-      } else if (check.msg === 'late_return') {
-        window.showToast?.(
-          `⚠️ 강의 후 귀가(${check.travelMin}분${check.isFallback ? ' 추정' : ''})까지 포함 시 늦은 귀가가 예상됩니다.`,
-          'warning',
-        );
-      }
+      const toast = formatConflictWarning(check);
+      if (toast) window.showToast?.(toast.message, toast.type);
     }
   }
 

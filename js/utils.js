@@ -128,7 +128,7 @@ export function calcFee(lec) {
   return Number(lec.feeTotal != null ? lec.feeTotal : (lec.fee != null ? lec.fee : 0));
 }
 
-function _resolvePaymentDeadline(lec, allLectures) {
+export function resolvePaymentDeadline(lec, allLectures) {
   if (lec.paymentDate) return lec.paymentDate;
   if (lec.settlementCycle === 'after-completion' && lec.groupId) {
     const lastDate = allLectures
@@ -158,7 +158,7 @@ export function calcPaymentStatus(lec, todayStr, allLectures = []) {
   const isFinished = lec.progressStatus === PROGRESS_DONE
     || (lec.progressStatus !== PROGRESS_CANCELLED && lecDate !== '' && lecDate < todayStr);
   if (!isFinished) return 'scheduled';
-  const deadline = _resolvePaymentDeadline(lec, allLectures);
+  const deadline = resolvePaymentDeadline(lec, allLectures);
   if (!deadline) return 'pending';
   return todayStr >= deadline ? 'overdue' : 'pending';
 }
@@ -173,30 +173,34 @@ export function calcPaymentStatus(lec, todayStr, allLectures = []) {
  *   totalAmt: number, totalCnt: number,
  *   paidAmt: number, paidCnt: number,
  *   pendingAmt: number, pendingCnt: number, pendingLecs: Object[],
- *   overdueAmt: number, overdueCnt: number, overdueLecs: Object[]
+ *   overdueAmt: number, overdueCnt: number, overdueLecs: Object[],
+ *   scheduledAmt: number, scheduledCnt: number, scheduledLecs: Object[]
  * }}
  */
 export function calculateSettlementStats(allLectures, todayStr) {
-  const overdueLecs = [], pendingLecs = [];
-  // totalAmt/totalCnt: 전체 예상 수익 (취소·비정산 제외, 미진행 포함)
+  const overdueLecs = [], pendingLecs = [], scheduledLecs = [];
+  // totalAmt/totalCnt: 전체 파이프라인 (취소·비정산 제외, scheduled 포함)
   let totalAmt = 0, totalCnt = 0;
-  // 정산 집계: 완료된 강의만 (scheduled 제외)
-  let paidAmt = 0, pendingAmt = 0, overdueAmt = 0;
-  let paidCnt = 0, pendingCnt = 0, overdueCnt = 0;
+  let paidAmt = 0, pendingAmt = 0, overdueAmt = 0, scheduledAmt = 0;
+  let paidCnt = 0, pendingCnt = 0, overdueCnt = 0, scheduledCnt = 0;
   for (const l of allLectures) {
     if (l.progressStatus === PROGRESS_CANCELLED) continue;
     const fee    = calcFee(l);
     const status = calcPaymentStatus(l, todayStr, allLectures);
     if (status === 'na') continue;
-    // 전체 수익: 비정산(na)·취소(cancelled) 외 모두 포함 (scheduled 포함)
     if (fee > 0) { totalAmt += fee; totalCnt++; }
-    // 정산 집계: 미진행(scheduled) 제외
-    if (status === 'scheduled') continue;
-    if (status === 'paid')    { paidAmt    += fee; paidCnt++;                                  }
-    if (status === 'pending') { pendingLecs.push(l); pendingAmt += fee; pendingCnt++;          }
-    if (status === 'overdue') { overdueLecs.push(l); overdueAmt += fee; overdueCnt++;          }
+    if (status === 'scheduled') { scheduledLecs.push(l); scheduledAmt += fee; scheduledCnt++; }
+    else if (status === 'paid')    { paidAmt    += fee; paidCnt++;    }
+    else if (status === 'pending') { pendingLecs.push(l); pendingAmt += fee; pendingCnt++; }
+    else if (status === 'overdue') { overdueLecs.push(l); overdueAmt += fee; overdueCnt++; }
   }
-  return { overdueLecs, pendingLecs, overdueAmt, pendingAmt, totalAmt, totalCnt, paidAmt, paidCnt, pendingCnt, overdueCnt };
+  return {
+    totalAmt, totalCnt,
+    paidAmt, paidCnt,
+    pendingAmt, pendingCnt, pendingLecs,
+    overdueAmt, overdueCnt, overdueLecs,
+    scheduledAmt, scheduledCnt, scheduledLecs,
+  };
 }
 
 /**
@@ -235,6 +239,38 @@ export function escapeHtml(str) {
  */
 export function fmt(n) {
   return n > 0 ? `₩${(n * REVENUE_UNIT).toLocaleString()}` : '₩0';
+}
+
+/**
+ * 스케줄 충돌 검사(checkScheduleConflict) warning 결과를 토스트 메시지로 변환한다.
+ * 두 모달(lectureModal, multiSessionModal)에서 동일한 경고 메시지를 표시하기 위한 공통 헬퍼.
+ * @param {Object} check - checkScheduleConflict 반환값 (status='warning')
+ * @returns {{message: string, type: string}|null} 토스트 파라미터, 해당 없으면 null
+ */
+export function formatConflictWarning(check) {
+  if (check.msg === 'public_transit') {
+    return { message: '대중교통 기반 이동 시간 계산은 현재 준비 중입니다.', type: 'info' };
+  }
+  const travelStr = `${check.travelMin}분${check.isFallback ? ' 추정' : ''}`;
+  if (check.msg === 'early_departure') {
+    const depTime = check.depMin != null
+      ? minToTime(((check.depMin % 1440) + 1440) % 1440)
+      : null;
+    const message = depTime
+      ? `⚠️ 출발지 기준 이동(${travelStr}) 포함 시 ${depTime} 이전 출발이 필요합니다.`
+      : `⚠️ 출발지 기준 이동(${travelStr}) 포함 시 이른 출발이 필요합니다.`;
+    return { message, type: 'warning' };
+  }
+  if (check.msg === 'late_return') {
+    const retTime = check.returnMin != null
+      ? minToTime(((check.returnMin % 1440) + 1440) % 1440)
+      : null;
+    const message = retTime
+      ? `⚠️ 강의 후 귀가(${travelStr})까지 포함 시 ${retTime} 귀가 예정입니다.`
+      : `⚠️ 강의 후 귀가(${travelStr})까지 포함 시 늦은 귀가가 예상됩니다.`;
+    return { message, type: 'warning' };
+  }
+  return null;
 }
 
 /**

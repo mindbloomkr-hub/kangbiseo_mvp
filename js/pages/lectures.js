@@ -4,7 +4,7 @@ import { subscribeLectures, authGuard, db, getLectureCache, setLectureCache } fr
 import { writeBatch, doc } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
 import { TODAY, STATUS_META, escapeHtml, formatDateKo, classifyStatus, positionPanel, calcDuration, timeToMin, formatDateString, calcPaymentDate } from '../utils.js';
 import { openKakaoAddress } from '../services/kakaoAddressService.js';
-import { initLectureModal, openModal, getTopicTags } from '../components/lectureModal.js';
+import { initLectureModal, openModal, getTopicTags, getTopicDefaultSupplies } from '../components/lectureModal.js';
 import { initMultiSessionModal, openAddModal as openMultiSessionModal } from '../components/multiSessionModal.js';
 
 /* ════════════════════════════════════════
@@ -20,6 +20,8 @@ let dateTo        = '';
 let filterTagId   = '';
 let unsubLectures = null;
 const selectedIds = new Set();
+let _bmSupplies = []; // [{id, name, isChecked}] for batch edit supplies chip input
+let _bmPresets  = []; // [{id, name, included}] for batch edit preset checkboxes
 
 let _isLoading   = true;
 let _currentPage = 0;
@@ -403,6 +405,33 @@ function _initFilterPicker() {
 }
 
 /* ════════════════════════════════════════
+   일괄 처리 — 칩 렌더링 헬퍼 (준비물)
+════════════════════════════════════════ */
+function _renderBmChips() {
+  const list = document.getElementById('bm-supplies-chip-list');
+  if (!list) return;
+  list.innerHTML = _bmSupplies.map(item =>
+    `<span class="supplies-chip" data-id="${item.id}">` +
+    `${escapeHtml(item.name)}` +
+    `<button type="button" class="supplies-chip-remove" data-id="${item.id}" aria-label="삭제">×</button>` +
+    `</span>`
+  ).join('');
+}
+
+function _renderBmPresets() {
+  const wrap = document.getElementById('bm-supplies-presets-wrap');
+  const list = document.getElementById('bm-supplies-presets-list');
+  if (!wrap || !list) return;
+  if (_bmPresets.length === 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  list.innerHTML = _bmPresets.map(item =>
+    `<label class="supplies-preset-item${item.included ? ' is-checked' : ''}" data-preset-id="${item.id}">` +
+    `<input type="checkbox" class="supplies-preset-cb" data-preset-id="${item.id}" ${item.included ? 'checked' : ''} />` +
+    `<span>${escapeHtml(item.name)}</span></label>`
+  ).join('');
+}
+
+/* ════════════════════════════════════════
    일괄 처리 — 초기화 (바 이벤트 + 모달 이벤트)
 ════════════════════════════════════════ */
 function _initBatchBar() {
@@ -421,6 +450,15 @@ function _initBatchModal() {
 
   bd.querySelectorAll('.bm-cb').forEach(cb => {
     cb.addEventListener('change', () => {
+      if (cb.id === 'bm-cb-supplies') {
+        const section = document.getElementById('bm-supplies-section');
+        if (section) {
+          section.style.opacity = cb.checked ? '1' : '0.5';
+          section.style.pointerEvents = cb.checked ? '' : 'none';
+          if (cb.checked) document.getElementById('bm-supplies-input')?.focus();
+        }
+        return;
+      }
       const inputId = cb.id.replace('bm-cb-', 'bm-');
       const el = document.getElementById(inputId);
       if (el) el.disabled = !cb.checked;
@@ -473,6 +511,44 @@ function _initBatchModal() {
 
   document.getElementById('bm-addr-search').addEventListener('click', () => openKakaoAddress('bm-place'));
 
+  document.getElementById('bm-tag')?.addEventListener('change', e => {
+    const tagId = e.target.value === '' ? null : Number(e.target.value);
+    const defs = getTopicDefaultSupplies(tagId);
+    _bmPresets = defs.map((d, i) => ({ id: i + 1, name: d.name, included: true }));
+    _renderBmPresets();
+  });
+
+  document.getElementById('bm-supplies-presets-list')?.addEventListener('change', e => {
+    const cb = e.target.closest('.supplies-preset-cb');
+    if (!cb) return;
+    const presetId = Number(cb.dataset.presetId);
+    const preset = _bmPresets.find(p => p.id === presetId);
+    if (preset) {
+      preset.included = cb.checked;
+      cb.closest('.supplies-preset-item')?.classList.toggle('is-checked', cb.checked);
+    }
+  });
+
+  document.getElementById('bm-supplies-wrap')?.addEventListener('click', e => {
+    const removeBtn = e.target.closest('.supplies-chip-remove');
+    if (removeBtn) {
+      const idStr = removeBtn.dataset.id;
+      _bmSupplies = _bmSupplies.filter(s => String(s.id) !== idStr);
+      _renderBmChips();
+      return;
+    }
+    document.getElementById('bm-supplies-input')?.focus();
+  });
+  document.getElementById('bm-supplies-input')?.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const name = e.target.value.trim();
+    if (!name) return;
+    _bmSupplies.push({ id: Date.now(), name, isChecked: false });
+    _renderBmChips();
+    e.target.value = '';
+  });
+
   document.getElementById('bm-apply').addEventListener('click', async () => {
     const applyBtn = document.getElementById('bm-apply');
     applyBtn.disabled = true; applyBtn.textContent = '적용 중...';
@@ -494,7 +570,13 @@ function _initBatchModal() {
       if (checked('bm-cb-mgrName'))   payload.managerName  = get('bm-mgrName').trim();
       if (checked('bm-cb-mgrPhone'))  payload.managerPhone = get('bm-mgrPhone').trim();
       if (checked('bm-cb-mgrEmail'))  payload.managerEmail = get('bm-mgrEmail').trim();
-      if (checked('bm-cb-supplies'))  payload.supplies     = get('bm-supplies').trim();
+      if (checked('bm-cb-supplies')) {
+        const _included = _bmPresets.filter(p => p.included);
+        payload.supplies = [
+          ..._included.map((p, i) => ({ id: i + 1, name: p.name, isChecked: false })),
+          ..._bmSupplies.map((s, j) => ({ id: _included.length + j + 1, name: s.name, isChecked: false })),
+        ];
+      }
 
       if (checked('bm-cb-tag')) {
         const v = get('bm-tag');
@@ -777,6 +859,11 @@ function _openBatchModal() {
   // Reset checkboxes/inputs to initial state
   bd.querySelectorAll('.bm-cb').forEach(cb => {
     cb.checked = false;
+    if (cb.id === 'bm-cb-supplies') {
+      const section = document.getElementById('bm-supplies-section');
+      if (section) { section.style.opacity = '0.5'; section.style.pointerEvents = 'none'; }
+      return;
+    }
     const inputId = cb.id.replace('bm-cb-', 'bm-');
     const el = document.getElementById(inputId);
     if (el) el.disabled = true;
@@ -791,6 +878,10 @@ function _openBatchModal() {
       if (endDate) endDate.disabled = true;
     }
   });
+  _bmSupplies = [];
+  _renderBmChips();
+  _bmPresets = [];
+  _renderBmPresets();
   const seqCb  = document.getElementById('bm-seq-cb');
   const grpCb  = document.getElementById('bm-group-cb');
   const online = document.getElementById('bm-online');
@@ -855,6 +946,17 @@ function initLectures(uid) {
     allLectures = snapshot.docs
       .map(d => { const data = d.data(); return { id: d.id, ...data, _status: classifyStatus(data) }; })
       .sort((a, b) => a.date.localeCompare(b.date));
+
+    /* 🚨 파이어베이스 실시간 데이터가 들어올 때마다 브라우저 콘솔에 표를 그립니다.
+    console.log("========== 🚨 DB 실시간 데이터 topicTagId 전수 조사 ==========");
+    console.table(allLectures.map(lec => ({
+      "강의명": lec.title || "제목 없음",
+      "날짜": lec.date,
+      "강의 고유 ID": lec.id,
+      "DB에 저장된 tagId": lec.topicTagId === null ? "null (일반강의)" : lec.topicTagId
+    })));
+    */
+   
     _isLoading = false;
     setLectureCache(uid, allLectures);
     updateTabCounts();

@@ -1,0 +1,705 @@
+/* css/supplies.css — 준비물 마스터 관리 페이지 */
+
+/* ════════════════════════════════
+   SPLIT LAYOUT
+════════════════════════════════ */
+.sp-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: var(--space-6);
+  align-items: start;
+  min-height: calc(100vh - 200px);
+}
+
+/* ════════════════════════════════
+   LEFT SIDEBAR
+════════════════════════════════ */
+.sp-sidebar {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-4));
+}
+
+.sp-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-gray-50);
+}
+
+.sp-sidebar-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-gray-700);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sp-tag-count {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  background: var(--color-gray-100);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-weight: var(--font-weight-semibold);
+}
+
+.sp-tag-list {
+  max-height: 65vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-gray-200) transparent;
+}
+
+.sp-tag-list::-webkit-scrollbar { width: 4px; }
+.sp-tag-list::-webkit-scrollbar-track { background: transparent; }
+.sp-tag-list::-webkit-scrollbar-thumb {
+  background: var(--color-gray-200);
+  border-radius: var(--radius-full);
+}
+
+.sp-tag-loading,
+.sp-tag-empty {
+  padding: var(--space-8) var(--space-5);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+/* ── 공통 항목과 주제 태그 사이 구분선 ── */
+.sp-list-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: var(--space-1) 0;
+}
+
+/* ── 공통 항목 레이블 (구분선 위 소제목) ── */
+.sp-list-label {
+  padding: var(--space-2) var(--space-5) var(--space-1);
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* ── 개별 사이드바 항목 (공통) ── */
+.sp-tag-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-5);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  border-left: 3px solid transparent;
+  border-bottom: 1px solid var(--color-gray-100);
+  position: relative;
+}
+
+.sp-tag-item:last-child {
+  border-bottom: none;
+}
+
+.sp-tag-item:hover {
+  background: var(--color-gray-50);
+}
+
+.sp-tag-item.is-active {
+  background: var(--color-primary-50);
+}
+
+/* ── 공통 준비물 목록 항목 (특별) ── */
+.sp-global-item {
+  background: var(--color-gray-50);
+}
+
+.sp-global-item:hover {
+  background: var(--color-gray-100);
+}
+
+.sp-global-item.is-active {
+  background: #eff0f2;
+  border-left-color: var(--color-gray-500);
+}
+
+.sp-tag-icon {
+  font-size: 15px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* ── 주제 태그 색상 점 ── */
+.sp-tag-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.sp-tag-item-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-gray-800);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sp-tag-item.is-active .sp-tag-item-name {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary-700);
+}
+
+.sp-global-item.is-active .sp-tag-item-name {
+  color: var(--color-gray-800);
+}
+
+.sp-tag-item-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
+  border-radius: var(--radius-full);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sp-global-item .sp-tag-item-badge {
+  background: var(--color-gray-200);
+  color: var(--color-gray-600);
+}
+
+/* ════════════════════════════════
+   RIGHT MAIN — 빈 상태
+════════════════════════════════ */
+.sp-main {
+  min-width: 0;
+}
+
+.sp-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 360px;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  text-align: center;
+  padding: var(--space-12);
+}
+
+.sp-empty-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-4);
+  opacity: 0.4;
+}
+
+.sp-empty-title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-gray-700);
+  margin-bottom: var(--space-2);
+}
+
+.sp-empty-sub {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-relaxed);
+}
+
+/* ════════════════════════════════
+   CONFIG PANEL (공통)
+════════════════════════════════ */
+.sp-panel {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.sp-panel-header {
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-gray-50);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sp-panel-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  width: fit-content;
+}
+
+/* 공통 준비물 패널 헤더 칩 — 회색 계열 */
+.sp-panel-tag-chip--global {
+  background: var(--color-gray-200);
+  color: var(--color-gray-700);
+}
+
+.sp-panel-desc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-relaxed);
+}
+
+.sp-section {
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sp-section:last-of-type {
+  border-bottom: none;
+}
+
+.sp-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.sp-section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-gray-800);
+}
+
+.sp-section-icon {
+  font-size: 16px;
+}
+
+.sp-section-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ════════════════════════════════
+   GLOBAL PANEL — 공통 준비물 편집 목록
+════════════════════════════════ */
+.sp-global-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.sp-global-empty {
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--color-border);
+  line-height: var(--line-height-relaxed);
+}
+
+.sp-global-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.sp-global-row:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-300);
+}
+
+.sp-global-row-idx {
+  width: 18px;
+  text-align: right;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-semibold);
+  flex-shrink: 0;
+}
+
+.sp-global-row-name {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  color: var(--color-gray-800);
+  font-weight: var(--font-weight-medium);
+}
+
+.sp-global-row-del {
+  background: none;
+  border: none;
+  padding: 2px 5px;
+  cursor: pointer;
+  color: var(--color-gray-300);
+  font-size: 17px;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast), color var(--transition-fast);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sp-global-row-del:hover {
+  background: var(--color-danger-100);
+  color: var(--color-danger-600);
+}
+
+/* ── 추가 입력 행 ── */
+.sp-global-add-row {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--color-border);
+}
+
+.sp-global-input {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family-base);
+  color: var(--color-gray-800);
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.sp-global-input:focus {
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px rgba(37, 99, 196, 0.12);
+}
+
+.sp-global-input::placeholder {
+  color: var(--color-gray-400);
+}
+
+/* ════════════════════════════════
+   TOPIC PANEL — Section A: 프리셋 체크박스 그리드
+════════════════════════════════ */
+.sp-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-2);
+}
+
+.sp-preset-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+  user-select: none;
+  font-size: var(--font-size-sm);
+  color: var(--color-gray-700);
+}
+
+.sp-preset-item:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-300);
+}
+
+.sp-preset-item.is-included {
+  background: var(--color-primary-50);
+  border-color: var(--color-primary-200);
+  color: var(--color-primary-800);
+}
+
+.sp-preset-cb {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  accent-color: var(--color-primary-500);
+  cursor: pointer;
+}
+
+.sp-preset-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--font-weight-medium);
+}
+
+.sp-preset-item.is-included .sp-preset-name {
+  font-weight: var(--font-weight-semibold);
+}
+
+/* 공통 목록이 비어있을 때 프리셋 영역 안내 */
+.sp-preset-empty {
+  grid-column: 1 / -1;
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--color-border);
+  line-height: var(--line-height-relaxed);
+}
+
+.sp-link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-primary-500);
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  font-family: inherit;
+}
+
+.sp-link-btn:hover {
+  color: var(--color-primary-700);
+}
+
+/* ════════════════════════════════
+   TOPIC PANEL — Section B: 직접 추가 칩 입력
+════════════════════════════════ */
+.sp-chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  min-height: 52px;
+  cursor: text;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.sp-chip-wrap:focus-within {
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px rgba(37, 99, 196, 0.12);
+}
+
+.sp-chip-list {
+  display: contents;
+}
+
+.sp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 10px;
+  background: var(--color-primary-100);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary-800);
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.sp-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sp-chip-remove {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  color: var(--color-primary-500);
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.sp-chip-remove:hover {
+  background: var(--color-danger-100);
+  color: var(--color-danger-600);
+}
+
+.sp-chip-input {
+  border: none;
+  outline: none;
+  font-size: var(--font-size-sm);
+  color: var(--color-gray-800);
+  background: transparent;
+  flex: 1;
+  min-width: 140px;
+  padding: 2px 0;
+  font-family: var(--font-family-base);
+}
+
+.sp-chip-input::placeholder {
+  color: var(--color-gray-400);
+}
+
+/* ════════════════════════════════
+   PANEL FOOTER — 버튼
+════════════════════════════════ */
+.sp-panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-gray-50);
+}
+
+.sp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast),
+              box-shadow var(--transition-fast), transform var(--transition-fast);
+  white-space: nowrap;
+  font-family: var(--font-family-base);
+}
+
+.sp-btn:active { transform: scale(0.97); }
+
+.sp-btn--primary {
+  background: var(--color-primary-500);
+  color: var(--color-white);
+  border: 1.5px solid var(--color-primary-500);
+}
+
+.sp-btn--primary:hover {
+  background: var(--color-primary-600);
+  border-color: var(--color-primary-600);
+  box-shadow: var(--shadow-primary);
+}
+
+.sp-btn--primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.sp-btn--ghost {
+  background: var(--color-white);
+  color: var(--color-gray-600);
+  border: 1.5px solid var(--color-border);
+}
+
+.sp-btn--ghost:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-300);
+}
+
+.sp-btn--outline {
+  background: transparent;
+  color: var(--color-primary-600);
+  border: 1.5px solid var(--color-primary-400);
+  padding: var(--space-2) var(--space-4);
+}
+
+.sp-btn--outline:hover {
+  background: var(--color-primary-50);
+  border-color: var(--color-primary-500);
+}
+
+/* ════════════════════════════════
+   RESPONSIVE — 태블릿 / 모바일
+════════════════════════════════ */
+@media (max-width: 1200px) {
+.sp-global-list {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .sp-layout {
+    grid-template-columns: 220px 1fr;
+    gap: var(--space-4);
+  }
+
+  .sp-preset-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  .sp-global-list {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .sp-layout {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+    min-height: unset;
+  }
+
+  .sp-sidebar {
+    position: static;
+  }
+
+  .sp-tag-list {
+    max-height: 40vh;
+  }
+
+  .sp-preset-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+
+  .sp-panel-footer {
+    flex-direction: column-reverse;
+  }
+
+  .sp-btn {
+    width: 100%;
+  }
+
+  .sp-global-add-row {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .sp-preset-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

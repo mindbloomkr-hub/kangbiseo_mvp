@@ -21,27 +21,7 @@
 }
 
 /* ── header ───────────────────────────────────── */
-.ms-head {
-  display: flex; align-items: flex-start;
-  justify-content: space-between;
-  padding: var(--space-6) var(--space-8);
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
-}
-.ms-head-title {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-extrabold);
-  color: var(--color-gray-900);
-  line-height: var(--line-height-snug);
-  margin-bottom: var(--space-2);
-}
-.ms-head-sub { font-size: var(--font-size-xs); color: rgba(53,53,53,.7); margin-top: 4px; }
-.ms-x {
-  background: none; border: none; color: rgba(255,255,255,.7);
-  font-size: 20px; cursor: pointer; padding: 2px 8px;
-  border-radius: 6px; line-height: 1; transition: all .15s;
-}
-.ms-x:hover { color: #fff; background: rgba(255,255,255,.18); }
+/* .modal-header / .modal-title / .modal-form-subtitle / .btn-close → common.css */
 
 /* ── body ─────────────────────────────────────── */
 .ms-body { padding: 22px; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }

@@ -37,10 +37,7 @@
   flex-shrink: 0;
 }
 
-.stat-icon--blue   { background: var(--color-primary-100); }
-.stat-icon--green  { background: var(--color-success-100); }
-.stat-icon--yellow { background: var(--color-warning-100); }
-.stat-icon--red    { background: var(--color-danger-100); }
+/* icon background colors → common.css */
 
 .stat-body {}
 
@@ -70,23 +67,16 @@
 
 /* ════════════════════════════════
    HOME GRID
-   좌(브리핑+투두) | 우(타임라인)
+   TL: 브리핑 | TR: 투두
+   BL: 오늘타임라인 | BR: 내일타임라인
    하단 풀위드(위클리)
 ════════════════════════════════ */
 .home-grid {
   display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: var(--space-6);
-  align-items: start;
-  /*margin-bottom: var(--space-6);*/
-  grid-template-columns: 6fr 4fr;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-8);
+  align-items: stretch;
 }
-
-/* 좌 컬럼: 브리핑 위, 투두 아래 */
-.home-col-left  { display: flex; flex-direction: column;}
-
-/* 우 컬럼: 타임라인 단독 */
-.home-col-right { display: flex; flex-direction: column;}
 
 /* 하단 풀위드 섹션 */
 .home-full-row {
@@ -287,6 +277,248 @@
   line-height: var(--line-height-relaxed);
 }
 
+/* ════════════════════════════════
+   ACCORDION BRIEFING CARD (v2)
+════════════════════════════════ */
+
+/* Card header: always visible, toggles accordion */
+.briefing-card-header {
+  padding: var(--space-4) var(--space-5);
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid transparent;
+  transition: background var(--transition-fast);
+}
+.briefing-card-header:hover {
+  background: var(--color-gray-50);
+}
+.lecture-briefing-card.is-expanded .briefing-card-header {
+  border-bottom-color: var(--color-border);
+}
+
+.briefing-header-row1 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.briefing-header-row2 {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+  margin-top:8px;
+}
+.briefing-header-row3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+/* Location row: place + classroom + chevron (chevron pushed far-right) */
+.briefing-header-row-loc {
+  display: grid;
+  grid-template-columns: 5fr 2fr 1fr;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: 6px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.briefing-loc-item {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Override old .briefing-title (now lives in header, not body) */
+.briefing-card-header .briefing-title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-gray-900);
+  margin-bottom: 0;
+}
+
+.briefing-client {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.briefing-topic {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.briefing-fee {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-success-600);
+  white-space: nowrap;
+}
+
+.briefing-topic-chip {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+.briefing-session {
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary-600);
+  background: var(--color-primary-50);
+  border: 1px solid var(--color-primary-200);
+  border-radius: var(--radius-full);
+  padding: 1px 8px;
+}
+
+.briefing-pay-chip {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+.briefing-pay-chip--overdue { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+.briefing-pay-chip--pending { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+
+.briefing-chevron {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  display: inline-block;
+  transition: transform 220ms ease;
+  flex-shrink: 0;
+}
+.lecture-briefing-card.is-expanded .briefing-chevron {
+  transform: rotate(180deg);
+}
+
+/* Collapsible body */
+.briefing-card-body {
+  margin-top:var(--space-4);
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 300ms ease;
+}
+.lecture-briefing-card.is-expanded .briefing-card-body {
+  max-height: 700px;
+}
+
+/* Time bar */
+.briefing-timebar {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1.2fr 2fr;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-2);
+  padding: var(--space-1) var(--space-5);
+  /*background: var(--color-gray-50);*/
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-4);
+}
+.briefing-tb-main { font-weight: var(--font-weight-semibold); color: var(--color-primary-700); }
+.briefing-tb-dur  { font-weight: var(--font-weight-bold); color: var(--color-gray-700); }
+.briefing-tb-sep  { color: var(--color-gray-300); }
+
+/* Parking row in body (uses .briefing-loc-item but needs block padding) */
+.briefing-card-body .briefing-loc-item {
+  display: block;
+  padding: 4px var(--space-5);
+  margin-bottom: 2px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+/* Logistics 2-col grid */
+.briefing-logistics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+.briefing-lg-item {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+/* Class info row */
+.briefing-class-info {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-5);
+  margin-bottom:var(--space-3);
+}
+.briefing-ci-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+/* Highlight boxes: supplies / memo */
+.briefing-highlight {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-snug);
+}
+.briefing-highlight--supplies {
+  background: #fffbeb;
+  /*border-left: 3px solid #f59e0b;*/
+  color: #92400e;
+}
+.briefing-highlight--memo {
+  background: #f0f9ff;
+  /*border-left: 3px solid #0ea5e9;*/
+  color: #0c4a6e;
+}
+.briefing-hl-icon { font-size: 16px; flex-shrink: 0; }
+.briefing-highlight strong { font-weight: var(--font-weight-semibold); display: block; margin-bottom: 2px; }
+.briefing-highlight p { margin: 0; }
+
+/* Footer: detail + contact buttons */
+.briefing-detail-btn {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  background: var(--color-gray-100);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.briefing-detail-btn:hover {
+  background: var(--color-primary-50);
+  color: var(--color-primary-600);
+  border-color: var(--color-primary-200);
+}
+
+/* Section: top-level position (briefing now a direct sibling of stat-bar) */
+#briefing-section {
+  margin-bottom: var(--space-8);
+}
+
 /* 타임라인 스타일 → css/common.css 로 이동 */
 
 /* ════════════════════════════════
@@ -345,19 +577,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  max-height: 280px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-gray-200) transparent;
-}
-
-.todo-list::-webkit-scrollbar {
-  width: 4px;
-}
-
-.todo-list::-webkit-scrollbar-thumb {
-  background: var(--color-gray-200);
-  border-radius: var(--radius-full);
+  overflow: visible;
 }
 
 .todo-item {
@@ -544,6 +764,11 @@
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
+
+.v-todo-add-row > * {
+  min-width: 0;
+}
+
 
 .v-todo-input {
   flex: 1;
@@ -804,8 +1029,6 @@
 
   /* 모든 홈 컨테이너: 뷰포트 너비를 넘지 않도록 */
   .home-grid,
-  .home-col-left,
-  .home-col-right,
   .home-full-row {
     width: 100%;
     max-width: 100%;
@@ -842,8 +1065,221 @@
     gap: var(--space-2);
   }
 
-  /* 브리핑 메타 그리드를 1열로 */
-  .briefing-meta-grid {
+  .briefing-meta-grid,
+  .briefing-logistics-grid {
     grid-template-columns: 1fr;
   }
+}
+
+@media (max-width: 767px) {
+  .briefing-timebar {
+    grid-template-columns: repeat(2, 1fr); /* 모바일에서는 2열로 변경 */
+    gap: var(--space-2); /* 필요한 경우 상하좌우 간격 조정 */
+  }
+}
+
+@media (max-width: 640px) {
+  .v-todo-add-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .v-todo-add-row > *:nth-child(1) {
+    grid-column: span 2;
+  }
+}
+
+/* ════════════════════════════════
+   SUPPLIES CHIP INPUT (form modal)
+════════════════════════════════ */
+.supplies-chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-white);
+  min-height: 40px;
+  cursor: text;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.supplies-chip-wrap:focus-within {
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px rgba(37,99,196,0.12);
+}
+.supplies-chip-list {
+  display: contents;
+}
+.supplies-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  background: var(--color-primary-50);
+  border: 1px solid var(--color-primary-200);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary-700);
+  white-space: nowrap;
+}
+.supplies-chip-remove {
+  background: none;
+  border: none;
+  padding: 0;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--color-primary-400);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  transition: color var(--transition-fast);
+}
+.supplies-chip-remove:hover {
+  color: var(--color-danger-600);
+}
+.supplies-chip-input {
+  border: none;
+  outline: none;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: transparent;
+  flex: 1;
+  min-width: 130px;
+  padding: 2px 0;
+}
+.supplies-chip-input::placeholder {
+  color: var(--color-gray-400);
+}
+
+/* ════════════════════════════════
+   SUPPLIES CHECKLIST (home briefing)
+════════════════════════════════ */
+.supplies-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.supplies-check-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  line-height: 1.4;
+  user-select: none;
+}
+.supplies-check-item.is-checked > span {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+.supplies-check-cb {
+  width: 14px;
+  height: 14px;
+  accent-color: #f59e0b;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ════════════════════════════════
+   SUPPLIES PRESET GRID (modal)
+════════════════════════════════ */
+.supplies-presets-wrap {
+  margin-bottom: 8px;
+  padding: 10px 12px 12px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.supplies-presets-label {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.supplies-presets-label span {
+  font-weight: var(--font-weight-normal);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.supplies-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 5px;
+}
+
+.supplies-preset-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  background: var(--color-white);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+  line-height: 1.35;
+}
+
+.supplies-preset-item:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.supplies-preset-item.is-checked {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+
+.supplies-preset-cb {
+  width: 13px;
+  height: 13px;
+  accent-color: var(--color-primary-500, #2563c4);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+/* ════════════════════════════════
+   SUPPLIES PROGRESS BAR (home)
+════════════════════════════════ */
+.supplies-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 6px;
+}
+.supplies-progress-text {
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  opacity: 0.8;
+}
+.supplies-progress-bar-wrap {
+  flex: 1;
+  height: 5px;
+  background: rgba(146,64,14,0.2);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.supplies-progress-bar {
+  height: 100%;
+  background: #f59e0b;
+  border-radius: var(--radius-full);
+  transition: width 200ms ease;
 }

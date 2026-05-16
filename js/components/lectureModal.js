@@ -22,8 +22,9 @@ import {
   escapeHtml, formatDateKo, calcDuration, classifyStatus,
   buildTimeOptions, updateDurationDisplay, syncEndTimeOptions, initTimeSelects,
   checkScheduleConflict, _geocode, positionPanel, getTodayString,
-  timeToMin, minToTime, calcPaymentDate, resolveOriginAddr,
+  timeToMin, minToTime, calcPaymentDate, resolveOriginAddr, formatConflictWarning,
 } from '../utils.js';
+import { REVENUE_UNIT, PROGRESS_SCHEDULED } from '../constants.js';
 import { openKakaoAddress } from '../services/kakaoAddressService.js';
 
 // ---------------------------------------------------------
@@ -70,6 +71,10 @@ let _topicTags      = [];
 let _unsubLecTodos    = null;
 let _pendingTodos     = [];      // todos staged while adding a new lecture
 let _refreshPendingUI = null;    // refresh fn returned by renderTodoUI (pending mode)
+
+// Supplies chip input state
+let _afSupplies = []; // [{id, name, isChecked}] custom additions
+let _afPresets  = []; // [{id, name, included}] topic-default items (shown as checkboxes)
 
 export function getTopicTags() { return _topicTags; }
 
@@ -157,7 +162,7 @@ export async function openAddModal() {
   updateDurationDisplay();
 
   const progressSel = document.getElementById('af-progress');
-  if (progressSel) progressSel.value = 'scheduled';
+  if (progressSel) progressSel.value = PROGRESS_SCHEDULED;
   const paidSel = document.getElementById('af-paid-status');
   if (paidSel) paidSel.value = 'false';
   const cycleSel = document.getElementById('af-settlement-cycle');
@@ -174,6 +179,16 @@ export async function openAddModal() {
   if (wrapupEl) wrapupEl.value = (sched.wrapupTime != null ? sched.wrapupTime : 15);
 
   _refreshTagPicker(null);
+
+  _afSupplies = [];
+  _renderAfChips();
+  const _initDefs = getTopicDefaultSupplies(null);
+  _afPresets = _initDefs.map((d, i) => ({ id: i + 1, name: d.name, included: true }));
+  _renderAfPresets();
+  const _addSaveWrap = document.getElementById('af-supplies-quick-save-wrap');
+  if (_addSaveWrap) _addSaveWrap.style.display = 'none';
+  const _addSaveCb = document.getElementById('af-supplies-save-default');
+  if (_addSaveCb) _addSaveCb.checked = false;
 
   const placeEl = document.getElementById('af-place');
   if (placeEl) { placeEl.disabled = false; placeEl.placeholder = '예) 서울 강남구 SSDC 4F'; }
@@ -209,6 +224,64 @@ export async function openAddModal() {
 ════════════════════════════════════════ */
 const _backdrop  = () => document.getElementById('modal-backdrop');
 const _confirmBd = () => document.getElementById('confirm-backdrop');
+
+function _parseSupplies(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.map((s, i) => ({
+      id:        s.id != null ? s.id : (i + 1),
+      name:      typeof s === 'string' ? s : (s.name || ''),
+      isChecked: s.isChecked ?? false,
+    })).filter(s => s.name);
+  }
+  return String(raw).split(/[,;]+/).map(s => s.trim()).filter(Boolean)
+    .map((name, i) => ({ id: i + 1, name, isChecked: false }));
+}
+
+function _renderAfChips() {
+  const list = document.getElementById('af-supplies-chip-list');
+  if (!list) return;
+  list.innerHTML = _afSupplies.map(item =>
+    `<span class="supplies-chip" data-id="${item.id}">` +
+    `${escapeHtml(item.name)}` +
+    `<button type="button" class="supplies-chip-remove" data-id="${item.id}" aria-label="삭제">×</button>` +
+    `</span>`
+  ).join('');
+}
+
+function _renderAfPresets() {
+  const wrap = document.getElementById('af-supplies-presets-wrap');
+  const list = document.getElementById('af-supplies-presets-list');
+  if (!wrap || !list) return;
+  if (_afPresets.length === 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  list.innerHTML = _afPresets.map(item =>
+    `<label class="supplies-preset-item${item.included ? ' is-checked' : ''}" data-preset-id="${item.id}">` +
+    `<input type="checkbox" class="supplies-preset-cb" data-preset-id="${item.id}" ${item.included ? 'checked' : ''} />` +
+    `<span>${escapeHtml(item.name)}</span></label>`
+  ).join('');
+}
+
+export function getTopicDefaultSupplies(tagId) {
+  try {
+    const raw = localStorage.getItem('kangbiseo_topic_supplies');
+    if (!raw) return [];
+    const map = JSON.parse(raw);
+    // null tagId = "일반 강의" → stored under 'none'
+    const key = tagId == null ? 'none' : String(tagId);
+    return Array.isArray(map[key]) ? map[key] : [];
+  } catch { return []; }
+}
+
+function _saveTopicDefaultSupplies(tagId, items) {
+  if (tagId == null) return;
+  try {
+    const raw = localStorage.getItem('kangbiseo_topic_supplies');
+    const map = raw ? JSON.parse(raw) : {};
+    map[String(tagId)] = items.map(({ name }) => ({ name }));
+    localStorage.setItem('kangbiseo_topic_supplies', JSON.stringify(map));
+  } catch {}
+}
 
 function _closeModal() {
   _backdrop()?.classList.remove('open');
@@ -298,7 +371,7 @@ function _populateView(lec) {
   document.getElementById('v-total-duration').textContent = calcDuration(startDate, timeStart, endDate, timeEnd);
   document.getElementById('v-title').textContent          = lec.title  || '—';
   document.getElementById('v-client').textContent         = lec.client || '—';
-  document.getElementById('v-fee').textContent            = `₩${(Number(lec.fee)*10000 || 0).toLocaleString()}`;
+  document.getElementById('v-fee').textContent            = `₩${((Number(lec.fee) || 0) * REVENUE_UNIT).toLocaleString()}`;
 
   const _feeTotalWrap = document.getElementById('v-fee-total-wrap');
   const _feeTotalEl   = document.getElementById('v-fee-total');
@@ -307,7 +380,7 @@ function _populateView(lec) {
       _feeTotalWrap.style.display = '';
       if (_feeTotalEl) {
         const feeTotal = lec.feeAmount != null ? lec.feeAmount : ((lec.fee || 0) * (lec.sessionTotal || 1));
-        _feeTotalEl.textContent = `₩${(Number(feeTotal) * 10000 || 0).toLocaleString()}`;
+        _feeTotalEl.textContent = `₩${((Number(feeTotal) || 0) * REVENUE_UNIT).toLocaleString()}`;
       }
     } else {
       _feeTotalWrap.style.display = 'none';
@@ -325,12 +398,22 @@ function _populateView(lec) {
     if (_tag) {
       _tagEl.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:20px;background:${escapeHtml(_tag.color)};color:#fff;font-size:12px;font-weight:600;">${escapeHtml(_tag.name)}</span>`;
     } else {
-      _tagEl.textContent = '—';
+      _tagEl.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:20px;background:#e5e7eb;color:#6b7280;font-size:12px;font-weight:600;">일반 강의</span>`;
     }
   }
   document.getElementById('v-setup-time').textContent      = lec.setupTime  != null ? `${lec.setupTime}분`  : '—';
   document.getElementById('v-wrapup-time').textContent     = lec.wrapupTime != null ? `${lec.wrapupTime}분` : '—';
-  document.getElementById('v-supplies').textContent        = lec.supplies       || '—';
+  const _supList = _parseSupplies(lec.supplies);
+  const _supEl   = document.getElementById('v-supplies');
+  if (_supEl) {
+    if (_supList.length === 0) {
+      _supEl.textContent = '—';
+    } else {
+      _supEl.innerHTML = _supList.map(s =>
+        `<span style="display:inline-block;margin:2px 4px 2px 0;padding:1px 8px;background:#fef3c7;border:1px solid #fde68a;border-radius:20px;font-size:11px;">${escapeHtml(s.name)}</span>`
+      ).join('');
+    }
+  }
   document.getElementById('v-place').textContent           = lec.isOnline ? '💻 온라인 수업' : (lec.place || '—');
   document.getElementById('v-classroom').textContent       = lec.classroom      || '—';
   document.getElementById('v-parking').textContent         = lec.parkingInfo    || '—';
@@ -387,7 +470,14 @@ function _populateForm(lec) {
   _refreshTagPicker(lec.topicTagId);
   set('af-setup-time',      (lec.setupTime  != null ? lec.setupTime  : ''));
   set('af-wrapup-time',     (lec.wrapupTime != null ? lec.wrapupTime : ''));
-  set('af-supplies',        lec.supplies);
+  _afSupplies = _parseSupplies(lec.supplies);
+  _renderAfChips();
+  _afPresets = [];
+  _renderAfPresets();
+  const _fmQsWrap = document.getElementById('af-supplies-quick-save-wrap');
+  if (_fmQsWrap) _fmQsWrap.style.display = lec.topicTagId != null ? '' : 'none';
+  const _fmQsCb = document.getElementById('af-supplies-save-default');
+  if (_fmQsCb) _fmQsCb.checked = false;
   const onlineCb  = document.getElementById('af-online');
   const fullDayCb = document.getElementById('af-full-day');
   const placeEl   = document.getElementById('af-place');
@@ -485,6 +575,14 @@ function _applyTagTrigger(tagId, prefix = 'lm') {
   });
 
   if (prefix === 'ms') _msBulkTagUpdate?.(tagId);
+
+  if (prefix === 'lm') {
+    const _qs = document.getElementById('af-supplies-quick-save-wrap');
+    if (_qs) _qs.style.display = tagId != null ? '' : 'none';
+    const _defs = getTopicDefaultSupplies(tagId);
+    _afPresets = _defs.map((d, i) => ({ id: i + 1, name: d.name, included: true }));
+    _renderAfPresets();
+  }
 }
 
 let _tagPanelAbortCtrl = null;
@@ -1003,8 +1101,10 @@ function _bindEvents() {
     const formPanel   = document.getElementById('form-panel');
     const isFormOpen  = formPanel && formPanel.style.display !== 'none';
     if (isFormOpen) {
-      const dirty = ['af-title','af-client','af-fee','af-topic','af-supplies','af-place','af-classroom','af-memo','af-group-info']
-        .some(id => (document.getElementById(id)?.value || '').trim() !== '');
+      const dirty = ['af-title','af-client','af-fee','af-topic','af-place','af-classroom','af-memo','af-group-info']
+        .some(id => (document.getElementById(id)?.value || '').trim() !== '')
+        || _afSupplies.length > 0
+        || _afPresets.some(p => !p.included);
       if (dirty && !confirm('작성 중인 내용이 사라집니다. 계속 닫으시겠어요?')) return;
     }
     _closeModal();
@@ -1161,6 +1261,12 @@ function _bindEvents() {
     const paidStatus     = _paidStatusVal;
     const taxType        = document.getElementById('af-tax')?.value || 'income3_3';
 
+    const _includedPresets = _afPresets.filter(p => p.included).map((p, i) => ({ id: i + 1, name: p.name, isChecked: false }));
+    const _mergedSupplies  = [
+      ..._includedPresets,
+      ..._afSupplies.map((s, j) => ({ id: _includedPresets.length + j + 1, name: s.name, isChecked: false })),
+    ];
+
     const payload = {
       startDate: date, startTime: timeStart, endDate, endTime: timeEnd,
       date, timeStart, timeEnd, title, client,
@@ -1174,7 +1280,7 @@ function _bindEvents() {
       topicTagId:     get('af-topic-tag') ? Number(get('af-topic-tag')) : null,
       setupTime:      Number(get('af-setup-time'))  || 0,
       wrapupTime:     Number(get('af-wrapup-time')) || 0,
-      supplies:       get('af-supplies'),
+      supplies:       _mergedSupplies,
       place,
       isOnline,
       isFullDay,
@@ -1207,21 +1313,16 @@ function _bindEvents() {
       return;
     }
     if (check.status === 'warning') {
-      if (check.msg === 'public_transit') {
-        window.showToast?.('대중교통 기반 이동 시간 계산은 현재 준비 중입니다.', 'info');
-      } else if (check.msg === 'early_departure') {
-        const depTime = minToTime(((check.depMin % 1440) + 1440) % 1440);
-        window.showToast?.(
-          `⚠️ 출발지 기준 이동(${check.travelMin}분${check.isFallback ? ' 추정' : ''}) 포함 시 ${depTime} 이전 출발이 필요합니다.`,
-          'warning',
-        );
-      } else if (check.msg === 'late_return') {
-        const retTime = minToTime(((check.returnMin % 1440) + 1440) % 1440);
-        window.showToast?.(
-          `⚠️ 강의 후 귀가(${check.travelMin}분${check.isFallback ? ' 추정' : ''})까지 포함 시 ${retTime} 귀가 예정입니다.`,
-          'warning',
-        );
-      }
+      const toast = formatConflictWarning(check);
+      if (toast) window.showToast?.(toast.message, toast.type);
+    }
+
+    // Quick-save supplies as topic default if requested
+    const _topicTagRaw = get('af-topic-tag');
+    const _quickSaveCb = document.getElementById('af-supplies-save-default');
+    if (_quickSaveCb?.checked && _topicTagRaw) {
+      _saveTopicDefaultSupplies(Number(_topicTagRaw), _mergedSupplies);
+      window.showToast?.('준비물 기본값이 저장되었습니다.', 'success');
     }
 
     const submitBtn = document.getElementById('btn-form-submit');
@@ -1265,6 +1366,38 @@ function _bindEvents() {
   });
 
   _bindTagPickerEvents();
+
+  // ── 준비물 칩 입력 ──────────────────────────────────────────────────
+  document.getElementById('af-supplies-wrap')?.addEventListener('click', e => {
+    const removeBtn = e.target.closest('.supplies-chip-remove');
+    if (removeBtn) {
+      const idStr  = removeBtn.dataset.id;
+      _afSupplies  = _afSupplies.filter(s => String(s.id) !== idStr);
+      _renderAfChips();
+      return;
+    }
+    document.getElementById('af-supplies-input')?.focus();
+  });
+  document.getElementById('af-supplies-input')?.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const name = e.target.value.trim();
+    if (!name) return;
+    _afSupplies.push({ id: Date.now(), name, isChecked: false });
+    _renderAfChips();
+    e.target.value = '';
+  });
+
+  document.getElementById('af-supplies-presets-list')?.addEventListener('change', e => {
+    const cb = e.target.closest('.supplies-preset-cb');
+    if (!cb) return;
+    const presetId = Number(cb.dataset.presetId);
+    const preset = _afPresets.find(p => p.id === presetId);
+    if (preset) {
+      preset.included = cb.checked;
+      cb.closest('.supplies-preset-item')?.classList.toggle('is-checked', cb.checked);
+    }
+  });
 
   // ── 모달 뷰 패널: 기존 강의 할 일 추가 (Firestore 직접) ─────────────
   document.getElementById('v-todo-add-btn')?.addEventListener('click', async () => {

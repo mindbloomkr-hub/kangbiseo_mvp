@@ -4,7 +4,7 @@ import { subscribeLectures, authGuard } from '../api.js';
 import {
   TODAY, IN_7DAYS,
   STATUS_META as STATUS_META_BASE,
-  parseDate, getTodayString,
+  parseDate, getTodayString, calcFee,
 } from '../utils.js';
 import { initLectureModal, openModal, getTopicTags } from '../components/lectureModal.js';
 import { initMultiSessionModal, openAddModal as openMultiSessionModal } from '../components/multiSessionModal.js';
@@ -63,13 +63,6 @@ import { initMultiSessionModal, openAddModal as openMultiSessionModal } from '..
 })();
 
 /* ════════════════════════════════════════
-   수수료 읽기 헬퍼 — feeTotal 우선, fee 폴백
-════════════════════════════════════════ */
-function _getFee(lec) {
-  return Number(lec.feeTotal != null ? lec.feeTotal : (lec.fee != null ? lec.fee : 0));
-}
-
-/* ════════════════════════════════════════
    calendar.js 전용 확장
    — doc(서류 미비) 상태 추가 → classifyStatus + STATUS_META 로컬 오버라이드
 ════════════════════════════════════════ */
@@ -82,7 +75,7 @@ function classifyStatus(lec) {
   const d = parseDate(lec.startDate != null ? lec.startDate : lec.date);
 
   // Priority 2: unpaid alert — skip if no fee (na)
-  if (!lec.isPaid && _getFee(lec) > 0 && (d < TODAY || prog === 'done')) return 'unpaid';
+  if (!lec.isPaid && calcFee(lec) > 0 && (d < TODAY || prog === 'done')) return 'unpaid';
 
   // Priority 3: urgent alert — scheduled within 7 days
   if (prog === 'scheduled' && d >= TODAY && d <= IN_7DAYS) return 'urgent';
@@ -121,7 +114,7 @@ function getEventColor(lec) {
   if (prog === 'needs_review') return { bg: '#fbee03', border: '#fbee03', text: '#108500' };
 
   // na-fee: no payment tracking — display with tag/scheduled color regardless of progress
-  if (!lec.isPaid && !_getFee(lec)) {
+  if (!lec.isPaid && !calcFee(lec)) {
     const _tagNa = lec.topicTagId != null ? getTopicTags().find(t => t.id === lec.topicTagId) : null;
     if (_tagNa?.color) return { bg: _tagNa.color, border: _tagNa.color, text: '#fff' };
     return { bg: '#0ea5e9', border: '#0284c7', text: '#fff' };
@@ -146,34 +139,41 @@ function getEventColor(lec) {
 }
 
 /* ════════════════════════════════════════
-   주간 뷰 동적 시간 범위 계산
+   주간 뷰 슬롯 최소 시간 동적 조정
+   — 표시 중인 주(week)에 09:00 이전 강의가 있으면
+     해당 시(hour) 정각부터 달력을 확장한다.
+   — 다회차(멀티데이) 강의는 스캔에서 제외.
 ════════════════════════════════════════ */
-function calcDynamicSlotRange(lectures) {
-  let minH = 7;
-  let maxH = 21;
+const SLOT_MIN_DEFAULT = '09:00:00';
 
-  lectures.forEach(lec => {
+function applyWeekSlotMin() {
+  if (!calendar) return;
+
+  // Month view doesn't use slotMinTime — reset to default and exit
+  if (calendar.view.type !== 'timeGridWeek') {
+    calendar.setOption('slotMinTime', SLOT_MIN_DEFAULT);
+    return;
+  }
+
+  const rangeStart = calendar.view.activeStart.toISOString().slice(0, 10);
+  const rangeEnd   = calendar.view.activeEnd.toISOString().slice(0, 10);
+  let minH = 9;
+
+  allLectures.forEach(lec => {
     const startDate = (lec.startDate != null ? lec.startDate : (lec.date != null ? lec.date : ''));
     const endDate   = (lec.endDate   != null ? lec.endDate   : (lec.date != null ? lec.date : ''));
-    // Skip multi-day lectures — their times belong to different days
-    if (startDate !== endDate) return;
+    if (startDate !== endDate) return;                            // skip multi-day
+    if (startDate < rangeStart || startDate >= rangeEnd) return; // outside visible week
     const timeStart = (lec.startTime != null ? lec.startTime : (lec.timeStart != null ? lec.timeStart : ''));
-    const timeEnd   = (lec.endTime   != null ? lec.endTime   : (lec.timeEnd   != null ? lec.timeEnd   : ''));
-    if (timeStart) {
-      const h = parseInt(timeStart.split(':')[0], 10);
-      if (h < minH) minH = h;
-    }
-    if (timeEnd) {
-      const [h, m] = timeEnd.split(':').map(Number);
-      const endH = m > 0 ? h + 1 : h;
-      if (endH > maxH) maxH = endH;
-    }
+    if (!timeStart) return;
+    const h = parseInt(timeStart.split(':')[0], 10);
+    if (h < minH) minH = h;
   });
 
-  return {
-    slotMinTime: `${String(Math.max(0,  minH)).padStart(2, '0')}:00:00`,
-    slotMaxTime: `${String(Math.min(24, maxH)).padStart(2, '0')}:00:00`,
-  };
+  calendar.setOption('slotMinTime', minH < 9
+    ? `${String(Math.max(0, minH)).padStart(2, '0')}:00:00`
+    : SLOT_MIN_DEFAULT
+  );
 }
 
 /* ════════════════════════════════════════
@@ -236,7 +236,7 @@ function initCalendar() {
     locale:          'ko',
     height:          'auto',
     headerToolbar:   { left: 'prev,next today', center: 'title', right: '' },
-    slotMinTime:     '07:00:00',
+    slotMinTime:     SLOT_MIN_DEFAULT,
     slotMaxTime:     '21:00:00',
     slotDuration:    '00:30:00',
     allDaySlot:      false,
@@ -275,6 +275,8 @@ function initCalendar() {
       return { domNodes: [el] };
     },
 
+    datesSet: () => applyWeekSlotMin(),
+
     eventClick: ({ event }) => openModal(event.id),
 
     eventDidMount: ({ event, el: evEl }) => {
@@ -290,7 +292,7 @@ function initCalendar() {
         ? `${startDate} ${timeStart} ~ ${endDate} ${timeEnd}`
         : `${timeStart}~${timeEnd}`;
 
-      const naFee = !_getFee(lec);
+      const naFee = !calcFee(lec);
       const STATUS_HINTS = { discussing: '[논의 중] ', onhold: '[보류 중] ', cancelled: '[취소/드롭] ' };
       const paidMark   = (lec.isPaid || naFee) ? '' : '[미입금] ';
       const statusHint = STATUS_HINTS[prog] || '';
@@ -315,11 +317,9 @@ function initCalendar() {
 
 function updateCalendarEvents() {
   if (!calendar) return;
-  const { slotMinTime, slotMaxTime } = calcDynamicSlotRange(allLectures);
-  calendar.setOption('slotMinTime', slotMinTime);
-  calendar.setOption('slotMaxTime', slotMaxTime);
   calendar.removeAllEvents();
   calendar.addEventSource(toFcEvents(allLectures));
+  applyWeekSlotMin();
 }
 
 /* ════════════════════════════════════════

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<!-- pages/supplies.html — 강비서 준비물 마스터 관리 -->
+<html lang="ko">
+<head>
+
+  <!-- Google Tag Manager -->
+  <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+  })(window,document,'script','dataLayer','GTM-MT8KX3JV');</script>
+  <!-- End Google Tag Manager -->
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>준비물 마스터 | 강비서</title>
+  <link rel="stylesheet" href="../css/reset.css" />
+  <link rel="stylesheet" href="../css/variables.css" />
+  <link rel="stylesheet" href="../css/common.css" />
+  <link rel="stylesheet" href="../css/layout.css" />
+  <link rel="stylesheet" href="../css/supplies.css" />
+</head>
+<body>
+
+  <!-- Google Tag Manager (noscript) -->
+  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-MT8KX3JV"
+  height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+  <!-- End Google Tag Manager (noscript) -->
+
+  <div class="app-shell">
+    <!-- 사이드바: authGuard → loadSidebar() 에서 동적 주입 -->
+
+    <div class="app-main" id="app-main">
+
+      <header class="topbar">
+        <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="메뉴 열기">☰</button>
+        <nav class="topbar-breadcrumb" aria-label="현재 위치">
+          <span>강비서</span><span>›</span><span class="current">준비물 마스터 관리</span>
+        </nav>
+        <div class="topbar-right">
+          <span class="topbar-date" id="topbar-date"></span>
+          <div class="topbar-notification" role="button" aria-label="알림" tabindex="0">
+            🔔<span class="notification-dot"></span>
+          </div>
+        </div>
+      </header>
+
+      <main class="page-content">
+
+        <div class="page-header">
+          <h1 class="page-title">🎒 준비물 마스터 관리</h1>
+          <p class="page-subtitle">공통 준비물 목록을 먼저 설정하고, 주제별로 적용할 항목을 선택하세요.</p>
+        </div>
+
+        <div class="sp-layout">
+
+          <!-- ── 좌측 사이드바 ── -->
+          <aside class="sp-sidebar" aria-label="준비물 설정 메뉴">
+            <div class="sp-sidebar-header">
+              <span class="sp-sidebar-title">설정 메뉴</span>
+              <span class="sp-tag-count" id="sp-tag-count"></span>
+            </div>
+            <!-- JS가 공통 항목 + 구분선 + 주제 태그 목록을 동적 주입 -->
+            <div class="sp-tag-list" id="sp-tag-list" role="list">
+              <div class="sp-tag-loading" aria-live="polite">⏳ 불러오는 중…</div>
+            </div>
+          </aside>
+
+          <!-- ── 우측 메인 패널 ── -->
+          <div class="sp-main" id="sp-main">
+
+            <!-- ① 빈 상태 (초기 로딩 전) -->
+            <div class="sp-empty-state" id="sp-empty-state">
+              <div class="sp-empty-icon">📦</div>
+              <p class="sp-empty-title">불러오는 중…</p>
+              <p class="sp-empty-sub"></p>
+            </div>
+
+            <!-- ② 공통 준비물 마스터 목록 관리 패널 -->
+            <div class="sp-panel" id="sp-global-panel" hidden>
+
+              <div class="sp-panel-header">
+                <div class="sp-panel-tag-chip sp-panel-tag-chip--global">
+                  <span>⚙️</span> 공통 준비물 목록
+                </div>
+                <p class="sp-panel-desc">
+                  모든 주제의 기본 체크박스로 사용되는 마스터 목록입니다.
+                  항목을 추가·삭제하면 모든 주제 설정 화면에 즉시 반영됩니다.
+                </p>
+              </div>
+
+              <section class="sp-section" aria-labelledby="sp-global-heading">
+                <div class="sp-section-header">
+                  <h2 class="sp-section-title" id="sp-global-heading">
+                    <span class="sp-section-icon">📦</span>등록된 공통 준비물
+                  </h2>
+                  <span class="sp-section-hint" id="sp-global-count">0개</span>
+                </div>
+
+                <!-- 공통 준비물 행 목록 -->
+                <div class="sp-global-list" id="sp-global-list"></div>
+
+                <!-- 새 항목 추가 행 -->
+                <div class="sp-global-add-row">
+                  <input
+                    class="sp-global-input"
+                    type="text"
+                    id="sp-global-input"
+                    placeholder="새 준비물 입력 후 Enter"
+                    maxlength="50"
+                    aria-label="공통 준비물 추가"
+                    autocomplete="off"
+                  />
+                  <button class="sp-btn sp-btn--outline" id="sp-global-add-btn" type="button">추가</button>
+                </div>
+              </section>
+
+              <div class="sp-panel-footer">
+                <button class="sp-btn sp-btn--ghost" id="sp-global-reset-btn" type="button">🔄 초기화</button>
+                <button class="sp-btn sp-btn--primary" id="sp-global-save-btn" type="button">💾 저장하기</button>
+              </div>
+
+            </div><!-- /sp-global-panel -->
+
+            <!-- ③ 주제별 준비물 설정 패널 -->
+            <div class="sp-panel" id="sp-panel" hidden>
+
+              <div class="sp-panel-header">
+                <div class="sp-panel-tag-chip" id="sp-panel-tag-chip"></div>
+                <p class="sp-panel-desc">이 주제의 기본 준비물을 설정합니다. 강의 등록 시 아래 목록이 자동 추천됩니다.</p>
+              </div>
+
+              <!-- Section A: 공통 준비물 기반 체크박스 -->
+              <section class="sp-section" aria-labelledby="sp-presets-heading">
+                <div class="sp-section-header">
+                  <h2 class="sp-section-title" id="sp-presets-heading">
+                    <span class="sp-section-icon">⚙️</span>공통 준비물 기본 목록
+                  </h2>
+                  <span class="sp-section-hint">체크 해제 시 이 주제에서 제외</span>
+                </div>
+                <div class="sp-preset-grid" id="sp-preset-grid" role="group" aria-label="공통 준비물 선택"></div>
+              </section>
+
+              <!-- Section B: 직접 추가 준비물 -->
+              <section class="sp-section" aria-labelledby="sp-custom-heading">
+                <div class="sp-section-header">
+                  <h2 class="sp-section-title" id="sp-custom-heading">
+                    <span class="sp-section-icon">✏️</span>직접 추가 준비물
+                  </h2>
+                  <span class="sp-section-hint">Enter 키로 추가</span>
+                </div>
+                <div class="sp-chip-wrap" id="sp-chip-wrap">
+                  <div class="sp-chip-list" id="sp-chip-list"></div>
+                  <input
+                    class="sp-chip-input"
+                    type="text"
+                    id="sp-chip-input"
+                    placeholder="준비물 입력 후 Enter"
+                    maxlength="50"
+                    aria-label="직접 추가 준비물 입력"
+                    autocomplete="off"
+                  />
+                </div>
+              </section>
+
+              <div class="sp-panel-footer">
+                <button class="sp-btn sp-btn--ghost" id="sp-reset-btn" type="button">🔄 초기화</button>
+                <button class="sp-btn sp-btn--primary" id="sp-save-btn" type="button">💾 저장하기</button>
+              </div>
+
+            </div><!-- /sp-panel -->
+
+          </div><!-- /sp-main -->
+        </div><!-- /sp-layout -->
+
+      </main>
+    </div>
+  </div>
+
+  <script src="../js/common.js"></script>
+  <script type="module" src="../js/pages/supplies.js"></script>
+</body>
+</html>

@@ -13,6 +13,67 @@
 }
 
 /* ════════════════════════════════
+   CALENDAR LEGEND (two-line)
+════════════════════════════════ */
+.cal-legend-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 14px 20px;
+  background: var(--color-bg-card, #fff);
+  border-radius: 12px;
+  border: 1px solid var(--color-border, #e5e7eb);
+}
+
+.cal-legend-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.cal-legend-line-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-text-muted, #9ca3af);
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  min-width: 52px;
+  flex-shrink: 0;
+}
+
+.cal-legend-tags,
+.cal-legend-status-items {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.cal-legend-item-fc {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cal-legend-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+}
+
+.cal-legend-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-secondary, #374151);
+  white-space: nowrap;
+}
+
+/* ════════════════════════════════
    CALENDAR LAYOUT
    왼쪽: 달력 / 오른쪽: 선택일 상세
 ════════════════════════════════ */
@@ -551,4 +612,30 @@
   .calendar-page-header { flex-direction: column; }
 
   .cal-nav-right { display: none; }
+
+  /* Two-line legend: stack each line label above its items */
+  .cal-legend-row {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .cal-legend-line {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .cal-legend-line-label {
+    min-width: unset;
+    margin-bottom: 2px;
+  }
+
+  .cal-legend-tags,
+  .cal-legend-status-items {
+    gap: 6px 10px;
+  }
+
+  .cal-legend-label {
+    font-size: 0.75rem;
+  }
 }

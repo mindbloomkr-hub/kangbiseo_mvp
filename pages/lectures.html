@@ -2,6 +2,15 @@
 <!-- pages/lectures.html — 강비서 나의 강의 리스트 -->
 <html lang="ko">
 <head>
+
+  <!-- Google Tag Manager -->
+  <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+  })(window,document,'script','dataLayer','GTM-MT8KX3JV');</script>
+  <!-- End Google Tag Manager -->
+
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>나의 강의 리스트 | 강비서</title>
@@ -15,6 +24,11 @@
   <link rel="stylesheet" href="../css/multiSessionModal.css" />
 </head>
 <body>
+  <!-- Google Tag Manager (noscript) -->
+  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-MT8KX3JV"
+  height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+  <!-- End Google Tag Manager (noscript) -->
+   
 
   <div class="app-shell">
     <!-- 사이드바: authGuard → loadSidebar() 에서 동적 주입 -->
@@ -288,8 +302,17 @@
           <input class="bm-input" type="text" id="bm-groupInfo" placeholder="예) 팀별 5인 4개조" disabled>
         </div>
         <div class="bm-field bm-field--cb">
-          <div class="bm-cb-row"><input type="checkbox" class="bm-cb" id="bm-cb-supplies"><label class="bm-label" for="bm-supplies">준비물</label></div>
-          <textarea class="bm-input" id="bm-supplies" placeholder="준비물" rows="2" disabled></textarea>
+          <div class="bm-cb-row"><input type="checkbox" class="bm-cb" id="bm-cb-supplies"><label class="bm-label">준비물</label></div>
+          <div id="bm-supplies-section" style="opacity:0.5;pointer-events:none">
+            <div id="bm-supplies-presets-wrap" class="supplies-presets-wrap" style="display:none">
+              <p class="supplies-presets-label">이 주제 기본 준비물 <span>(체크 해제 시 제외)</span></p>
+              <div id="bm-supplies-presets-list" class="supplies-preset-grid"></div>
+            </div>
+            <div class="supplies-chip-wrap" id="bm-supplies-wrap">
+              <div class="supplies-chip-list" id="bm-supplies-chip-list"></div>
+              <input class="supplies-chip-input" type="text" id="bm-supplies-input" placeholder="추가 준비물 입력 후 Enter" maxlength="50" />
+            </div>
+          </div>
         </div>
 
         <p class="bm-section-title">담당자 정보</p>

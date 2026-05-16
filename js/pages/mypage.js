@@ -3,7 +3,7 @@
 import { auth, db, uploadProfilePhoto, fetchGoogleCalendarEvents, authGuard } from '../api.js';
 import {
   collection, doc, getDoc, setDoc, addDoc,
-  query, where, getDocs, serverTimestamp,
+  query, where, getDocs, writeBatch, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
 import {
   escapeHtml, classifyStatus, STATUS_META,
@@ -58,6 +58,21 @@ let fbKeywords         = [];
 let fbTopics           = [];
 let selectedTopicColor = '#2563c4';
 let topicIdCounter     = 1;
+let _colorExpanded     = false;
+
+const TOPIC_COLORS = [
+  '#2563c4','#059669','#d97706','#dc2626','#7c3aed','#0891b2','#db2777','#374151',
+  '#16a34a','#ea580c','#9333ea','#0284c7','#e11d48','#65a30d','#ca8a04','#0d9488',
+  '#c026d3','#4f46e5','#b45309','#64748b','#be123c','#15803d','#1d4ed8','#78716c',
+];
+const COLOR_NAMES = {
+  '#2563c4':'파란색','#059669':'초록색','#d97706':'주황색','#dc2626':'빨간색',
+  '#7c3aed':'보라색','#0891b2':'청록색','#db2777':'분홍색','#374151':'회색',
+  '#16a34a':'연두색','#ea580c':'주황빨간색','#9333ea':'바이올렛','#0284c7':'하늘색',
+  '#e11d48':'장미색','#65a30d':'라임색','#ca8a04':'황금색','#0d9488':'청록녹색',
+  '#c026d3':'자홍색','#4f46e5':'인디고','#b45309':'갈색','#64748b':'슬레이트',
+  '#be123c':'크림슨','#15803d':'숲녹색','#1d4ed8':'진파랑','#78716c':'웜그레이',
+};
 
 /* ════════════════════════════════════════
    nav-badge (localStorage에서 즉시 초기화)
@@ -368,15 +383,39 @@ function unmarkDocUploaded(key) {
 /* ════════════════════════════════════════
    SECTION 4: 카테고리
 ════════════════════════════════════════ */
+function _renderColorPresets(count) {
+  const group = document.getElementById('color-preset-group');
+  if (!group) return;
+  const colors = TOPIC_COLORS.slice(0, count);
+  group.innerHTML = colors.map(hex => {
+    const name = COLOR_NAMES[hex] || hex;
+    const sel  = hex === selectedTopicColor ? ' selected' : '';
+    return `<button type="button" class="color-preset${sel}" data-color="${hex}"
+              style="background:${hex};" aria-label="${name}" title="${name}"></button>`;
+  }).join('');
+}
+
 function initTopics() {
   renderTopicTags();
-  document.querySelectorAll('.color-preset').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.color-preset').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-      selectedTopicColor = btn.dataset.color;
-    });
+  _renderColorPresets(8);
+
+  const group = document.getElementById('color-preset-group');
+  group?.addEventListener('click', e => {
+    const btn = e.target.closest('.color-preset');
+    if (!btn) return;
+    group.querySelectorAll('.color-preset').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedTopicColor = btn.dataset.color;
   });
+
+  const showMoreBtn = document.getElementById('color-show-more-btn');
+  showMoreBtn?.addEventListener('click', () => {
+    if (_colorExpanded) return;
+    _colorExpanded = true;
+    _renderColorPresets(TOPIC_COLORS.length);
+    showMoreBtn.style.display = 'none';
+  });
+
   document.getElementById('topic-add-btn')?.addEventListener('click', addTopicTag);
   document.getElementById('topic-add-input')?.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); addTopicTag(); }
@@ -398,8 +437,28 @@ function renderTopicTags() {
     el.setAttribute('role', 'listitem');
     el.innerHTML = `<span class="topic-tag-text">${escapeHtml(tag.name)}</span>
       <button type="button" class="topic-tag-del" aria-label="${escapeHtml(tag.name)} 삭제">×</button>`;
-    el.querySelector('.topic-tag-del').addEventListener('click', () => {
-      fbTopics = fbTopics.filter(t => t.id !== tag.id);
+    el.querySelector('.topic-tag-del').addEventListener('click', async () => {
+      const deletedId   = tag.id;
+      const deletedName = tag.name;
+      if (!confirm(`"${deletedName}" 카테고리를 삭제하시겠습니까?\n이 카테고리가 적용된 모든 강의는 자동으로 "일반 강의"로 변경됩니다.`)) return;
+      if (currentUser) {
+        try {
+          const snap = await getDocs(query(
+            collection(db, 'lectures'),
+            where('uid',        '==', currentUser.uid),
+            where('topicTagId', '==', deletedId)
+          ));
+          if (!snap.empty) {
+            const batch = writeBatch(db);
+            snap.docs.forEach(d => batch.update(d.ref, { topicTagId: null }));
+            await batch.commit();
+          }
+        } catch (err) {
+          console.error('[강비서] 카테고리 cascade 오류:', err);
+          showToast('일부 강의의 카테고리 초기화에 실패했습니다.', 'warn');
+        }
+      }
+      fbTopics = fbTopics.filter(t => t.id !== deletedId);
       renderTopicTags();
     });
     list.appendChild(el);

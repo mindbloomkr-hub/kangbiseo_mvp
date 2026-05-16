@@ -505,25 +505,9 @@ color: var(--color-text-secondary) !important; }
   transform: translateY(0) scale(1);
 }
 
-/* 모달 헤더 */
-.modal-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: var(--space-6) var(--space-8);
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
-}
+/* 모달 헤더: .modal-header / .modal-title / .btn-close → common.css */
 
 .modal-title-block {}
-
-.modal-title {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-extrabold);
-  color: var(--color-gray-900);
-  line-height: var(--line-height-snug);
-  margin-bottom: var(--space-2);
-}
 
 .modal-meta-row {
   display: flex;
@@ -538,28 +522,6 @@ color: var(--color-text-secondary) !important; }
   display: flex;
   align-items: center;
   gap: 4px;
-}
-
-.modal-close {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-md);
-  background: var(--color-gray-100);
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  color: var(--color-gray-500);
-  flex-shrink: 0;
-  transition: background var(--transition-fast), color var(--transition-fast);
-  margin-left: var(--space-4);
-}
-
-.modal-close:hover {
-  background: var(--color-gray-200);
-  color: var(--color-gray-800);
 }
 
 /* 모달 바디 */
@@ -995,6 +957,10 @@ color: var(--color-text-secondary) !important; }
   gap: var(--space-4);
 }
 
+.add-form-grid > * {
+  min-width: 0;
+}
+
 .add-form-grid--3 {
   grid-template-columns: 1fr 1fr 1fr;
 }
@@ -1008,6 +974,11 @@ color: var(--color-text-secondary) !important; }
   flex-direction: column;
   gap: 6px;
 }
+
+
+
+
+
 
 .add-form-label {
   font-size: var(--font-size-xs);
@@ -1038,6 +1009,9 @@ color: var(--color-text-secondary) !important; }
 .add-form-input::placeholder { color: var(--color-gray-400); }
 
 .lm-addr-wrap { display: flex; gap: 6px; align-items: stretch; }
+.lm-addr-wrap > * {
+  min-width: 0;
+}
 .lm-addr-btn {
   height: 38px;
   padding: 0 12px;
@@ -1221,6 +1195,43 @@ color: var(--color-text-secondary) !important; }
   align-items: start;
 }
 
+.add-form-grid--title {
+  display: grid;
+  grid-template-columns: 4fr 1fr 1fr;
+  gap: var(--space-3);
+  align-items: center;
+  width: 100%;
+}
+
+/* ★ 가로 스크롤 폭발 방지 핵심 코드 */
+.add-form-grid--title .add-form-field {
+  min-width: 0; 
+}
+.add-form-grid--title .add-form-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+
+
+/* 담당자 정보 1:2:2 비율 그리드 */
+.add-form-grid--manager {
+  display: grid;
+  grid-template-columns: 2fr 3fr 3fr;
+  gap: var(--space-3);
+  align-items: center;
+  width: 100%;
+}
+
+/* ★ 가로 스크롤 폭발 방지 핵심 코드 */
+.add-form-grid--manager .add-form-field {
+  min-width: 0; 
+}
+.add-form-grid--manager .add-form-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 /* 읽기 전용 자동계산 입력 */
 .add-form-input--readonly {
   background: var(--color-gray-100);
@@ -1326,6 +1337,23 @@ color: var(--color-text-secondary) !important; }
   }
   .add-form-grid--5 .add-form-field {
     grid-column: span 1 !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .add-form-grid--manager {
+    grid-template-columns: 1fr; /* 모바일에서는 시원하게 한 줄씩 */
+    gap: var(--space-2);
+  }
+}
+
+@media (max-width: 767px) {
+  .add-form-grid--title {
+    grid-template-columns: 1fr 1fr; 
+    gap: var(--space-2);
+  }
+  .add-form-grid--title .add-form-field:nth-child(1) {
+    grid-column: span 2;
   }
 }
 

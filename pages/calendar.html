@@ -2,6 +2,15 @@
 <!-- pages/calendar.html — 강비서 강의 캘린더 (FullCalendar + Firebase) -->
 <html lang="ko">
 <head>
+
+  <!-- Google Tag Manager -->
+  <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+  })(window,document,'script','dataLayer','GTM-MT8KX3JV');</script>
+  <!-- End Google Tag Manager -->
+
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>강의 캘린더 | 강비서</title>
@@ -13,6 +22,7 @@
   <link rel="stylesheet" href="../css/calendar.css" />
   <link rel="stylesheet" href="../css/home.css" />
   <link rel="stylesheet" href="../css/modal.css" />
+  <link rel="stylesheet" href="../css/multiSessionModal.css" />
   <style>
     :root {
       --fc-border-color: #e5e7eb;
@@ -48,7 +58,7 @@
     .fc .fc-event { border-radius: 5px; font-size: 0.75rem; font-weight: 500; padding: 2px 6px; cursor: pointer; border: none !important; transition: opacity 150ms, transform 100ms; }
     .fc .fc-event:hover { opacity: .88; transform: translateY(-1px); }
     .fc .fc-event .fc-event-time { font-weight: 600; margin-right: 3px; }
-    .fc .fc-timegrid-slot { height: 0.8em; border-color: #f3f4f6; }
+    .fc .fc-timegrid-slot { height: 2em; border-color: #f3f4f6; }
     .fc .fc-timegrid-slot-label { font-size: 0.72rem; color: #9ca3af; }
     .fc .fc-timegrid-now-indicator-line { border-color: #ef4444; }
     .fc .fc-timegrid-now-indicator-arrow { border-top-color: #ef4444; border-bottom-color: #ef4444; }
@@ -57,37 +67,7 @@
     .cal-view-btn.active { background: #0a1628; border-color: #0a1628; color: #fff; }
     .cal-view-btn:hover:not(.active) { background: var(--color-bg-hover, #e5e7eb); border-color: #9ca3af; color: var(--color-text-primary, #111827); }
     .calendar-page-header-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; flex-wrap: wrap; }
-    .cal-legend-row {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: clamp(8px, 2vw, 24px); 
-      margin-top: 24px;
-      padding: clamp(12px, 3vw, 20px) clamp(16px, 5vw, 40px);
-      background: var(--color-bg-card, #fff);
-      border-radius: 12px;
-      border: 1px solid var(--color-border, #e5e7eb);
-    }
-    .cal-legend-label { 
-      font-size: clamp(0.8rem, 1vw, 1rem);
-      font-weight: 600;
-      color: #374151;
-      white-space: nowrap;
-    }
-    .cal-legend-item-fc {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .cal-legend-badge {
-      width: clamp(12px, 1.5vw, 18px);
-      height: clamp(12px, 1.5vw, 18px);
-      border-radius: 4px;
-      flex-shrink: 0;
-      padding: 10px 16px;
-    }
-    .cal-legend-badge:hover { opacity: .8; }
+    /* legend styles live in calendar.css */
     #cal-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 40px; color: var(--color-text-muted, #9ca3af); font-size: 0.9rem; }
     #cal-loading.hidden { display: none; }
     .cal-spinner { width: 18px; height: 18px; border: 2px solid #e5e7eb; border-top-color: #0ea5e9; border-radius: 50%; animation: spin .7s linear infinite; }
@@ -96,19 +76,15 @@
     .fc .fc-event.fc-cancelled-lec .fc-event-title,
     .fc .fc-event.fc-cancelled-lec .fc-list-event-title { text-decoration: line-through; }
     .fc .fc-daygrid-event .fc-event-title { font-weight: 600; }
-    @media (max-width: 768px) {
-    .cal-legend-row {
-      justify-content: flex-start; /* 모바일은 왼쪽부터 채우는 게 자연스러움 */
-      gap: 12px 16px;            /* 세로 간격 12px, 가로 간격 16px */
-      padding: 12px;
-    }
-    .cal-legend-label {
-      font-size: 0.85rem;        /* 모바일에선 너무 작지도 크지도 않게 */
-    }
-  }
+    /* mobile legend overrides live in calendar.css */
   </style>
 </head>
 <body>
+
+  <!-- Google Tag Manager (noscript) -->
+  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-MT8KX3JV"
+  height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+  <!-- End Google Tag Manager (noscript) -->
 
   <div class="app-shell">
     <!-- 사이드바: authGuard → loadSidebar() 에서 동적 주입 -->
@@ -146,50 +122,48 @@
         </div>
 
         <div class="cal-legend-row">
-          <div class="cal-legend-item-fc">
-            <span class="cal-legend-badge badge-discussing" style="background-color: #ede9fe; border: 1px solid #a78bfa;"></span>
-            <span class="cal-legend-label" style="color: #4338ca;">논의 중</span>
-          </div>
-          <div class="cal-legend-item-fc">
-            <span class="cal-legend-badge badge-scheduled" style="background-color: #0ea5e9; border: 1px solid #0284c7;"></span>
-            <span class="cal-legend-label">진행 예정</span>
-          </div>
-          <div class="cal-legend-item-fc">
-            <span class="cal-legend-badge badge-done" style="background-color: #059669; border: 1px solid #047857;"></span>
-            <span class="cal-legend-label" style="color: #000000">진행 완료</span>
-          </div>
-          <div class="cal-legend-item-fc">
-            <span class="cal-legend-badge badge-onhold" style="background-color: #f3f4f6; border: 1px solid #9ca3af;"></span>
-            <span class="cal-legend-label">보류 중</span>
-          </div>
-          <div class="cal-legend-item-fc">
-            <span class="cal-legend-badge badge-cancelled" style="opacity: 0.6; 
-              border: 1.5px dashed #9ca3af; 
-              background-color: #f9fafb; 
-              padding: 10px 20px; 
-              border-radius: 4px; 
-              display: flex; 
-              align-items: center;
-              gap: 12px;">
-            </span>
-            <span class="cal-legend-label">취소/드롭</span>
-          </div>
-          <div class="cal-legend-divider"></div> <div class="cal-legend-item">
-            <span class="cal-legend-badge badge-urgent" style="background-color: #f59e0b; border: 1px solid #d97706;"></span>
-            <span class="cal-legend-label">준비 임박</span>
-          </div>
-          <div class="cal-legend-item">
-            <span class="cal-legend-badge badge-unpaid" style="background-color: #96efc1; border: 1px solid #047857;"></span>
-            <span class="cal-legend-label" style="color: #b91c1c">미입금</span>
-          </div>
-          <div class="cal-legend-item">
-            <span class="cal-legend-badge badge-needs_review" style="background-color: #fbee03; border: 1px solid #9ca3af;"></span>
-            <span class="cal-legend-label" style="color: #310f70">확인 필요</span>
+
+          <!-- Line 1: Topic Tags — populated by calendar.js after auth -->
+          <div class="cal-legend-line cal-legend-line--tags" hidden>
+            <span class="cal-legend-line-label">카테고리</span>
+            <div class="cal-legend-tags" id="cal-legend-tags"></div>
           </div>
 
+          <!-- Line 2: Status categories (fixed order) -->
+          <div class="cal-legend-line cal-legend-line--status">
+            <span class="cal-legend-line-label">진행 상태</span>
+            <div class="cal-legend-status-items">
+              <div class="cal-legend-item-fc">
+                <span class="cal-legend-dot" style="background:#ede9fe;border:1px dashed #a78bfa;"></span>
+                <span class="cal-legend-label" style="color:#4338ca;">논의 중</span>
+              </div>
+              <div class="cal-legend-item-fc">
+                <span class="cal-legend-dot" style="background:#f3f4f6;border:1px solid #9ca3af;"></span>
+                <span class="cal-legend-label">보류 중</span>
+              </div>
+              <div class="cal-legend-item-fc">
+                <span class="cal-legend-dot" style="background:#f9fafb;border:1.5px dashed #9ca3af;opacity:0.6;"></span>
+                <span class="cal-legend-label">취소/드롭</span>
+              </div>
+              <div class="cal-legend-item-fc">
+                <span class="cal-legend-dot" style="background:#fbee03;border:1px solid #c8a800;"></span>
+                <span class="cal-legend-label" style="color:#108500;">확인 필요</span>
+              </div>
+              <div class="cal-legend-item-fc">
+                <span class="cal-legend-dot" style="background:#0ea5e9;border:1px solid #0284c7;"></span>
+                <span class="cal-legend-label">진행 예정</span>
+              </div>
+              <div class="cal-legend-item-fc">
+                <span class="cal-legend-dot" style="background:#f59e0b;border:1px solid #d97706;"></span>
+                <span class="cal-legend-label">준비 임박</span>
+              </div>
+              <div class="cal-legend-item-fc">
+                <span class="cal-legend-dot" style="background:#059669;border:1px solid #047857;"></span>
+                <span class="cal-legend-label">진행 완료</span>
+              </div>
+            </div>
+          </div>
 
-
-          
         </div>
 
         

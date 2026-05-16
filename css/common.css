@@ -736,9 +736,9 @@ body {
 }
 
 .tl-card--home-origin {
-  background: #f0f4ff;
-  border: 1px solid #c7d7f8;
-  border-left: 3px solid #6b7280;
+  background: #11182715;
+  border: 1px solid #11182750;
+  border-left: 3px solid #11182780;
 }
 
 /* ── Departure card interior layout ── */
@@ -848,4 +848,74 @@ body {
   .section {
     padding-block: var(--space-16);
   }
+}
+
+/* ════════════════════════════════
+   공용 아이콘 배경 색상
+   — home(.stat-icon--*) / settlement(.sl-stat-icon--*) 양쪽에서 같은 토큰을 사용하므로
+     한 곳에서 관리한다. 개별 CSS 파일에서 중복 선언하지 않는다.
+════════════════════════════════ */
+.stat-icon--blue,   .sl-stat-icon--blue   { background: var(--color-primary-100); }
+.stat-icon--green,  .sl-stat-icon--green  { background: var(--color-success-100); }
+.stat-icon--yellow, .sl-stat-icon--yellow { background: var(--color-warning-100); }
+.stat-icon--red,    .sl-stat-icon--red    { background: var(--color-danger-100); }
+
+/* ════════════════════════════════
+   공용 정산 상태 배지 (payment-status badge)
+   — settlement.css의 .sl-status-badge--* 와 동일한 색상 토큰을 사용.
+   새 페이지에서 상태 배지가 필요할 때 이 클래스를 재사용한다.
+════════════════════════════════ */
+.status-badge--paid      { background: #d1fae5; color: #065f46; }
+.status-badge--pending   { background: #dbeafe; color: #1e40af; }
+.status-badge--overdue   { background: #fee2e2; color: #991b1b; }
+.status-badge--scheduled { background: #ede9fe; color: #5b21b6; }
+.status-badge--record    { background: #f3f4f6; color: #6b7280; }
+
+/* ════════════════════════════════
+   공용 모달 헤더 / 제목 / 닫기 버튼
+   — multiSessionModal.html 등 모든 모달에서 공유
+════════════════════════════════ */
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--space-6) var(--space-8);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.modal-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-extrabold);
+  color: var(--color-gray-900);
+  line-height: var(--line-height-snug);
+  margin-bottom: var(--space-2);
+}
+
+.modal-form-subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+.btn-close {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: var(--color-gray-100);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--color-gray-500);
+  flex-shrink: 0;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  margin-left: var(--space-4);
+}
+
+.btn-close:hover {
+  background: var(--color-gray-200);
+  color: var(--color-gray-800);
 }

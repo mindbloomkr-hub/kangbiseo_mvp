@@ -2,6 +2,15 @@
 <!-- pages/mypage.html — 강비서 마이 페이지 -->
 <html lang="ko">
 <head>
+
+  <!-- Google Tag Manager -->
+  <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+  })(window,document,'script','dataLayer','GTM-MT8KX3JV');</script>
+  <!-- End Google Tag Manager -->
+
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>마이 페이지 | 강비서</title>
@@ -14,6 +23,11 @@
   <link rel="stylesheet" href="../css/mypage.css" />
 </head>
 <body>
+  <!-- Google Tag Manager (noscript) -->
+  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-MT8KX3JV"
+  height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+  <!-- End Google Tag Manager (noscript) -->
+   
 
   <!-- ══════════════════════════════════════
        APP SHELL
@@ -520,31 +534,17 @@
 
                 <!-- 카테고리 입력 영역 -->
                 <div class="topic-add-row" role="group" aria-label="새 카테고리 추가">
-                  <input class="topic-add-input" type="text" id="topic-add-input"
-                         placeholder="주제 이름 입력 (예: 경영, IT, 인문학)"
-                         maxlength="20" aria-label="카테고리 이름" />
-
-                  <!-- 컬러 프리셋 -->
-                  <div class="color-preset-group" role="group" aria-label="카테고리 색상 선택">
-                    <button type="button" class="color-preset selected" data-color="#2563c4"
-                            style="background:#2563c4;" aria-label="파란색" title="파란색"></button>
-                    <button type="button" class="color-preset" data-color="#059669"
-                            style="background:#059669;" aria-label="초록색" title="초록색"></button>
-                    <button type="button" class="color-preset" data-color="#d97706"
-                            style="background:#d97706;" aria-label="주황색" title="주황색"></button>
-                    <button type="button" class="color-preset" data-color="#dc2626"
-                            style="background:#dc2626;" aria-label="빨간색" title="빨간색"></button>
-                    <button type="button" class="color-preset" data-color="#7c3aed"
-                            style="background:#7c3aed;" aria-label="보라색" title="보라색"></button>
-                    <button type="button" class="color-preset" data-color="#0891b2"
-                            style="background:#0891b2;" aria-label="청록색" title="청록색"></button>
-                    <button type="button" class="color-preset" data-color="#db2777"
-                            style="background:#db2777;" aria-label="분홍색" title="분홍색"></button>
-                    <button type="button" class="color-preset" data-color="#374151"
-                            style="background:#374151;" aria-label="회색" title="회색"></button>
+                  <div class="topic-input-line">
+                    <input class="topic-add-input" type="text" id="topic-add-input"
+                           placeholder="주제 이름 입력 (예: 경영, IT, 인문학)"
+                           maxlength="20" aria-label="카테고리 이름" />
+                    <button type="button" class="topic-add-btn" id="topic-add-btn">+ 카테고리 추가</button>
                   </div>
-
-                  <button type="button" class="topic-add-btn" id="topic-add-btn">+ 카테고리 추가</button>
+                  <div class="topic-color-area">
+                    <!-- 컬러 프리셋 (JS로 렌더링) -->
+                    <div class="color-preset-group" id="color-preset-group" role="group" aria-label="카테고리 색상 선택"></div>
+                    <button type="button" class="color-show-more-btn" id="color-show-more-btn">색상 더 보기 ▾</button>
+                  </div>
                 </div>
 
               </div><!-- /.mypage-card-body -->

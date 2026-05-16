@@ -2,6 +2,15 @@
 <!-- pages/home.html — 강비서 홈(대시보드) -->
 <html lang="ko">
 <head>
+
+  <!-- Google Tag Manager -->
+  <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+  })(window,document,'script','dataLayer','GTM-MT8KX3JV');</script>
+  <!-- End Google Tag Manager -->
+
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>홈 | 강비서</title>
@@ -15,6 +24,11 @@
 </head>
 <body>
 
+  <!-- Google Tag Manager (noscript) -->
+  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-MT8KX3JV"
+  height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+  <!-- End Google Tag Manager (noscript) -->
+   
   <div class="app-shell">
     <!-- 사이드바: authGuard → loadSidebar() 에서 동적 주입 -->
 
@@ -42,59 +56,57 @@
 
         <div class="stat-bar" id="stat-bar" aria-label="오늘의 현황 요약"></div>
 
-        <div class="home-full-row">
 
-          <div class="home-col-left">
-            <section class="panel" aria-labelledby="briefing-heading">
-              <div class="panel-header">
-                <h2 class="panel-title" id="briefing-heading"><span class="panel-title-icon">📌</span>오늘의 강의 브리핑</h2>
-                <a href="lectures.html" class="panel-action">전체 보기 →</a>
-              </div>
-              <div class="panel-body">
-                <div class="lecture-briefing-list" id="briefing-list"></div>
-              </div>
-            </section>
+        <div class="home-grid">
 
-            <section class="panel" aria-labelledby="todo-heading" style="margin-top:var(--space-8)">
-              <div class="panel-header">
-                <h2 class="panel-title" id="todo-heading"><span class="panel-title-icon">✅</span>오늘의 할 일</h2>
+          <section id="briefing-section" class="panel" aria-labelledby="briefing-heading">
+            <div class="panel-header">
+              <h2 class="panel-title" id="briefing-heading"><span class="panel-title-icon">📌</span>오늘의 강의 브리핑</h2>
+              <a href="lectures.html" class="panel-action">전체 보기 →</a>
+            </div>
+            <div class="panel-body">
+              <div class="lecture-briefing-list" id="briefing-list"></div>
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="todo-heading">
+            <div class="panel-header">
+              <h2 class="panel-title" id="todo-heading"><span class="panel-title-icon">✅</span>오늘의 할 일</h2>
+            </div>
+            <div class="panel-body">
+              <div class="todo-input-row">
+                <input class="todo-input" type="text" id="todo-input" placeholder="할 일을 입력하세요" maxlength="80" aria-label="할 일 입력" />
+                <button class="todo-add-btn" id="todo-add-btn" aria-label="추가">+</button>
               </div>
-              <div class="panel-body">
-                <div class="todo-input-row">
-                  <input class="todo-input" type="text" id="todo-input" placeholder="할 일을 입력하세요" maxlength="80" aria-label="할 일 입력" />
-                  <button class="todo-add-btn" id="todo-add-btn" aria-label="추가">+</button>
+              <div class="todo-list" id="todo-list" role="list" aria-label="할 일 목록"></div>
+              <div class="todo-footer">
+                <span class="todo-count" id="todo-count"></span>
+                <div style="display:flex;gap:var(--space-3)">
+                  <span class="todo-clear-btn" id="todo-postpone-all" role="button" tabindex="0">전체 미루기 ⏭</span>
+                  <!-- <span class="todo-clear-btn" id="todo-clear-done" role="button" tabindex="0">완료 삭제</span> -->
                 </div>
-                <div class="todo-list" id="todo-list" role="list" aria-label="할 일 목록"></div>
-                <div class="todo-footer">
-                  <span class="todo-count" id="todo-count"></span>
-                  <div style="display:flex;gap:var(--space-3)">
-                    <span class="todo-clear-btn" id="todo-postpone-all" role="button" tabindex="0">전체 미루기 ⏭</span>
-                    <span class="todo-clear-btn" id="todo-clear-done" role="button" tabindex="0">완료 삭제</span>
-                  </div>
-                </div>
               </div>
-            </section>
-          </div>
+            </div>
+          </section>
 
-          <div class="home-col-right">
-            <section class="panel" aria-labelledby="timeline-heading" style="margin-top:var(--space-8)">
-              <div class="panel-header">
-                <h2 class="panel-title" id="timeline-heading"><span class="panel-title-icon">⏱</span>오늘의 타임스케줄</h2>
-                <a href="calendar.html" class="panel-action">캘린더 →</a>
-              </div>
-              <div class="panel-body">
-                <div class="timeline-wrapper" id="timeline-list" aria-label="오늘 일정 타임라인"></div>
-              </div>
-            </section>
-            <section class="panel" aria-labelledby="tomorrow-timeline-heading"  style="margin-top:var(--space-8)">
-              <div class="panel-header">
-                <h2 class="panel-title" id="tomorrow-timeline-heading"><span class="panel-title-icon">🌅</span>내일의 타임스케줄</h2>
-              </div>
-              <div class="panel-body">
-                <div class="timeline-wrapper" id="tomorrow-timeline-list" aria-label="내일 일정 타임라인"></div>
-              </div>
-            </section>
-          </div>
+          <section class="panel" aria-labelledby="timeline-heading">
+            <div class="panel-header">
+              <h2 class="panel-title" id="timeline-heading"><span class="panel-title-icon">⏱</span>오늘의 타임스케줄</h2>
+              <a href="calendar.html" class="panel-action">캘린더 →</a>
+            </div>
+            <div class="panel-body">
+              <div class="timeline-wrapper" id="timeline-list" aria-label="오늘 일정 타임라인"></div>
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="tomorrow-timeline-heading">
+            <div class="panel-header">
+              <h2 class="panel-title" id="tomorrow-timeline-heading"><span class="panel-title-icon">🌅</span>내일의 타임스케줄</h2>
+            </div>
+            <div class="panel-body">
+              <div class="timeline-wrapper" id="tomorrow-timeline-list" aria-label="내일 일정 타임라인"></div>
+            </div>
+          </section>
 
         </div>
 
