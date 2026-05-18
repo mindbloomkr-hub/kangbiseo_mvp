@@ -1,5 +1,6 @@
 // js/pages/home.js — 홈 대시보드 (Firestore 실시간 연동)
-import { subscribeLectures, authGuard, syncUserProfile } from '../api.js';
+import { subscribeLectures, authGuard, syncUserProfile, db } from '../api.js';
+import { doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
 import { subscribeTodos, addTodo, clearDoneTodos, postponeAllTodayTodos } from '../services/todoService.js';
 import { renderTodoList, bindTodoEvents } from '../components/todoComponent.js';
 import { DAY_KO, escapeHtml, fmt, calcFee, getTodayString, fetchTravelMin, clearTravelCache, hexToRgba, timeToMin, minToTime, formatDateString, calcPaymentStatus, calculateSettlementStats } from '../utils.js';
@@ -473,25 +474,47 @@ function renderBriefingCards() {
 
   if (!container.dataset.delegated) {
     container.dataset.delegated = '1';
-    container.addEventListener('click', e => {
+    container.addEventListener('click', async e => {
       // Supplies checkbox toggle (must be first so it doesn't bubble to accordion)
       if (e.target.classList.contains('supplies-check-cb')) {
         const cb     = e.target;
         const lecId  = cb.dataset.lecId;
         const itemId = cb.dataset.itemId;
+
+        // 1. Optimistic in-memory state — drives re-render until snapshot arrives
         _suppliesState[`${lecId}:${itemId}`] = cb.checked;
         cb.closest('.supplies-check-item')?.classList.toggle('is-checked', cb.checked);
+
+        // 2. Update progress bar immediately from live DOM
         const card = cb.closest('.lecture-briefing-card');
         if (card) {
-          const allCbs      = card.querySelectorAll('.supplies-check-cb');
-          const checkedNow  = [...allCbs].filter(c => c.checked).length;
-          const totalNow    = allCbs.length;
-          const pctNow      = totalNow > 0 ? Math.round(checkedNow / totalNow * 100) : 0;
-          const progText    = card.querySelector('.supplies-progress-text');
-          const progBar     = card.querySelector('.supplies-progress-bar');
+          const allCbs     = card.querySelectorAll('.supplies-check-cb');
+          const checkedNow = [...allCbs].filter(c => c.checked).length;
+          const totalNow   = allCbs.length;
+          const pctNow     = totalNow > 0 ? Math.round(checkedNow / totalNow * 100) : 0;
+          const progText   = card.querySelector('.supplies-progress-text');
+          const progBar    = card.querySelector('.supplies-progress-bar');
           if (progText) progText.textContent = `챙김: ${checkedNow}/${totalNow}`;
           if (progBar)  progBar.style.width  = `${pctNow}%`;
-          _saveSuppliesState(lecId, card);
+        }
+
+        // 3. Build payload from the authoritative in-memory lecture data (not DOM).
+        //    Apply _suppliesState overrides so every item reflects the current
+        //    session's checked state, not the stale Firestore isChecked baseline.
+        const lec = allLectures.find(l => l.id === lecId);
+        if (lec) {
+          const baseItems       = _parseSupplies(lec.supplies);
+          const updatedSupplies = baseItems.map(item => ({
+            name:      item.name,
+            isChecked: _suppliesState[`${lecId}:${item.id}`] !== undefined
+                         ? _suppliesState[`${lecId}:${item.id}`]
+                         : item.isChecked,
+          }));
+          try {
+            await updateDoc(doc(db, 'lectures', lecId), { supplies: updatedSupplies });
+          } catch (err) {
+            console.error('[Supplies Sync Error]:', err);
+          }
         }
         return;
       }

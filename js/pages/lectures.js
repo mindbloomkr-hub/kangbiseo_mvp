@@ -902,6 +902,8 @@ function _closeBatchModal() {
   if (!bd) return;
   bd.classList.remove('open');
   document.body.style.overflow = '';
+  const applyBtn = document.getElementById('bm-apply');
+  if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = '적용하기'; }
 }
 
 function _detectBatchConflicts(newStart, newEnd) {
