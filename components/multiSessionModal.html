@@ -221,6 +221,16 @@
             </select>
           </div>
           <div class="ms-field">
+            <label class="ms-label" for="ms-fee-type">강사료 유형</label>
+            <select class="ms-select" id="ms-fee-type">
+              <option value="unit">회차별 입력 (단가)</option>
+              <option value="fixed">총액 입력 (고정)</option>
+            </select>
+          </div>
+          <div class="ms-field"></div>
+        </div>
+        <div class="ms-grid ms-grid--3" style="margin-top:var(--space-2)">
+          <div class="ms-field">
             <label class="ms-label" for="ms-fee">회차별 강사료 (만원)</label>
             <input class="ms-input" type="number" id="ms-fee" placeholder="0" min="0" />
           </div>
@@ -228,13 +238,14 @@
             <label class="ms-label" for="ms-fee-total">강사료 총 금액 (만원)</label>
             <input class="ms-input" type="number" id="ms-fee-total" placeholder="0" min="0" />
           </div>
+          <div class="ms-field"></div>
         </div>
         <div class="ms-grid ms-grid--3" style="margin-top:var(--space-4)">
           <div class="ms-field">
             <label class="ms-label" for="ms-paid-status">정산 상태</label>
             <select class="ms-input" id="ms-paid-status"><option value="false">미입금</option><option value="true">입금 완료</option><option value="na">해당없음</option></select>
           </div>
-          <div class="ms-field"><label class="ms-label" for="ms-payment-date">예상 지급일</label><input class="ms-input" type="date" id="ms-payment-date" /></div>
+          <div class="ms-field"><label class="ms-label" for="ms-payment-date">지급 예정일</label><input class="ms-input" type="date" id="ms-payment-date" /></div>
             <div class="ms-field">
               <label class="ms-label" for="ms-tax">세금 정보</label>
               <select class="ms-input" id="ms-tax">

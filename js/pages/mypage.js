@@ -37,9 +37,17 @@ function loadDevice() {
   try {
     const raw = localStorage.getItem('kangbiseo_device');
     if (!raw) return JSON.parse(JSON.stringify(DEFAULT_DEVICE));
-    // 구버전 키 호환: kangbiseo_mypage
     const parsed = JSON.parse(raw);
-    return parsed;
+    // Deep-merge so that any key missing in old localStorage data (e.g. settlement,
+    // scheduler sub-keys) is always filled in with the current DEFAULT_DEVICE value.
+    return {
+      scheduler: { ...DEFAULT_DEVICE.scheduler, ...(parsed.scheduler || {}) },
+      settlement: {
+        ...DEFAULT_DEVICE.settlement,
+        ...(parsed.settlement || {}),
+        docs: { ...DEFAULT_DEVICE.settlement.docs, ...(parsed.settlement?.docs || {}) },
+      },
+    };
   } catch { return JSON.parse(JSON.stringify(DEFAULT_DEVICE)); }
 }
 
@@ -152,6 +160,7 @@ async function loadFirebaseProfile(uid) {
       if (d.defaultOriginType != null) device.scheduler.defaultOriginType = d.defaultOriginType;
 
       // 정산 설정 — 기기를 넘어 동기화
+      if (!device.settlement) device.settlement = JSON.parse(JSON.stringify(DEFAULT_DEVICE.settlement));
       if (d.hourlyRate    != null) device.settlement.hourlyRate    = Number(d.hourlyRate);
       if (d.bankName      != null) device.settlement.bankName      = d.bankName;
       if (d.accountNumber != null) device.settlement.accountNumber = d.accountNumber;
@@ -333,12 +342,13 @@ function toggleCustomBuffer(show) {
    SECTION 3: 정산 & 행정
 ════════════════════════════════════════ */
 function initSettlement() {
+  if (!device.settlement) return;
   const s = device.settlement;
-  setVal('hourly-rate',    s.hourlyRate);
-  setVal('bank-name',      s.bankName);
-  setVal('account-number', s.accountNumber);
-  setVal('account-holder', s.accountHolder);
-  updateFeeDisplay(s.hourlyRate);
+  setVal('hourly-rate',    s?.hourlyRate);
+  setVal('bank-name',      s?.bankName);
+  setVal('account-number', s?.accountNumber);
+  setVal('account-holder', s?.accountHolder);
+  updateFeeDisplay(s?.hourlyRate);
   document.getElementById('hourly-rate')?.addEventListener('input', e => {
     updateFeeDisplay(Number(e.target.value));
   });

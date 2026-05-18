@@ -167,6 +167,12 @@ export async function openAddModal() {
   if (paidSel) paidSel.value = 'false';
   const cycleSel = document.getElementById('af-settlement-cycle');
   if (cycleSel) cycleSel.value = '';
+  const feeTypeSel = document.getElementById('af-fee-type');
+  if (feeTypeSel) feeTypeSel.value = 'unit';
+  const _resetFeeEl = document.getElementById('af-fee');
+  const _resetFeeTotalEl = document.getElementById('af-fee-total');
+  if (_resetFeeEl) { _resetFeeEl.readOnly = false; _resetFeeEl.classList.remove('add-form-input--readonly'); }
+  if (_resetFeeTotalEl) { _resetFeeTotalEl.readOnly = true; _resetFeeTotalEl.classList.add('add-form-input--readonly'); }
   const taxSel = document.getElementById('af-tax');
   if (taxSel) { taxSel.value = 'income3_3'; taxSel.disabled = false; }
 
@@ -316,17 +322,42 @@ function _switchMode(mode) {
 }
 
 function _syncFeeTotalForm() {
-  const fee          = parseFloat(document.getElementById('af-fee')?.value) || 0;
-  const sessionTotal = parseInt(document.getElementById('af-session-total')?.value) || 0;
+  const feeType      = document.getElementById('af-fee-type')?.value || 'unit';
+  const feeEl        = document.getElementById('af-fee');
   const wrap         = document.getElementById('af-fee-total-wrap');
   const feeTotalEl   = document.getElementById('af-fee-total');
+  const sessionTotal = parseInt(document.getElementById('af-session-total')?.value) || 0;
   if (!wrap || !feeTotalEl) return;
-  if (sessionTotal > 1) {
+
+  if (feeType === 'fixed') {
+    // total is primary — fee per-session is computed
     wrap.style.display = '';
-    feeTotalEl.value   = fee > 0 ? String(fee * sessionTotal) : '';
+    feeTotalEl.readOnly = false;
+    feeTotalEl.classList.remove('add-form-input--readonly');
+    if (feeEl) {
+      feeEl.readOnly = true;
+      feeEl.classList.add('add-form-input--readonly');
+      const feeTotal = parseFloat(feeTotalEl.value) || 0;
+      feeEl.value = feeTotal > 0 && sessionTotal > 0
+        ? String(+(feeTotal / sessionTotal).toFixed(2))
+        : (feeTotal > 0 ? String(feeTotal) : '');
+    }
   } else {
-    wrap.style.display = 'none';
-    feeTotalEl.value   = '';
+    // unit — fee per-session is primary; total is auto-computed
+    if (feeEl) {
+      feeEl.readOnly = false;
+      feeEl.classList.remove('add-form-input--readonly');
+    }
+    feeTotalEl.readOnly = true;
+    feeTotalEl.classList.add('add-form-input--readonly');
+    const fee = parseFloat(feeEl?.value) || 0;
+    if (sessionTotal > 1) {
+      wrap.style.display = '';
+      feeTotalEl.value   = fee > 0 ? String(fee * sessionTotal) : '';
+    } else {
+      wrap.style.display = 'none';
+      feeTotalEl.value   = '';
+    }
   }
 }
 
@@ -461,6 +492,8 @@ function _populateForm(lec) {
   set('af-date',     (lec.startDate != null ? lec.startDate : lec.date));
   set('af-title',           lec.title);
   set('af-client',          lec.client);
+  const _feeTypeEl = document.getElementById('af-fee-type');
+  if (_feeTypeEl) _feeTypeEl.value = lec.feeType || 'unit';
   set('af-fee',             lec.fee);
   set('af-session-current', lec.sessionCurrent);
   set('af-session-total',   lec.sessionTotal);
@@ -470,9 +503,23 @@ function _populateForm(lec) {
   _refreshTagPicker(lec.topicTagId);
   set('af-setup-time',      (lec.setupTime  != null ? lec.setupTime  : ''));
   set('af-wrapup-time',     (lec.wrapupTime != null ? lec.wrapupTime : ''));
-  _afSupplies = _parseSupplies(lec.supplies);
+  const _allExisting     = _parseSupplies(lec.supplies);
+  const _tagDefs         = getTopicDefaultSupplies(lec.topicTagId ?? null);
+  if (_tagDefs.length > 0) {
+    const _presetNamesLo  = new Set(_tagDefs.map(d => d.name.trim().toLowerCase()));
+    const _savedNamesLo   = new Set(_allExisting.map(s => s.name.trim().toLowerCase()));
+    // Master items that match saved supplies → checked; others → unchecked
+    _afPresets  = _tagDefs.map((d, i) => ({
+      id: i + 1, name: d.name,
+      included: _savedNamesLo.has(d.name.trim().toLowerCase()),
+    }));
+    // Custom chips = saved supplies not covered by the master preset list
+    _afSupplies = _allExisting.filter(s => !_presetNamesLo.has(s.name.trim().toLowerCase()));
+  } else {
+    _afPresets  = [];
+    _afSupplies = _allExisting;
+  }
   _renderAfChips();
-  _afPresets = [];
   _renderAfPresets();
   const _fmQsWrap = document.getElementById('af-supplies-quick-save-wrap');
   if (_fmQsWrap) _fmQsWrap.style.display = lec.topicTagId != null ? '' : 'none';
@@ -580,6 +627,12 @@ function _applyTagTrigger(tagId, prefix = 'lm') {
     const _qs = document.getElementById('af-supplies-quick-save-wrap');
     if (_qs) _qs.style.display = tagId != null ? '' : 'none';
     const _defs = getTopicDefaultSupplies(tagId);
+    if (_defs.length > 0) {
+      // Any custom chip whose name matches a preset moves into the preset list
+      const _presetNamesLo = new Set(_defs.map(d => d.name.trim().toLowerCase()));
+      _afSupplies = _afSupplies.filter(s => !_presetNamesLo.has(s.name.trim().toLowerCase()));
+      _renderAfChips();
+    }
     _afPresets = _defs.map((d, i) => ({ id: i + 1, name: d.name, included: true }));
     _renderAfPresets();
   }
@@ -1065,8 +1118,11 @@ function _autoFillPaymentDate(forceOverwrite = false) {
   if (!cycleEl || !payEl) return;
 
   const cycle = cycleEl.value;
-  if (!cycle) return;
-  if (!forceOverwrite && payEl.value) return;  // manual entry → skip unless cycle changed
+  if (!cycle || cycle === 'other') {
+    if (forceOverwrite) payEl.value = '';
+    return;
+  }
+  if (!forceOverwrite && payEl.value) return;
 
   const date    = document.getElementById('af-date')?.value;
   const endDate = document.getElementById('af-end-date')?.value;
@@ -1087,7 +1143,8 @@ function _autoFillPaymentDate(forceOverwrite = false) {
   }
 
   const baseDate = cycle === 'after-completion' ? (lastDate || date) : (endDate || date);
-  payEl.value = calcPaymentDate(baseDate, cycle, lastDate);
+  const computed = calcPaymentDate(baseDate, cycle, lastDate);
+  payEl.value = computed || '';
 }
 
 /* ════════════════════════════════════════
@@ -1158,6 +1215,10 @@ function _bindEvents() {
   });
 
   document.getElementById('af-fee')?.addEventListener('input', _syncFeeTotalForm);
+  document.getElementById('af-fee-total')?.addEventListener('input', () => {
+    if ((document.getElementById('af-fee-type')?.value || 'unit') === 'fixed') _syncFeeTotalForm();
+  });
+  document.getElementById('af-fee-type')?.addEventListener('change', _syncFeeTotalForm);
   document.getElementById('af-session-total')?.addEventListener('input', _syncFeeTotalForm);
 
   document.getElementById('af-settlement-cycle')?.addEventListener('change', () => {
@@ -1267,9 +1328,11 @@ function _bindEvents() {
       ..._afSupplies.map((s, j) => ({ id: _includedPresets.length + j + 1, name: s.name, isChecked: false })),
     ];
 
+    const _feeTypeVal = get('af-fee-type') || 'unit';
     const payload = {
       startDate: date, startTime: timeStart, endDate, endTime: timeEnd,
       date, timeStart, timeEnd, title, client,
+      feeType:        _feeTypeVal,
       fee:            Number(feeRaw),
       feeAmount:      Number(document.getElementById('af-fee-total')?.value) || null,
       sessionCurrent: Number(get('af-session-current')) || null,
@@ -1381,11 +1444,21 @@ function _bindEvents() {
   document.getElementById('af-supplies-input')?.addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    const name = e.target.value.trim();
-    if (!name) return;
-    _afSupplies.push({ id: Date.now(), name, isChecked: false });
+    const parts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+    if (!parts.length) return;
+    parts.forEach((name, i) => _afSupplies.push({ id: Date.now() + i, name, isChecked: false }));
     _renderAfChips();
     e.target.value = '';
+  });
+  document.getElementById('af-supplies-input')?.addEventListener('input', e => {
+    if (!e.target.value.includes(',')) return;
+    const parts    = e.target.value.split(',');
+    const trailing = parts.pop();                // text after the last comma stays in the field
+    const names    = parts.map(s => s.trim()).filter(Boolean);
+    if (!names.length) { e.target.value = trailing; return; }
+    names.forEach((name, i) => _afSupplies.push({ id: Date.now() + i, name, isChecked: false }));
+    _renderAfChips();
+    e.target.value = trailing.trimStart();
   });
 
   document.getElementById('af-supplies-presets-list')?.addEventListener('change', e => {

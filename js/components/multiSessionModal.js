@@ -350,16 +350,24 @@ function _flashHighlight(el) {
    지급일 자동 계산
 ════════════════════════════════════════ */
 function _syncPaymentDate() {
-  const cycle   = document.getElementById('ms-settlement-cycle')?.value;
+  const cycle = document.getElementById('ms-settlement-cycle')?.value;
+  const payEl = document.getElementById('ms-payment-date');
+  if (!payEl) return;
+
+  if (!cycle || cycle === 'other') {
+    payEl.value = '';
+    return;
+  }
+
   const startEl = document.getElementById('ms-start');
-  const payEl   = document.getElementById('ms-payment-date');
-  if (!payEl || !startEl?.value || !cycle) return;
+  if (!startEl?.value) return;
 
   const lastDate = (cycle === 'after-completion' && _sessions.length > 0)
     ? _sessions[_sessions.length - 1].date
     : startEl.value;
 
-  payEl.value = calcPaymentDate(startEl.value, cycle, lastDate);
+  const computed = calcPaymentDate(startEl.value, cycle, lastDate);
+  payEl.value = computed || '';
 }
 
 /* ════════════════════════════════════════
@@ -367,17 +375,30 @@ function _syncPaymentDate() {
    source: 'fee' | 'fee-total' | 'total'
 ════════════════════════════════════════ */
 function _syncFee(source) {
+  const feeTypeEl  = document.getElementById('ms-fee-type');
+  const feeType    = feeTypeEl?.value || 'unit';
   const feeEl      = document.getElementById('ms-fee');
   const feeTotalEl = document.getElementById('ms-fee-total');
   const total      = parseInt(document.getElementById('ms-total')?.value);
-
   if (!feeEl || !feeTotalEl) return;
+
+  // Enforce readonly states based on feeType
+  if (feeType === 'fixed') {
+    feeEl.readOnly = true;       feeEl.style.background       = '#f3f4f6';
+    feeTotalEl.readOnly = false; feeTotalEl.style.background  = '';
+  } else {
+    feeEl.readOnly = false;      feeEl.style.background       = '';
+    feeTotalEl.readOnly = true;  feeTotalEl.style.background  = '#f3f4f6';
+  }
 
   if (source === 'fee' || source === 'fee-total') _feeLastEdited = source;
 
   if (!total || total <= 0) return;
 
-  const active = source === 'total' ? _feeLastEdited : source;
+  // feeType overrides _feeLastEdited for the active direction
+  const active = feeType === 'fixed' ? 'fee-total'
+               : feeType === 'unit'  ? 'fee'
+               : (source === 'total' ? _feeLastEdited : source);
 
   if (active === 'fee') {
     const fee = parseFloat(feeEl.value);
@@ -413,7 +434,14 @@ function _reset() {
   $('ms-fee').value              = '';
   $('ms-fee-total').value        = '';
   $('ms-settlement-cycle').value = '';
-  _feeLastEdited                 = 'fee';
+  const _msFeeTypeEl = $('ms-fee-type');
+  if (_msFeeTypeEl) _msFeeTypeEl.value = 'unit';
+  _feeLastEdited = 'fee';
+  // Reset fee readonly states to unit mode (fee editable, fee-total readonly)
+  const _msFeeEl = $('ms-fee');
+  const _msFeeTotalEl = $('ms-fee-total');
+  if (_msFeeEl)      { _msFeeEl.readOnly = false;      _msFeeEl.style.background      = ''; }
+  if (_msFeeTotalEl) { _msFeeTotalEl.readOnly = true;  _msFeeTotalEl.style.background = '#f3f4f6'; }
 
   const onlineCb = $('ms-online');
   if (onlineCb) onlineCb.checked = false;
@@ -437,6 +465,8 @@ function _reset() {
   $('ms-group-info').value    = '';
   _msSupplies = [];
   _renderMsChips();
+  _msPresets = getTopicDefaultSupplies(null).map((d, i) => ({ id: i + 1, name: d.name, included: true }));
+  _renderMsPresets();
   $('ms-manager-name').value  = '';
   $('ms-manager-phone').value = '';
   $('ms-manager-email').value = '';
@@ -609,10 +639,11 @@ function _bindEvents() {
   // Save
   $('ms-save').addEventListener('click', _handleSave);
 
-  // Fee bidirectional sync
+  // Fee bidirectional sync + fee-type toggle
   $('ms-fee').addEventListener('input',       () => _syncFee('fee'));
   $('ms-fee-total').addEventListener('input', () => _syncFee('fee-total'));
   $('ms-total').addEventListener('input',     () => _syncFee('total'));
+  $('ms-fee-type')?.addEventListener('change', () => _syncFee('fee-type'));
 
   // Supplies chip input
   $('ms-supplies-wrap')?.addEventListener('click', e => {
@@ -628,11 +659,21 @@ function _bindEvents() {
   $('ms-supplies-input')?.addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    const name = e.target.value.trim();
-    if (!name) return;
-    _msSupplies.push({ id: Date.now(), name, isChecked: false });
+    const parts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+    if (!parts.length) return;
+    parts.forEach((name, i) => _msSupplies.push({ id: Date.now() + i, name, isChecked: false }));
     _renderMsChips();
     e.target.value = '';
+  });
+  $('ms-supplies-input')?.addEventListener('input', e => {
+    if (!e.target.value.includes(',')) return;
+    const parts    = e.target.value.split(',');
+    const trailing = parts.pop();
+    const names    = parts.map(s => s.trim()).filter(Boolean);
+    if (!names.length) { e.target.value = trailing; return; }
+    names.forEach((name, i) => _msSupplies.push({ id: Date.now() + i, name, isChecked: false }));
+    _renderMsChips();
+    e.target.value = trailing.trimStart();
   });
 
   // Kakao address search
@@ -662,6 +703,11 @@ function _bindEvents() {
     _sessions.forEach(s => { s.topicTagId = tagId; });
     if ($('ms-tbody')) _reRenderTableBody();
     const defs = getTopicDefaultSupplies(tagId);
+    if (defs.length > 0) {
+      const _presetNamesLo = new Set(defs.map(d => d.name.trim().toLowerCase()));
+      _msSupplies = _msSupplies.filter(s => !_presetNamesLo.has(s.name.trim().toLowerCase()));
+      _renderMsChips();
+    }
     _msPresets = defs.map((d, i) => ({ id: i + 1, name: d.name, included: true }));
     _renderMsPresets();
   });
@@ -1058,8 +1104,9 @@ async function _handleSave() {
     client,
     place,
     isOnline:         _isOnline,
+    feeType:          $('ms-fee-type')?.value || 'unit',
     fee:              feePerSession,
-    feeTotal:         feeTotalCalc,
+    feeAmount:        feeTotalCalc,
     settlementCycle,
     progressStatus:   $('ms-progress').value || PROGRESS_SCHEDULED,
     topicTagId:       _msTagId,

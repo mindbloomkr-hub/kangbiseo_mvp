@@ -87,30 +87,24 @@ export function calcPaymentDate(date, cycle, lastDate) {
   const d = new Date(date + 'T00:00:00');
   switch (cycle) {
     case 'per-session': {
-      // lecture date + 15 days
-      d.setDate(d.getDate() + 15);
+      d.setDate(d.getDate() + 14);
       return formatDateString(d);
     }
     case 'monthly': {
-      // 15th of the following month
-      return formatDateString(new Date(d.getFullYear(), d.getMonth() + 1, 15));
+      return formatDateString(new Date(d.getFullYear(), d.getMonth() + 1, 20));
     }
     case 'quarterly': {
-      // 15th of the first month of the next quarter
-      // new Date(y, 12, 15) resolves correctly to Jan 15 of y+1
-      const nextQStartMonth = (Math.floor(d.getMonth() / 3) + 1) * 3;
-      return formatDateString(new Date(d.getFullYear(), nextQStartMonth, 15));
+      // 20th of the month after the quarter ends (Apr/Jul/Oct/Jan)
+      const nextQAfterEnd = (Math.floor(d.getMonth() / 3) + 1) * 3;
+      return formatDateString(new Date(d.getFullYear(), nextQAfterEnd, 20));
     }
     case 'after-completion': {
-      // last session date + 15 days (caller passes lastDate)
+      // 20th of the following month after the last session
       const last = new Date((lastDate || date) + 'T00:00:00');
-      last.setDate(last.getDate() + 15);
-      return formatDateString(last);
+      return formatDateString(new Date(last.getFullYear(), last.getMonth() + 1, 20));
     }
     default: {
-      // endDate + 15 days (caller passes endDate || date as `date`)
-      d.setDate(d.getDate() + 15);
-      return formatDateString(d);
+      return '';
     }
   }
 }
@@ -120,12 +114,12 @@ export function calcPaymentDate(date, cycle, lastDate) {
    단일 함수에서 계산하므로 두 페이지 간 값이 항상 일치
 ════════════════════════════════════════ */
 /**
- * 강의 객체에서 수강료(만원 단위)를 읽는다. feeTotal 우선, fee 폴백.
+ * 강의 객체에서 수강료(만원 단위)를 읽는다. feeAmount 우선, fee 폴백.
  * @param {Object} lec - 강의 Firestore 문서 데이터
  * @returns {number} 수강료(만원 단위), 없으면 0
  */
 export function calcFee(lec) {
-  return Number(lec.feeTotal != null ? lec.feeTotal : (lec.fee != null ? lec.fee : 0));
+  return Number(lec.feeAmount != null ? lec.feeAmount : (lec.fee != null ? lec.fee : 0));
 }
 
 export function resolvePaymentDeadline(lec, allLectures) {
@@ -150,17 +144,24 @@ export function resolvePaymentDeadline(lec, allLectures) {
  *   paid=입금완료, pending=입금대기, overdue=연체, scheduled=미진행, na=비정산
  */
 export function calcPaymentStatus(lec, todayStr, allLectures = []) {
+  // 1. Paid check — highest priority
   const ps = lec.paidStatus || (lec.isPaid === true ? 'true' : 'false');
   if (ps === 'true' || lec.isPaid === true) return 'paid';
+
+  // 2. Explicitly excluded from settlement tracking
   if (ps === 'na') return 'na';
-  if (!calcFee(lec)) return 'na';
-  const lecDate    = (lec.endDate != null ? lec.endDate : (lec.date != null ? lec.date : ''));
+
+  // 3. No paymentDate set → not tracked
+  if (!lec.paymentDate) return 'na';
+
+  // 4. Past payment deadline
+  if (lec.paymentDate < todayStr) return 'overdue';
+
+  // 5. Classify by lecture completion
+  const lecDate    = lec.endDate != null ? lec.endDate : (lec.date != null ? lec.date : '');
   const isFinished = lec.progressStatus === PROGRESS_DONE
     || (lec.progressStatus !== PROGRESS_CANCELLED && lecDate !== '' && lecDate < todayStr);
-  if (!isFinished) return 'scheduled';
-  const deadline = resolvePaymentDeadline(lec, allLectures);
-  if (!deadline) return 'pending';
-  return todayStr >= deadline ? 'overdue' : 'pending';
+  return isFinished ? 'pending' : 'scheduled';
 }
 
 /**
@@ -1052,7 +1053,7 @@ export function calculateExpectedSettlement(lectures) {
 
   for (const lec of lectures) {
     if (lec.progressStatus === 'cancelled') continue;
-    const feeAmt = (lec.feeTotal != null ? lec.feeTotal : lec.feeAmount);
+    const feeAmt = lec.feeAmount;
     if (!lec.feeType || !feeAmt || !lec.date) continue;
 
     let sessionAmount;

@@ -1,8 +1,7 @@
 // js/pages/settlement.js — 정산 관리 페이지
 import { subscribeLectures, authGuard, db, getLectureCache, setLectureCache } from '../api.js';
 import {
-  calcPaymentDate, calcFee, fmt, resolvePaymentDeadline,
-  getTodayString, escapeHtml, formatDateKo,
+  fmt, getTodayString, escapeHtml, formatDateKo,
   calculateSettlementStats, calcPaymentStatus,
 } from '../utils.js';
 import { PROGRESS_CANCELLED } from '../constants.js';
@@ -52,6 +51,7 @@ function _ddayHtml(deadline, today, status, feeTotal) {
   if (diff === 0) return `<span class="sl-dday sl-dday--warning">D-Day 입금 대기</span>`;
   return `<span class="sl-dday sl-dday--late">D+${Math.abs(diff)} 연체</span>`;
 }
+
 
 /* ════════════════════════════════════════
    날짜 프리셋
@@ -226,19 +226,25 @@ function renderTable() {
     return;
   }
 
-  const totalFilteredFee = rows.reduce((s, l) => s + calcFee(l), 0);
+  const totalFilteredFee = rows.reduce((s, l) =>
+    s + (l.feeType === 'fixed' ? (Number(l.feeAmount) || 0) : (Number(l.fee) || 0)), 0);
   const summaryFeeStr    = fmt(totalFilteredFee);
 
   const start = _slPage * SL_PAGE;
   const page  = rows.slice(start, start + SL_PAGE);
 
   tbody.innerHTML = page.map(l => {
-    const fee                 = calcFee(l);
-    const status              = calcPaymentStatus(l, today, allLectures);
-    const expectedPaymentDate = resolvePaymentDeadline(l, allLectures);
-    const dateStr             = l.date ? formatDateKo(l.date).main : '—';
-    const feeStr              = fee > 0 ? fmt(fee) : '—';
-    const ddHtml              = _ddayHtml(expectedPaymentDate, today, status, fee);
+    const status      = calcPaymentStatus(l, today, allLectures);
+    const paymentDate = l.paymentDate || '';
+    const dateStr     = l.date ? formatDateKo(l.date).main : '—';
+    let directFeeToRender = 0;
+    if (l.feeType === 'fixed') {
+      directFeeToRender = Number(l.feeAmount) || 0;
+    } else {
+      directFeeToRender = Number(l.fee) || 0;
+    }
+    const cleanFeeDisplayStr = fmt(directFeeToRender);
+    const ddHtml      = _ddayHtml(paymentDate, today, status, directFeeToRender);
 
     const statusBadge = status === 'paid'
       ? `<span class="sl-status-badge sl-status-badge--paid">✓ 입금 완료</span>`
@@ -263,8 +269,8 @@ function renderTable() {
         <td class="sl-cell-date">${dateStr}</td>
         <td><div class="sl-cell-title" title="${escapeHtml(l.title)}">${escapeHtml(l.title)}</div></td>
         <td><div class="sl-cell-client" title="${escapeHtml(l.client || '')}">${escapeHtml(l.client || '—')}</div></td>
-        <td class="sl-cell-amount">${feeStr}</td>
-        <td class="sl-cell-date">${isNa || isScheduled ? '—' : (expectedPaymentDate || '—')}</td>
+        <td class="sl-cell-amount">${cleanFeeDisplayStr}</td>
+        <td class="sl-cell-date">${paymentDate || '—'}</td>
         <td>${statusBadge}</td>
         <td>
           <div class="sl-actions">
@@ -313,9 +319,11 @@ function _generateInvoice(id) {
   const lec = allLectures.find(l => l.id === id);
   if (!lec) return;
 
-  const deadline = resolvePaymentDeadline(lec, allLectures) || '—';
-  const feeAmt   = calcFee(lec);
-  const fee      = feeAmt > 0 ? fmt(feeAmt) : '—';
+  const deadline = lec.paymentDate || '—';
+  const rawFee_  = lec.feeType === 'fixed' ? lec.feeAmount : lec.fee;
+  const sf_      = typeof rawFee_ === 'string' ? Number(rawFee_.replace(/[^0-9]/g, '')) : Number(rawFee_);
+  const feeAmt   = isNaN(sf_) ? 0 : sf_;
+  const fee      = fmt(feeAmt);
   const dateStr  = lec.date ? formatDateKo(lec.date).full : '—';
 
   const win = window.open('', '_blank', 'width=700,height=900');
@@ -346,7 +354,7 @@ function _generateInvoice(id) {
     <tr><td>강의명</td><td>${escapeHtml(lec.title)}</td></tr>
     <tr><td>기관명</td><td>${escapeHtml(lec.client || '—')}</td></tr>
     <tr><td>강의 일자</td><td>${dateStr}</td></tr>
-    <tr><td>정산 예정일</td><td>${deadline}</td></tr>
+    <tr><td>지급 예정일</td><td>${deadline}</td></tr>
     <tr class="total-row"><td>청구 금액</td><td>${fee}</td></tr>
   </table>
   <p class="footer">본 청구서는 강비서에서 자동 생성되었습니다.</p>

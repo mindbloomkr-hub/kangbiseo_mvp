@@ -92,7 +92,7 @@
           <div class="modal-info-grid modal-info-grid--4">
             <div class="modal-info-item"><div class="modal-info-label">진행 상태</div><div class="modal-info-value" id="v-progress"></div></div>
             <div class="modal-info-item"><div class="modal-info-label">정산 상태</div><div class="modal-info-value" id="v-paid-status"></div></div>
-            <div class="modal-info-item"><div class="modal-info-label">예상 지급일</div><div class="modal-info-value" id="v-payment-date"></div></div>
+            <div class="modal-info-item"><div class="modal-info-label">지급 예정일</div><div class="modal-info-value" id="v-payment-date"></div></div>
             <div class="modal-info-item"><div class="modal-info-label">세금 정보</div><div class="modal-info-value" id="v-tax"></div></div>
           </div>
         </div>
@@ -190,10 +190,17 @@
               </div>
               <div class="add-form-grid" style="margin-top:var(--space-3)">
                 <div class="add-form-field"><label class="add-form-label" for="af-client">고객사 <span class="required">*</span></label><input class="add-form-input" type="text" id="af-client" placeholder="예) 삼성SDS" required /></div>
-                <div class="add-form-field"><label class="add-form-label" for="af-fee">(당 회차) 강사료 (만원)</label><input class="add-form-input" type="number" id="af-fee" placeholder="예) 50" min="0" required /></div>
+                <div class="add-form-field">
+                  <label class="add-form-label" for="af-fee-type">강사료 유형</label>
+                  <select class="add-form-input" id="af-fee-type">
+                    <option value="unit">회차별 입력 (단가)</option>
+                    <option value="fixed">총액 입력 (고정)</option>
+                  </select>
+                </div>
               </div>
-              <div class="add-form-grid add-form-grid--3" style="margin-top:var(--space-2)">
-                <div class="add-form-field" id="af-fee-total-wrap" style="display:none"><label class="add-form-label">총 강사료 (자동계산)</label><input class="add-form-input add-form-input--readonly" type="text" id="af-fee-total" readonly placeholder="자동 계산" /></div>
+              <div class="add-form-grid add-form-grid--2" style="margin-top:var(--space-2)">
+                <div class="add-form-field"><label class="add-form-label" for="af-fee">(당 회차) 강사료 (만원)</label><input class="add-form-input" type="number" id="af-fee" placeholder="예) 50" min="0" /></div>
+                <div class="add-form-field" id="af-fee-total-wrap" style="display:none"><label class="add-form-label" id="af-fee-total-label">총 강사료 (만원)</label><input class="add-form-input add-form-input--readonly" type="number" id="af-fee-total" readonly placeholder="자동 계산" /></div>
               </div>
               <div class="add-form-field" style="margin-top:var(--space-3)">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -284,7 +291,7 @@
                     <option value="other">기타</option>
                   </select>
                 </div>
-                <div class="add-form-field"><label class="add-form-label" for="af-payment-date">예상 지급일</label><input class="add-form-input" type="date" id="af-payment-date" /></div>
+                <div class="add-form-field"><label class="add-form-label" for="af-payment-date">지급 예정일</label><input class="add-form-input" type="date" id="af-payment-date" /></div>
               </div>
             </div>
             <div>

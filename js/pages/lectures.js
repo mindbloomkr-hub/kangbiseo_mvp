@@ -1,7 +1,7 @@
 ﻿// js/pages/lectures.js — 강의 관리 (Firebase 연동, ES Module)
 
 import { subscribeLectures, authGuard, db, getLectureCache, setLectureCache } from '../api.js';
-import { writeBatch, doc } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
+import { writeBatch, updateDoc, doc } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
 import { TODAY, STATUS_META, escapeHtml, formatDateKo, classifyStatus, positionPanel, calcDuration, timeToMin, formatDateString, calcPaymentDate } from '../utils.js';
 import { openKakaoAddress } from '../services/kakaoAddressService.js';
 import { initLectureModal, openModal, getTopicTags, getTopicDefaultSupplies } from '../components/lectureModal.js';
@@ -774,20 +774,19 @@ function _computeSeqUpdates() {
    일괄 처리 — writeBatch 실행
 ════════════════════════════════════════ */
 async function _executeBatch(commonPayload, seqUpdates) {
-  const merged = new Map();
-  if (Object.keys(commonPayload).length > 0) {
-    for (const id of selectedIds) merged.set(id, { ...commonPayload });
+  const updates = new Map();
+  // Seed every selected ID — no lecture is ever dropped
+  for (const id of selectedIds) {
+    updates.set(id, Object.keys(commonPayload).length > 0 ? { ...commonPayload } : {});
   }
+  // Merge per-lecture overrides on top
   for (const [id, upd] of Object.entries(seqUpdates)) {
-    merged.set(id, { ...(merged.get(id) != null ? merged.get(id) : {}), ...upd });
+    updates.set(id, { ...(updates.get(id) ?? {}), ...upd });
   }
-  if (merged.size === 0) return;
-
-  const batch = writeBatch(db);
-  for (const [id, upd] of merged) {
-    batch.update(doc(db, 'lectures', id), upd);
-  }
-  await batch.commit();
+  // Skip entries that have no actual field changes
+  const writes = [...updates].filter(([, upd]) => Object.keys(upd).length > 0);
+  if (writes.length === 0) return;
+  await Promise.all(writes.map(([id, upd]) => updateDoc(doc(db, 'lectures', id), upd)));
 }
 
 /* ════════════════════════════════════════
