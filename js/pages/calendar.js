@@ -372,6 +372,16 @@ function initLectures(uid) {
 /* ════════════════════════════════════════
    인증 상태 감지
 ════════════════════════════════════════ */
+function _renderLegendTags() {
+  const container = document.getElementById('cal-legend-tags');
+  if (!container) return;
+  const tags = getTopicTags();
+  if (!tags || tags.length === 0) { container.innerHTML = ''; return; }
+  container.innerHTML = tags.map(t =>
+    `<span class="cal-legend-tag" style="background:${t.color || '#64748b'};color:#fff;padding:2px 8px;border-radius:12px;font-size:0.75rem;margin-right:4px;">${t.name}</span>`
+  ).join('');
+}
+
 authGuard(async user => {
   currentUser = user;
   initCalendar();
@@ -381,6 +391,7 @@ authGuard(async user => {
     { classifyStatus, statusMeta: STATUS_META }
   );
   initMultiSessionModal(() => ({ allLectures, currentUser }));
+  _renderLegendTags();
 
   document.getElementById('btn-multi-lecture')?.addEventListener('click', () => {
     const selectedDate = calendar

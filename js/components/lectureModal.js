@@ -930,9 +930,9 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
   const _mkAltBtn = slot => {
     const { main, day } = formatDateKo(slot.date);
     return `<button class="lm-rv-alt-btn"
-      data-opt-date="${escapeHtml(slot.date)}"
-      data-opt-start="${escapeHtml(slot.startTime)}"
-      data-opt-end="${escapeHtml(slot.endTime)}">
+      data-date="${escapeHtml(slot.date)}"
+      data-start="${escapeHtml(slot.startTime)}"
+      data-end="${escapeHtml(slot.endTime)}">
       <span>${escapeHtml(slot.startTime)} ~ ${escapeHtml(slot.endTime)}</span>
       <span class="lm-rv-alt-btn-date">${main} (${day}) →</span>
     </button>`;
@@ -1068,12 +1068,12 @@ function _openReviewModal(check, rawNewLec, conflictLec, payload, currentUser) {
 
   // ── Alternative slot selection ───────────────────────
   bd.querySelector('#lm-rv-alts')?.addEventListener('click', e => {
-    const btn = e.target.closest('[data-opt-date]');
+    const btn = e.target.closest('[data-date]');
     if (!btn) return;
     _applyAlternative({
-      date:      btn.dataset.optDate,
-      startTime: btn.dataset.optStart,
-      endTime:   btn.dataset.optEnd,
+      date:      btn.dataset.date,
+      startTime: btn.dataset.start,
+      endTime:   btn.dataset.end,
     });
   });
 }
@@ -1090,8 +1090,20 @@ function _applyAlternative(option) {
   _closeReviewModal();
   const dateEl   = document.getElementById('af-date');
   const startSel = document.getElementById('af-time-start');
-  if (dateEl)   dateEl.value = option.date;
-  if (startSel) { startSel.innerHTML = buildTimeOptions(); startSel.value = option.startTime; }
+  if (dateEl) {
+    dateEl.value = option.date;
+    dateEl.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  if (startSel && option.startTime) {
+    startSel.innerHTML = buildTimeOptions();
+    // Inject exact value as option when off the 10-minute grid
+    if (!startSel.querySelector(`option[value="${option.startTime}"]`)) {
+      const o = document.createElement('option');
+      o.value = option.startTime; o.textContent = option.startTime;
+      startSel.appendChild(o);
+    }
+    startSel.value = option.startTime;
+  }
   syncEndTimeOptions(option.endTime);
   updateDurationDisplay();
 }

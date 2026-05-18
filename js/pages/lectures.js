@@ -110,7 +110,7 @@ function updateSummaryChips() {
   const upcoming = allLectures.filter(l => ['scheduled', 'urgent', 'discussing'].includes(l._status));
 
   const $ = id => document.getElementById(id);
-  if ($('chip-total'))    $('chip-total').textContent    = `총 ${activeLectures.length}건`;
+  if ($('chip-total'))    $('chip-total').textContent    = `총 ${allLectures.filter(FILTER_FN.all).length}건`;
   if ($('chip-fee'))      $('chip-fee').textContent      = `이번 달 총 강사료 ₩${(thisMonthFee).toFixed(0)}만원`;
   if ($('chip-unpaid'))   $('chip-unpaid').textContent   = `미입금 ${unpaid.length}건`;
   if ($('chip-upcoming')) $('chip-upcoming').textContent = `예정 ${upcoming.length}건`;
@@ -586,9 +586,15 @@ function _initBatchModal() {
       if (checked('bm-cb-setupTime'))    { const v = get('bm-setupTime');    if (v !== '') payload.setupTime    = Number(v); }
       if (checked('bm-cb-wrapupTime'))   { const v = get('bm-wrapupTime');   if (v !== '') payload.wrapupTime   = Number(v); }
       if (checked('bm-cb-participants')) { const v = get('bm-participants'); if (v !== '') payload.participants = Number(v); }
-      if (checked('bm-cb-fee'))          { const v = get('bm-fee');          if (v !== '') payload.fee          = Number(v); }
+      if (document.getElementById('bm-cb-fee')?.checked) {
+        const feeInput = document.getElementById('bm-fee')?.value;
+        if (feeInput !== '') payload.fee = Number(feeInput) || 0;
+      }
 
-      if (checked('bm-cb-feeType'))         { const v = get('bm-feeType');         if (v) payload.feeType         = v; }
+      if (document.getElementById('bm-cb-feeType')?.checked) {
+        const selectedType = document.getElementById('bm-feeType')?.value;
+        if (selectedType) payload.feeType = selectedType;
+      }
       if (checked('bm-cb-settlementCycle')) { const v = get('bm-settlementCycle'); if (v) payload.settlementCycle = v; }
 
       if (checked('bm-cb-progress')) payload.progressStatus = get('bm-progress');
@@ -651,16 +657,20 @@ function _initBatchModal() {
         });
       }
 
-      if (checked('bm-cb-feeAmount')) {
-        const rawTotal = get('bm-feeAmount');
-        if (rawTotal !== '') {
-          const feeTotal = Number(rawTotal);
-          payload.feeAmount = feeTotal;
-          if (!checked('bm-cb-fee')) {
+      if (document.getElementById('bm-cb-feeAmount')?.checked) {
+        const feeAmountInput = document.getElementById('bm-feeAmount')?.value;
+        if (feeAmountInput !== '') {
+          const totalFee = Number(feeAmountInput) || 0;
+          payload.feeAmount = totalFee;
+          // Derive unique per-session fee for each lecture only when fee isn't being set explicitly
+          if (!document.getElementById('bm-cb-fee')?.checked) {
             for (const id of selectedIds) {
               const lec = allLectures.find(l => l.id === id);
-              const sessionTotal = lec?.sessionTotal || 1;
-              seqUpdates[id] = { ...(seqUpdates[id] != null ? seqUpdates[id] : {}), fee: Math.floor(feeTotal / sessionTotal) };
+              const sessions = lec?.sessionTotal || 1;
+              seqUpdates[id] = {
+                ...(seqUpdates[id] ?? {}),
+                fee: Math.floor(totalFee / sessions)
+              };
             }
           }
         }
@@ -975,6 +985,17 @@ updateTabCounts();
 updateSummaryChips();
 _initBatchBar();
 _initBatchModal();
+
+// Chip → filter-tab click routing
+document.querySelector('.summary-chip--total')?.addEventListener('click', () => {
+  document.querySelector('button[data-filter="all"]')?.click();
+});
+document.querySelector('.summary-chip--unpaid')?.addEventListener('click', () => {
+  document.querySelector('button[data-filter="unpaid"]')?.click();
+});
+document.querySelector('.summary-chip--upcoming')?.addEventListener('click', () => {
+  document.querySelector('button[data-filter="scheduled"]')?.click();
+});
 
 document.getElementById('select-all-cb')?.addEventListener('change', e => {
   const visible = getFilteredLectures();

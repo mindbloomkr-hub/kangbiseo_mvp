@@ -326,13 +326,23 @@
 }
 
 /* 강의명 셀 */
-.td-title { font-weight: var(--font-weight-semibold) !important; }
+.td-title {
+  font-weight: var(--font-weight-semibold) !important;
+  min-width: 200px;
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .td-title-sub {
   max-width: 240px;
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
   font-weight: var(--font-weight-regular) !important;
   margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 강의처 */

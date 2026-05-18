@@ -2,7 +2,7 @@
 import { subscribeLectures, authGuard, db, getLectureCache, setLectureCache } from '../api.js';
 import {
   fmt, getTodayString, escapeHtml, formatDateKo,
-  calculateSettlementStats, calcPaymentStatus,
+  calcPaymentStatus,
 } from '../utils.js';
 import { PROGRESS_CANCELLED } from '../constants.js';
 import { initLectureModal, openModal } from '../components/lectureModal.js';
@@ -128,39 +128,57 @@ function renderStats() {
   if (!bar) return;
 
   const today = getTodayString();
-  const { totalAmt, totalCnt, paidAmt, pendingAmt, overdueAmt, paidCnt, pendingCnt, overdueCnt } =
-    calculateSettlementStats(allLectures, today);
-  console.log('[settlement] overdueCnt:', overdueCnt, 'pendingCnt:', pendingCnt);
+  let totalAmt = 0, totalCnt = 0;
+  let paidAmt  = 0, paidCnt  = 0;
+  let pendingAmt = 0, pendingCnt = 0;
+  let overdueAmt = 0, overdueCnt = 0;
+
+  for (const l of allLectures) {
+    if (l.progressStatus === PROGRESS_CANCELLED) continue;
+    const fee    = Number(l.fee) || 0;
+    const status = calcPaymentStatus(l, today, allLectures);
+    if (status === 'na') continue;
+    if (fee > 0) { totalAmt += fee; totalCnt++; }
+    if      (status === 'paid')    { paidAmt    += fee; paidCnt++;    }
+    else if (status === 'pending') { pendingAmt += fee; pendingCnt++; }
+    else if (status === 'overdue') { overdueAmt += fee; overdueCnt++; }
+  }
 
   bar.innerHTML = `
-    <div class="sl-stat-card">
+    <div class="sl-stat-card" data-tab="all" style="cursor:pointer;">
       <div class="sl-stat-icon sl-stat-icon--blue">📊</div>
       <div class="sl-stat-body">
         <div class="sl-stat-value">${fmt(totalAmt)}</div>
         <div class="sl-stat-label">전체 강의 수익 (${totalCnt}건)</div>
       </div>
     </div>
-    <div class="sl-stat-card">
+    <div class="sl-stat-card" data-tab="paid" style="cursor:pointer;">
       <div class="sl-stat-icon sl-stat-icon--green">✅</div>
       <div class="sl-stat-body">
         <div class="sl-stat-value">${fmt(paidAmt)}</div>
         <div class="sl-stat-label">입금 완료 (${paidCnt}건)</div>
       </div>
     </div>
-    <div class="sl-stat-card">
+    <div class="sl-stat-card" data-tab="pending" style="cursor:pointer;">
       <div class="sl-stat-icon sl-stat-icon--yellow">⏳</div>
       <div class="sl-stat-body">
         <div class="sl-stat-value">${fmt(pendingAmt)}</div>
         <div class="sl-stat-label">입금 대기 (${pendingCnt}건)</div>
       </div>
     </div>
-    <div class="sl-stat-card${overdueCnt > 0 ? ' sl-stat-card--overdue' : ''}">
+    <div class="sl-stat-card${overdueCnt > 0 ? ' sl-stat-card--overdue' : ''}" data-tab="overdue" style="cursor:pointer;">
       <div class="sl-stat-icon sl-stat-icon--red">🚨</div>
       <div class="sl-stat-body">
         <div class="sl-stat-value">${fmt(overdueAmt)}</div>
         <div class="sl-stat-label">미입금 / 연체 (${overdueCnt}건)</div>
       </div>
     </div>`;
+
+  bar.querySelectorAll('.sl-stat-card[data-tab]').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelector(`.sl-tab[data-tab="${card.dataset.tab}"]`)?.click();
+    });
+  });
 }
 
 /* ════════════════════════════════════════
@@ -226,8 +244,7 @@ function renderTable() {
     return;
   }
 
-  const totalFilteredFee = rows.reduce((s, l) =>
-    s + (l.feeType === 'fixed' ? (Number(l.feeAmount) || 0) : (Number(l.fee) || 0)), 0);
+  const totalFilteredFee = rows.reduce((s, l) => s + (Number(l.fee) || 0), 0);
   const summaryFeeStr    = fmt(totalFilteredFee);
 
   const start = _slPage * SL_PAGE;
@@ -237,12 +254,7 @@ function renderTable() {
     const status      = calcPaymentStatus(l, today, allLectures);
     const paymentDate = l.paymentDate || '';
     const dateStr     = l.date ? formatDateKo(l.date).main : '—';
-    let directFeeToRender = 0;
-    if (l.feeType === 'fixed') {
-      directFeeToRender = Number(l.feeAmount) || 0;
-    } else {
-      directFeeToRender = Number(l.fee) || 0;
-    }
+    const directFeeToRender  = Number(l.fee) || 0;
     const cleanFeeDisplayStr = fmt(directFeeToRender);
     const ddHtml      = _ddayHtml(paymentDate, today, status, directFeeToRender);
 
@@ -320,9 +332,7 @@ function _generateInvoice(id) {
   if (!lec) return;
 
   const deadline = lec.paymentDate || '—';
-  const rawFee_  = lec.feeType === 'fixed' ? lec.feeAmount : lec.fee;
-  const sf_      = typeof rawFee_ === 'string' ? Number(rawFee_.replace(/[^0-9]/g, '')) : Number(rawFee_);
-  const feeAmt   = isNaN(sf_) ? 0 : sf_;
+  const feeAmt   = Number(lec.fee) || 0;
   const fee      = fmt(feeAmt);
   const dateStr  = lec.date ? formatDateKo(lec.date).full : '—';
 

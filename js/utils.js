@@ -426,7 +426,15 @@ export function syncEndTimeOptions(keepValue = '', crossDay = false) {
   if (!startSel || !endSel) return;
   const prev = keepValue || endSel.value;
   endSel.innerHTML = crossDay ? buildAllTimeOptions() : buildTimeOptions(startSel.value);
-  if (prev) endSel.value = prev;
+  if (prev) {
+    // Inject exact value as option when off the 10-minute grid
+    if (!endSel.querySelector(`option[value="${prev}"]`)) {
+      const o = document.createElement('option');
+      o.value = prev; o.textContent = prev;
+      endSel.appendChild(o);
+    }
+    endSel.value = prev;
+  }
   updateDurationDisplay();
 }
 
