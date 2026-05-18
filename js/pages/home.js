@@ -134,57 +134,7 @@ let tomorrowLectures     = [];
 let unsubscribeTodos     = null;
 let unsubscribeLectures  = null;
 const _tlVersions        = {};   // stale-render guard: tracks the latest render request per container
-const _suppliesState     = {};   // key: `${lecId}:${itemId}` → boolean (in-page checkbox state)
-const _suppliesLoaded    = new Set(); // lecture IDs already hydrated from localStorage this session
 
-function _loadSuppliesFromStorage(lecId) {
-  try {
-    const raw = localStorage.getItem(`gb_supplies_${lecId}`);
-    if (!raw) return;
-    const saved = JSON.parse(raw);
-    if (!Array.isArray(saved)) return;
-    saved.forEach(({ id, isChecked }) => {
-      if (id != null) _suppliesState[`${lecId}:${id}`] = isChecked;
-    });
-  } catch {}
-}
-
-function _saveSuppliesState(lecId, card) {
-  try {
-    const cbs  = card.querySelectorAll('.supplies-check-cb');
-    const items = [...cbs].map(cb => ({ id: cb.dataset.itemId, isChecked: cb.checked }));
-    localStorage.setItem(`gb_supplies_${lecId}`, JSON.stringify(items));
-  } catch {}
-}
-
-function _cleanupSuppliesStorage(allLecs) {
-  try {
-    const todayStr = getTodayString();
-    const validIds = new Set(
-      allLecs.filter(l => (l.endDate || l.date || '') >= todayStr).map(l => l.id)
-    );
-    const toDelete = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key?.startsWith('gb_supplies_')) continue;
-      if (!validIds.has(key.slice('gb_supplies_'.length))) toDelete.push(key);
-    }
-    toDelete.forEach(k => localStorage.removeItem(k));
-  } catch {}
-}
-
-function _parseSupplies(raw) {
-  if (!raw) return [];
-  if (Array.isArray(raw)) {
-    return raw.map((s, i) => ({
-      id:        s.id != null ? s.id : (i + 1),
-      name:      typeof s === 'string' ? s : (s.name || ''),
-      isChecked: s.isChecked ?? false,
-    })).filter(s => s.name);
-  }
-  return String(raw).split(/[,;]+/).map(s => s.trim()).filter(Boolean)
-    .map((name, i) => ({ id: i + 1, name, isChecked: false }));
-}
 
 function getDisplayName() {
   return localStorage.getItem('userNickname')
@@ -383,20 +333,14 @@ function renderBriefingCards() {
       ? `<div class="briefing-class-info">${ciItems.join('')}</div>`
       : '';
 
-    // Highlight boxes — supplies as interactive checklist
-    const _supItems = _parseSupplies(l.supplies);
-    if (!_suppliesLoaded.has(l.id)) {
-      _suppliesLoaded.add(l.id);
-      _loadSuppliesFromStorage(l.id);
-    }
+    // Highlight boxes — supplies checklist
+    // Read directly from Firestore array — no wrapper function, no synthetic ids
+    const supplies   = Array.isArray(l.supplies) ? l.supplies : [];
     let suppliesHtml = '';
-    if (_supItems.length > 0) {
-      const checkedCount = _supItems.filter(s => {
-        const key = `${l.id}:${s.id}`;
-        return _suppliesState[key] !== undefined ? _suppliesState[key] : s.isChecked;
-      }).length;
-      const supTotal = _supItems.length;
-      const pct      = supTotal > 0 ? Math.round(checkedCount / supTotal * 100) : 0;
+    if (supplies.length > 0) {
+      const checkedCount = supplies.filter(s => s.isChecked).length;
+      const supTotal     = supplies.length;
+      const pct          = supTotal > 0 ? Math.round(checkedCount / supTotal * 100) : 0;
       suppliesHtml = `
         <div class="briefing-highlight briefing-highlight--supplies">
           <span class="briefing-hl-icon">⚠️</span>
@@ -407,14 +351,12 @@ function renderBriefingCards() {
               <div class="supplies-progress-bar-wrap"><div class="supplies-progress-bar" style="width:${pct}%"></div></div>
             </div>
             <div class="supplies-checklist">
-              ${_supItems.map(item => {
-                const key       = `${l.id}:${item.id}`;
-                const isChecked = _suppliesState[key] !== undefined ? _suppliesState[key] : item.isChecked;
-                return `<label class="supplies-check-item${isChecked ? ' is-checked' : ''}">` +
-                  `<input type="checkbox" class="supplies-check-cb" ` +
-                  `data-lec-id="${escapeHtml(l.id)}" data-item-id="${escapeHtml(String(item.id))}" ${isChecked ? 'checked' : ''} />` +
-                  `<span>${escapeHtml(item.name)}</span></label>`;
-              }).join('')}
+              ${supplies.map((item, idx) =>
+                `<label class="supplies-check-item${item.isChecked ? ' is-checked' : ''}">` +
+                `<input type="checkbox" class="supplies-check-cb" ` +
+                `data-lec-id="${escapeHtml(l.id)}" data-idx="${idx}" ${item.isChecked ? 'checked' : ''} />` +
+                `<span>${escapeHtml(item.name)}</span></label>`
+              ).join('')}
             </div>
           </div>
         </div>`;
@@ -475,46 +417,25 @@ function renderBriefingCards() {
   if (!container.dataset.delegated) {
     container.dataset.delegated = '1';
     container.addEventListener('click', async e => {
-      // Supplies checkbox toggle (must be first so it doesn't bubble to accordion)
+      // Supplies checkbox — must be first to prevent accordion toggle
       if (e.target.classList.contains('supplies-check-cb')) {
-        const cb     = e.target;
-        const lecId  = cb.dataset.lecId;
-        const itemId = cb.dataset.itemId;
+        const cb    = e.target;
+        const lecId = cb.dataset.lecId;
+        const idx   = Number(cb.dataset.idx);
 
-        // 1. Optimistic in-memory state — drives re-render until snapshot arrives
-        _suppliesState[`${lecId}:${itemId}`] = cb.checked;
-        cb.closest('.supplies-check-item')?.classList.toggle('is-checked', cb.checked);
-
-        // 2. Update progress bar immediately from live DOM
-        const card = cb.closest('.lecture-briefing-card');
-        if (card) {
-          const allCbs     = card.querySelectorAll('.supplies-check-cb');
-          const checkedNow = [...allCbs].filter(c => c.checked).length;
-          const totalNow   = allCbs.length;
-          const pctNow     = totalNow > 0 ? Math.round(checkedNow / totalNow * 100) : 0;
-          const progText   = card.querySelector('.supplies-progress-text');
-          const progBar    = card.querySelector('.supplies-progress-bar');
-          if (progText) progText.textContent = `챙김: ${checkedNow}/${totalNow}`;
-          if (progBar)  progBar.style.width  = `${pctNow}%`;
-        }
-
-        // 3. Build payload from the authoritative in-memory lecture data (not DOM).
-        //    Apply _suppliesState overrides so every item reflects the current
-        //    session's checked state, not the stale Firestore isChecked baseline.
         const lec = allLectures.find(l => l.id === lecId);
-        if (lec) {
-          const baseItems       = _parseSupplies(lec.supplies);
-          const updatedSupplies = baseItems.map(item => ({
-            name:      item.name,
-            isChecked: _suppliesState[`${lecId}:${item.id}`] !== undefined
-                         ? _suppliesState[`${lecId}:${item.id}`]
-                         : item.isChecked,
-          }));
-          try {
-            await updateDoc(doc(db, 'lectures', lecId), { supplies: updatedSupplies });
-          } catch (err) {
-            console.error('[Supplies Sync Error]:', err);
-          }
+        if (!lec || !Array.isArray(lec.supplies) || lec.supplies[idx] == null) return;
+
+        // Mutate in-memory — keeps allLectures consistent if re-render
+        // fires before the Firestore snapshot arrives
+        lec.supplies[idx].isChecked = cb.checked;
+
+        // Write strict { name, isChecked } schema — single source of truth
+        const cleanSupplies = lec.supplies.map(({ name, isChecked }) => ({ name, isChecked }));
+        try {
+          await updateDoc(doc(db, 'lectures', lecId), { supplies: cleanSupplies });
+        } catch (err) {
+          console.error('[Supplies Sync Error]:', err);
         }
         return;
       }
@@ -1158,7 +1079,6 @@ function initLectures(uid) {
   if (unsubscribeLectures) unsubscribeLectures();
   unsubscribeLectures = subscribeLectures(uid, snapshot => {
     allLectures = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-    _cleanupSuppliesStorage(allLectures);
 
     const todayStr    = getTodayString();
     const tomorrowObj = new Date(); tomorrowObj.setDate(tomorrowObj.getDate() + 1);
