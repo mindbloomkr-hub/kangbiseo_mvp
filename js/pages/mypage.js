@@ -1,6 +1,6 @@
 // js/pages/mypage.js — 마이 페이지 (Firebase Auth + Firestore 연동, ES Module)
 
-import { auth, db, uploadProfilePhoto, fetchGoogleCalendarEvents, authGuard } from '../api.js';
+import { auth, db, uploadProfilePhoto, fetchGoogleCalendarEvents, authGuard, SUPER_ADMIN_EMAILS } from '../api.js';
 import {
   collection, doc, getDoc, setDoc, addDoc,
   query, where, getDocs, writeBatch, serverTimestamp,
@@ -64,6 +64,7 @@ let currentUser        = null;
 let currentPhotoUrl    = null;   // Firebase Storage URL (null이면 이니셜 표시)
 let fbKeywords         = [];
 let fbTopics           = [];
+let fbMembership       = { status: 'trial', monthlyPrice: 9900, expiresAt: null };
 let selectedTopicColor = '#2563c4';
 let topicIdCounter     = 1;
 let _colorExpanded     = false;
@@ -165,6 +166,15 @@ async function loadFirebaseProfile(uid) {
       if (d.bankName      != null) device.settlement.bankName      = d.bankName;
       if (d.accountNumber != null) device.settlement.accountNumber = d.accountNumber;
       if (d.accountHolder != null) device.settlement.accountHolder = d.accountHolder;
+
+      // 구독 설정 — Firestore 값 반영
+      if (d.membershipStatus) fbMembership.status = d.membershipStatus;
+      if (d.monthlyPrice != null) fbMembership.monthlyPrice = Number(d.monthlyPrice);
+      if (d.membershipExpiresAt) {
+        fbMembership.expiresAt = d.membershipExpiresAt.toDate
+          ? d.membershipExpiresAt.toDate()
+          : new Date(d.membershipExpiresAt);
+      }
     } else {
       fbKeywords = []; fbTopics = [];
     }
@@ -487,12 +497,42 @@ function addTopicTag() {
 }
 
 /* ════════════════════════════════════════
-   SECTION 5: 구독 (정적 UI)
+   SECTION 5: 구독 (동적 렌더링)
 ════════════════════════════════════════ */
 function initSubscription() {
-  document.getElementById('plan-upgrade-btn')?.addEventListener('click',   () => showToast('플랜 변경 페이지는 준비 중입니다.', 'info'));
-  document.getElementById('billing-cancel-btn')?.addEventListener('click', () => showToast('구독 취소 기능은 준비 중입니다.', 'info'));
-  document.getElementById('billing-method-btn')?.addEventListener('click', () => showToast('결제 수단 변경 기능은 준비 중입니다.', 'info'));
+  const isAdmin = SUPER_ADMIN_EMAILS.has(currentUser?.email || '');
+
+  const statusLabel = isAdmin ? '최고 관리자 권한' :
+    (fbMembership.status === 'trial' ? '무료 체험 중' : '구독 중');
+
+  const badge = document.getElementById('sub-status-badge');
+  if (badge) badge.textContent = statusLabel;
+
+  const statusText = document.getElementById('sub-status-text');
+  if (statusText) statusText.textContent = statusLabel;
+
+  const expiresEl = document.getElementById('sub-expires-date');
+  if (expiresEl) {
+    if (isAdmin) {
+      expiresEl.textContent = '상시 이용 가능 (만료일 없음)';
+    } else if (fbMembership.expiresAt) {
+      const d = fbMembership.expiresAt;
+      expiresEl.textContent =
+        `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+    } else {
+      expiresEl.textContent = '–';
+    }
+  }
+
+  const priceEl = document.getElementById('sub-price-text');
+  if (priceEl) {
+    priceEl.textContent = isAdmin
+      ? '요금 없음'
+      : `월 ${(fbMembership.monthlyPrice || 9900).toLocaleString('ko-KR')}원 (VAT 포함)`;
+  }
+
+  const payBtn = document.getElementById('sub-payment-btn');
+  if (payBtn && isAdmin) payBtn.style.display = 'none';
 }
 
 /* ════════════════════════════════════════

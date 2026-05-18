@@ -538,8 +538,17 @@ function _bindEvents() {
   chipInput?.addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    _addChip(chipInput.value);
+    chipInput.value.split(',').map(s => s.trim()).filter(Boolean).forEach(name => _addChip(name));
     chipInput.value = '';
+  });
+  chipInput?.addEventListener('input', e => {
+    if (!e.target.value.includes(',')) return;
+    const parts    = e.target.value.split(',');
+    const trailing = parts.pop();
+    const names    = parts.map(s => s.trim()).filter(Boolean);
+    if (!names.length) { e.target.value = trailing; return; }
+    names.forEach(name => _addChip(name));
+    e.target.value = trailing.trimStart();
   });
   document.getElementById('sp-chip-wrap')?.addEventListener('click', e => {
     if (e.target === e.currentTarget) chipInput?.focus();

@@ -618,39 +618,34 @@
                   <div class="plan-card-info">
                     <div class="plan-card-name">
                       강비서 프로
-                      <span class="plan-card-badge">1개월 무료 체험 중</span>
+                      <span class="plan-card-badge" id="sub-status-badge">무료 체험 중</span>
                     </div>
                     <div class="plan-card-sub">강의 관리 · 정산 자동화 · 스마트 스케줄링 모든 기능 이용 가능</div>
                   </div>
-                  <button type="button" class="plan-card-action" id="plan-upgrade-btn">
-                    플랜 변경
-                  </button>
                 </div>
 
-                <!-- 결제 상세 정보 -->
+                <!-- 구독 상세 정보 (JS로 채워짐) -->
                 <div class="billing-info-grid">
                   <div class="billing-info-item">
-                    <span class="billing-info-label">다음 결제 예정일</span>
-                    <span class="billing-info-value" id="billing-next-date">2026년 00월 00일</span>
-                    <button type="button" class="billing-info-action" id="billing-cancel-btn">
-                      구독 취소
-                    </button>
+                    <span class="billing-info-label">이용 상태</span>
+                    <span class="billing-info-value" id="sub-status-text">무료 체험 중</span>
                   </div>
                   <div class="billing-info-item">
-                    <span class="billing-info-label">결제 수단</span>
-                    <span class="billing-info-value" id="billing-method">(체험 기간 중)</span>
-                    <button type="button" class="billing-info-action" id="billing-method-btn">
-                      결제 수단 변경
-                    </button>
+                    <span class="billing-info-label">체험 만료일</span>
+                    <span class="billing-info-value" id="sub-expires-date">–</span>
                   </div>
                   <div class="billing-info-item">
-                    <span class="billing-info-label">현재 플랜 요금</span>
-                    <span class="billing-info-value">₩ 00,000 / 월</span>
+                    <span class="billing-info-label">구독 요금</span>
+                    <span class="billing-info-value" id="sub-price-text">월 9,900원 (VAT 포함)</span>
                   </div>
-                  <div class="billing-info-item">
-                    <span class="billing-info-label">가입일</span>
-                    <span class="billing-info-value">2026년 00월 00일</span>
-                  </div>
+                </div>
+
+                <!-- 결제 수단 등록 (비활성 플레이스홀더) -->
+                <div style="margin-top: var(--space-5);">
+                  <button type="button" id="sub-payment-btn" class="plan-card-action"
+                          disabled style="opacity:0.5; cursor:not-allowed;">
+                    결제 수단 등록 (준비 중)
+                  </button>
                 </div>
 
               </div><!-- /.mypage-card-body -->

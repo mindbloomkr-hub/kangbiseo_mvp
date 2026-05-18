@@ -1,5 +1,5 @@
 // js/pages/settlement.js — 정산 관리 페이지
-import { subscribeLectures, authGuard, db, getLectureCache, setLectureCache } from '../api.js';
+import { subscribeLectures, authGuard, db, getLectureCache, setLectureCache, checkMembershipExpiry } from '../api.js';
 import {
   fmt, getTodayString, escapeHtml, formatDateKo,
   calcPaymentStatus,
@@ -466,6 +466,7 @@ _bindEvents();
 
 authGuard(async user => {
   currentUser = user;
+  if (await checkMembershipExpiry(user.uid)) return;
 
   _applyUrlParams();
   await initLectureModal(() => ({ allLectures, currentUser }));

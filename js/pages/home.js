@@ -1107,45 +1107,7 @@ function initLectures(uid) {
   });
 }
 
-/* ════════════════════════════════════════
-   알림 벨 아이콘 — 드롭다운 피드백
-════════════════════════════════════════ */
-(function initNotificationBell() {
-  const bell = document.querySelector('.topbar-notification');
-  if (!bell) return;
-
-  const dropdown = document.createElement('div');
-  dropdown.id = 'notification-dropdown';
-  Object.assign(dropdown.style, {
-    display: 'none', position: 'absolute', top: 'calc(100% + 8px)', right: '0',
-    width: '280px', background: '#fff', border: '1px solid #e5e7eb',
-    borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: '9999',
-    padding: '0', overflow: 'hidden',
-  });
-  dropdown.innerHTML = `
-    <div style="padding:12px 16px;font-weight:700;color:#111827;border-bottom:1px solid #f3f4f6;font-size:0.9rem;">🔔 알림</div>
-    <div style="padding:24px 16px;text-align:center;color:#9ca3af;font-size:0.85rem;">새로운 알림이 없습니다.</div>`;
-
-  bell.style.position = 'relative';
-  bell.appendChild(dropdown);
-
-  let isOpen = false;
-  bell.addEventListener('click', e => {
-    e.stopPropagation();
-    isOpen = !isOpen;
-    dropdown.style.display = isOpen ? 'block' : 'none';
-    bell.setAttribute('aria-expanded', String(isOpen));
-  });
-  document.addEventListener('click', () => {
-    if (!isOpen) return;
-    isOpen = false;
-    dropdown.style.display = 'none';
-  });
-  bell.addEventListener('keydown', e => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); bell.click(); }
-    if (e.key === 'Escape') { isOpen = false; dropdown.style.display = 'none'; }
-  });
-})();
+// 알림 벨 드롭다운은 api.js authGuard에서 공통 초기화됩니다.
 
 /* ════════════════════════════════════════
    To-do List — todoService + todoComponent 위임

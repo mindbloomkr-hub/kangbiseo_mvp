@@ -1,6 +1,6 @@
 ﻿// js/pages/lectures.js — 강의 관리 (Firebase 연동, ES Module)
 
-import { subscribeLectures, authGuard, db, getLectureCache, setLectureCache } from '../api.js';
+import { subscribeLectures, authGuard, db, getLectureCache, setLectureCache, checkMembershipExpiry } from '../api.js';
 import { writeBatch, updateDoc, doc } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
 import { TODAY, STATUS_META, escapeHtml, formatDateKo, classifyStatus, positionPanel, calcDuration, timeToMin, formatDateString, calcPaymentDate } from '../utils.js';
 import { openKakaoAddress } from '../services/kakaoAddressService.js';
@@ -542,11 +542,21 @@ function _initBatchModal() {
   document.getElementById('bm-supplies-input')?.addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    const name = e.target.value.trim();
-    if (!name) return;
-    _bmSupplies.push({ id: Date.now(), name, isChecked: false });
+    const parts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+    if (!parts.length) return;
+    parts.forEach((name, i) => _bmSupplies.push({ id: Date.now() + i, name, isChecked: false }));
     _renderBmChips();
     e.target.value = '';
+  });
+  document.getElementById('bm-supplies-input')?.addEventListener('input', e => {
+    if (!e.target.value.includes(',')) return;
+    const parts    = e.target.value.split(',');
+    const trailing = parts.pop();
+    const names    = parts.map(s => s.trim()).filter(Boolean);
+    if (!names.length) { e.target.value = trailing; return; }
+    names.forEach((name, i) => _bmSupplies.push({ id: Date.now() + i, name, isChecked: false }));
+    _renderBmChips();
+    e.target.value = trailing.trimStart();
   });
 
   document.getElementById('bm-apply').addEventListener('click', async () => {
@@ -1009,6 +1019,7 @@ document.getElementById('select-all-cb')?.addEventListener('change', e => {
 ════════════════════════════════════════ */
 authGuard(async user => {
   currentUser = user;
+  if (await checkMembershipExpiry(user.uid)) return;
   await initLectureModal(() => ({ allLectures, currentUser }));
   _initFilterPicker();
   initMultiSessionModal(() => ({ allLectures, currentUser }));
