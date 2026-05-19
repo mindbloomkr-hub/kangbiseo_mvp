@@ -90,6 +90,9 @@
             <div class="mypage-nav-item" data-target="section-topics">
               <span class="mypage-nav-icon">🏷️</span>카테고리 태그
             </div>
+            <div class="mypage-nav-item" data-target="section-data-management">
+              <span class="mypage-nav-icon">📊</span>데이터 관리
+            </div>
             <div class="mypage-nav-item" data-target="section-subscription">
               <span class="mypage-nav-icon">👑</span>구독 &amp; 서비스
             </div>
@@ -411,10 +414,11 @@
               <div class="mypage-card-body">
 
                 <!-- 표준 강사료 -->
+                 <!-- 
                 <div class="mp-field" style="margin-bottom: var(--space-5);">
                   <label class="mp-label" for="hourly-rate">
                     표준 강사료 (시급)
-                    <span class="mp-label-hint">· 강의 등록 시 예상 수익 자동 계산에 사용됩니다</span>
+                    <span class="mp-label-hint">· 강의 등록 시 예상 수익 자동 계산에 사용됩니다</span> 
                   </label>
                   <div class="fee-input-wrap">
                     <div class="mp-input-prefix" style="flex: 0 0 200px;">
@@ -426,8 +430,9 @@
                     <span class="fee-display" id="fee-display">= 시간당 20만원</span>
                   </div>
                 </div>
+                
 
-                <hr class="mp-divider" />
+                <hr class="mp-divider" />-->
 
                 <!-- 입금 계좌 -->
                 <p class="mp-label" style="margin-bottom: var(--space-4);">입금 계좌 설정</p>
@@ -552,19 +557,64 @@
 
 
             <!-- ══════════════════════════════════════
-                 SECTION 5: 구독 및 서비스 관리
+                 SECTION: 데이터 관리 (프리미엄 전용)
             ══════════════════════════════════════ -->
-            <!-- ── Google Calendar 가져오기 바로가기 ── -->
-            <section class="mypage-card" id="section-import" aria-labelledby="import-heading">
+            <section class="mypage-card" id="section-data-management" aria-labelledby="data-mgmt-heading">
               <div class="mypage-card-header">
-                <div class="mypage-card-icon" aria-hidden="true">📥</div>
+                <div class="mypage-card-icon" aria-hidden="true">📊</div>
                 <div>
-                  <h2 class="mypage-card-title" id="import-heading">Google 캘린더 가져오기</h2>
-                  <p class="mypage-card-desc">.ics 파일로 내보낸 일정을 강비서에 일괄 등록합니다.</p>
+                  <h2 class="mypage-card-title" id="data-mgmt-heading">데이터 관리</h2>
+                  <p class="mypage-card-desc">강의 데이터 내보내기, 일괄 업로드, 캘린더 연동을 한 곳에서 관리합니다. (프리미엄 전용)</p>
                 </div>
               </div>
+
               <div class="mypage-card-body">
-                <div class="mp-toggle-row">
+
+                <!-- ── 내보내기 그룹 ── -->
+                <p class="mp-label" style="margin-bottom:var(--space-3);">📤 내보내기 / 일괄 업로드</p>
+
+                
+                <div class="mp-toggle-row" style="margin-bottom:var(--space-4);">
+                  <div class="mp-toggle-info">
+                    <span class="mp-toggle-title">💾 내 강의 데이터 백업/내보내기</span>
+                    <span class="mp-toggle-sub">현재 등록된 모든 강의 데이터를 CSV 파일로 내보냅니다. 개인 백업 또는 외부 분석에 활용하세요.</span>
+                  </div>
+                  <button type="button" class="plan-card-action" id="btn-export-data"
+                          style="white-space:nowrap;flex-shrink:0;">
+                    ⬇ 데이터 내보내기
+                  </button>
+                </div>
+
+                <div class="mp-toggle-row" style="margin-bottom:var(--space-4);">
+                  <div class="mp-toggle-info">
+                    <span class="mp-toggle-title">📋 엑셀 업로드 양식 다운로드</span>
+                    <span class="mp-toggle-sub">22개 컬럼 헤더만 포함된 빈 양식 파일입니다. 강의 데이터를 직접 입력하거나 일괄 업로드 준비에 사용하세요.</span>
+                  </div>
+                  <button type="button" class="plan-card-action" id="btn-download-template"
+                          style="white-space:nowrap;flex-shrink:0;">
+                    ⬇ 업로드 양식 다운로드
+                  </button>
+                </div>
+
+                <div class="mp-toggle-row" style="margin-bottom:var(--space-4);">
+                  <div class="mp-toggle-info">
+                    <span class="mp-toggle-title">📥 엑셀/CSV 일괄 등록 (Import)</span>
+                    <span class="mp-toggle-sub">다운로드한 양식에 데이터를 입력 후 업로드하세요. 저장 전 미리보기를 통해 중복 여부를 확인할 수 있습니다.</span>
+                  </div>
+                  <label class="plan-card-action"
+                         style="white-space:nowrap;flex-shrink:0;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+                    ⬆ CSV 파일 업로드
+                    <input type="file" id="input-import-csv" accept=".csv"
+                           style="display:none;" />
+                  </label>
+                </div>
+
+                <hr class="mp-divider" />
+
+                <!-- ── Google 캘린더 가져오기 ── -->
+                <p class="mp-label" style="margin-bottom:var(--space-3);">📅 Google 캘린더 연동</p>
+
+                <div class="mp-toggle-row" style="margin-bottom:var(--space-4);">
                   <div class="mp-toggle-info">
                     <span class="mp-toggle-title">Google Calendar → 설정 → 가져오기/내보내기</span>
                     <span class="mp-toggle-sub">
@@ -580,26 +630,92 @@
                     📥 가져오기 열기
                   </a>
                 </div>
-              </div>
+
+                <!-- 내가 등록한 모든 강의 정보 및 투두리스트 정보 등을 삭제-->
+                <!--
+                <hr class="mp-divider" />
+                <section class="mypage-card" id="section-delete" aria-labelledby="delete-heading">
+                  <div class="mypage-card-header">
+                    <div class="mypage-card-icon" aria-hidden="true">📖</div>
+                    <div>
+                      <h2 class="mypage-card-title" id="subscription-heading">데이터 전체 삭제</h2>
+                      <p class="mypage-card-desc">내가 등록한 모든 강의 정보 및 투두리스트를 삭제합니다.</p>
+                    </div>
+                    <div></div>
+                    <div></div>
+                    <button class="btn--confirm-alldelete" id="btn-delete-all" onclick="deleteUserLectures()">
+                      내 강의 전체 삭제
+                    </button>
+                  </div>
+                </section>
+                -->
+
+              </div><!-- /.mypage-card-body -->
             </section>
 
-            <!-- 내가 등록한 모든 강의 정보 및 투두리스트 정보 등을 삭제-->
-            <!--
-            <section class="mypage-card" id="section-delete" aria-labelledby="delete-heading">
-              <div class="mypage-card-header">
-                <div class="mypage-card-icon" aria-hidden="true">📖</div>
-                <div>
-                  <h2 class="mypage-card-title" id="subscription-heading">데이터 전체 삭제</h2>
-                  <p class="mypage-card-desc">내가 등록한 모든 강의 정보 및 투두리스트를 삭제합니다.</p>
+            <!-- ══════════════════════════════════════
+                 IMPORT PREVIEW MODAL (position:fixed — DOM location irrelevant)
+            ══════════════════════════════════════ -->
+            <div id="modal-import-preview"
+                 style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);
+                        z-index:1300;overflow-y:auto;padding:32px 16px;">
+              <div style="background:#fff;border-radius:16px;max-width:1000px;margin:0 auto;
+                          box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden;">
+
+                <div style="display:flex;align-items:center;justify-content:space-between;
+                            padding:18px 24px;border-bottom:1px solid #f3f4f6;">
+                  <div>
+                    <h3 style="margin:0;font-size:1.05rem;font-weight:700;color:#111827;">
+                      📋 일괄 업로드 미리보기
+                    </h3>
+                    <p id="import-preview-summary"
+                       style="margin:4px 0 0;font-size:0.82rem;color:#6b7280;"></p>
+                  </div>
+                  <button id="btn-cancel-import" type="button"
+                          style="background:none;border:none;font-size:1.1rem;cursor:pointer;
+                                 color:#6b7280;padding:4px 8px;border-radius:6px;line-height:1;">✕</button>
                 </div>
-                <div></div>
-                <div></div>
-                <button class="btn--confirm-alldelete" id="btn-delete-all" onclick="deleteUserLectures()">
-                  내 강의 전체 삭제
-                </button>
+
+                <div style="overflow-x:auto;max-height:60vh;overflow-y:auto;">
+                  <table id="import-preview-table"
+                         style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+                    <thead>
+                      <tr style="background:#f9fafb;position:sticky;top:0;z-index:1;">
+                        <th style="padding:10px 12px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;white-space:nowrap;">#</th>
+                        <th style="padding:10px 12px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;white-space:nowrap;">강의명</th>
+                        <th style="padding:10px 12px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;white-space:nowrap;">현재/총 회차</th>
+                        <th style="padding:10px 12px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;white-space:nowrap;">시작 날짜</th>
+                        <th style="padding:10px 12px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;white-space:nowrap;">시작 시간</th>
+                        <th style="padding:10px 12px;text-align:right;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;white-space:nowrap;">회당강사료</th>
+                        <th style="padding:10px 12px;text-align:right;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;white-space:nowrap;">총강사료</th>
+                        <th style="padding:10px 12px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;white-space:nowrap;">진행 상태</th>
+                        <th style="padding:10px 12px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;white-space:nowrap;">업로드 상태</th>
+                      </tr>
+                    </thead>
+                    <tbody id="import-preview-tbody"></tbody>
+                  </table>
+                </div>
+
+                <div style="display:flex;justify-content:flex-end;gap:10px;
+                            padding:16px 24px;border-top:1px solid #f3f4f6;">
+                  <button id="btn-cancel-import-footer" type="button"
+                          style="padding:9px 20px;border-radius:8px;border:1px solid #e5e7eb;
+                                 background:#fff;color:#374151;font-weight:600;cursor:pointer;font-size:0.88rem;">
+                    취소
+                  </button>
+                  <button id="btn-confirm-import" type="button"
+                          style="padding:9px 20px;border-radius:8px;border:none;
+                                 background:#2563c4;color:#fff;font-weight:600;cursor:pointer;font-size:0.88rem;">
+                    최종 업로드 완료
+                  </button>
+                </div>
+
               </div>
-            </section>
-          -->
+            </div>
+
+            <!-- ══════════════════════════════════════
+                 SECTION 5: 구독 및 서비스 관리
+            ══════════════════════════════════════ -->
 
             <section class="mypage-card" id="section-subscription" aria-labelledby="subscription-heading">
               <div class="mypage-card-header">
@@ -669,6 +785,33 @@
     <span class="floating-save-icon" aria-hidden="true">💾</span>
     저장하기
   </button>
+
+  <!-- ════════════════════════════
+  PREMIUM GATE MODAL
+  ════════════════════════════ -->
+  <div id="modal-premium-gate" role="dialog" aria-modal="true" aria-labelledby="premium-gate-title"
+    style="display:none; position:fixed; inset:0; z-index:2000; background:rgba(0,0,0,0.6);
+    align-items:center; justify-content:center;">
+      <div style="background:#1a1a2e; border:1px solid #4a3f7a; border-radius:16px;
+        padding:2rem 2.5rem; max-width:380px; width:90%; text-align:center;
+        box-shadow:0 12px 48px rgba(0,0,0,0.55); position:relative;">
+      <div style="font-size:2.8rem; margin-bottom:0.75rem;" aria-hidden="true">👑</div>
+    <h2 id="premium-gate-title"
+      style="color:#e2c96e; font-size:1.15rem; font-weight:700; margin-bottom:0.6rem;">
+      프리미엄 전용 기능
+    </h2>
+    <p style="color:#b0a8c8; font-size:0.88rem; line-height:1.65; margin-bottom:1.6rem;">
+      이 기능은 프리미엄 유료 회원 전용입니다.<br>
+      결제 후 모든 기능을 자유롭게 이용해보세요!
+    </p>
+    <button id="btn-premium-gate-close"
+      style="background:linear-gradient(135deg,#7c4dff,#b39ddb); color:#fff;
+      border:none; border-radius:8px; padding:0.65rem 2.2rem;
+      font-size:0.95rem; font-weight:600; cursor:pointer; letter-spacing:0.02em;">
+      확인
+    </button>
+    </div>
+  </div>
 
   <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
   <script type="module" src="../js/components/lectureModal.js"></script>

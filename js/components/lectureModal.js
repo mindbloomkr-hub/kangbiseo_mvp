@@ -402,7 +402,7 @@ function _populateView(lec) {
   document.getElementById('v-total-duration').textContent = calcDuration(startDate, timeStart, endDate, timeEnd);
   document.getElementById('v-title').textContent          = lec.title  || '—';
   document.getElementById('v-client').textContent         = lec.client || '—';
-  document.getElementById('v-fee').textContent            = `₩${((Number(lec.fee) || 0) * REVENUE_UNIT).toLocaleString()}`;
+  document.getElementById('v-fee').textContent            = `₩${(Number(lec.fee) || 0).toLocaleString()}`;
 
   const _feeTotalWrap = document.getElementById('v-fee-total-wrap');
   const _feeTotalEl   = document.getElementById('v-fee-total');
@@ -411,7 +411,7 @@ function _populateView(lec) {
       _feeTotalWrap.style.display = '';
       if (_feeTotalEl) {
         const feeTotal = lec.feeAmount != null ? lec.feeAmount : ((lec.fee || 0) * (lec.sessionTotal || 1));
-        _feeTotalEl.textContent = `₩${((Number(feeTotal) || 0) * REVENUE_UNIT).toLocaleString()}`;
+        _feeTotalEl.textContent = `₩${(Number(feeTotal) || 0).toLocaleString()}`;
       }
     } else {
       _feeTotalWrap.style.display = 'none';
@@ -1346,7 +1346,6 @@ function _bindEvents() {
       date, timeStart, timeEnd, title, client,
       feeType:        _feeTypeVal,
       fee:            Number(feeRaw),
-      feeAmount:      Number(document.getElementById('af-fee-total')?.value) || null,
       sessionCurrent: Number(get('af-session-current')) || null,
       sessionTotal:   Number(get('af-session-total'))   || null,
       participants:   Number(get('af-participants'))     || null,
@@ -1371,6 +1370,8 @@ function _bindEvents() {
       isOvernight, endDate,
       memo:           get('af-memo'),
     };
+    const _feeTotalRaw = document.getElementById('af-fee-total')?.value;
+    if (_feeTotalRaw !== '' && _feeTotalRaw != null) payload.feeAmount = Number(_feeTotalRaw) || 0;
 
     let check;
     try {

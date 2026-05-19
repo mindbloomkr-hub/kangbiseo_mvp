@@ -57,7 +57,7 @@
           </div>
           <div class="lectures-header-right" style="display:flex; gap:10px; flex-wrap: wrap;">
             <button class="btn btn--primary"   id="btn-add-lecture">＋ 강의 추가</button>
-            <button class="btn btn--secondary"   id="btn-multi-lecture">📅 다회차 강의 추가</button>
+            <button class="btn btn--secondary" id="btn-multi-lecture">📅 다회차 강의 추가</button>
           </div>
         </div>
 
@@ -69,9 +69,9 @@
         </div>
 
         <div class="filter-tabs-bar" role="tablist" aria-label="강의 필터">
-          <button class="filter-tab active" role="tab" aria-selected="true"  data-filter="all">📋 전체 <span class="filter-tab-count">0</span></button>
+          <button class="filter-tab" role="tab" aria-selected="true"  data-filter="all">📋 전체 <span class="filter-tab-count">0</span></button>
           <button class="filter-tab" role="tab" aria-selected="false" data-filter="unpaid">💰 미입금 <span class="filter-tab-count">0</span></button>
-          <button class="filter-tab" role="tab" aria-selected="false" data-filter="urgent">⚠️ 준비 임박 <span class="filter-tab-count">0</span></button>
+          <button class="filter-tab active" role="tab" aria-selected="false" data-filter="urgent">⚠️ 준비 임박 <span class="filter-tab-count">0</span></button>
           <button class="filter-tab" role="tab" aria-selected="false" data-filter="scheduled">📅 진행 예정 <span class="filter-tab-count">0</span></button>
           <button class="filter-tab" role="tab" aria-selected="false" data-filter="discussing">💬 논의 중 <span class="filter-tab-count">0</span></button>
           <button class="filter-tab" role="tab" aria-selected="false" data-filter="done">✅ 진행 완료 <span class="filter-tab-count">0</span></button>
@@ -213,11 +213,11 @@
           </select>
         </div>
         <div class="bm-field bm-field--cb">
-          <div class="bm-cb-row"><input type="checkbox" class="bm-cb" id="bm-cb-fee"><label class="bm-label" for="bm-fee">회차별 강사료 (만원)</label></div>
+          <div class="bm-cb-row"><input type="checkbox" class="bm-cb" id="bm-cb-fee"><label class="bm-label" for="bm-fee">회차별 강사료 (원)</label></div>
           <input class="bm-input" type="number" id="bm-fee" placeholder="숫자만 입력" disabled>
         </div>
         <div class="bm-field bm-field--cb">
-          <div class="bm-cb-row"><input type="checkbox" class="bm-cb" id="bm-cb-feeAmount"><label class="bm-label" for="bm-feeAmount">강사료 총 금액 (만원)</label></div>
+          <div class="bm-cb-row"><input type="checkbox" class="bm-cb" id="bm-cb-feeAmount"><label class="bm-label" for="bm-feeAmount">강사료 총 금액 (원)</label></div>
           <input class="bm-input" type="number" id="bm-feeAmount" placeholder="숫자만 입력" disabled>
         </div>
         <div class="bm-field bm-field--cb">

@@ -2,7 +2,7 @@
 import { subscribeLectures, authGuard, db, getLectureCache, setLectureCache, checkMembershipExpiry } from '../api.js';
 import {
   fmt, getTodayString, escapeHtml, formatDateKo,
-  calcPaymentStatus,
+  calcPaymentStatus, calculateSettlementStats, calcFee,
 } from '../utils.js';
 import { PROGRESS_CANCELLED } from '../constants.js';
 import { initLectureModal, openModal } from '../components/lectureModal.js';
@@ -96,6 +96,22 @@ function _applyPreset(preset) {
 ════════════════════════════════════════ */
 function _filtered() {
   const today = getTodayString();
+  const sortByDate = (a, b) => (a.date != null ? a.date : '').localeCompare(b.date != null ? b.date : '');
+
+  if (_filters.tab === 'review_cancel') {
+    return allLectures.filter(l => {
+      if (!['discussing', 'cancelled', 'needs_review'].includes(l.progressStatus)) return false;
+      const lDate = (l.date != null ? l.date : '');
+      if (_filters.dateFrom && lDate < _filters.dateFrom) return false;
+      if (_filters.dateTo   && lDate > _filters.dateTo)   return false;
+      if (_filters.search) {
+        const q = _filters.search.toLowerCase();
+        if (!l.title?.toLowerCase().includes(q) && !l.client?.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    }).sort(sortByDate);
+  }
+
   return allLectures.filter(l => {
     if (l.progressStatus === PROGRESS_CANCELLED) return false;
 
@@ -105,7 +121,7 @@ function _filtered() {
 
     const status = calcPaymentStatus(l, today, allLectures);
     if (_filters.tab === 'all') {
-      if (status === 'na') return false;          // 'all'은 na 제외, scheduled 포함
+      if (status === 'na') return false;
     } else if (_filters.tab === 'na') {
       if (status !== 'na') return false;
     } else {
@@ -117,7 +133,7 @@ function _filtered() {
       if (!l.title?.toLowerCase().includes(q) && !l.client?.toLowerCase().includes(q)) return false;
     }
     return true;
-  }).sort((a, b) => (a.date != null ? a.date : '').localeCompare(b.date != null ? b.date : ''));
+  }).sort(sortByDate);
 }
 
 /* ════════════════════════════════════════
@@ -127,50 +143,49 @@ function renderStats() {
   const bar = document.getElementById('sl-stat-bar');
   if (!bar) return;
 
-  const today = getTodayString();
-  let totalAmt = 0, totalCnt = 0;
-  let paidAmt  = 0, paidCnt  = 0;
-  let pendingAmt = 0, pendingCnt = 0;
-  let overdueAmt = 0, overdueCnt = 0;
-
-  for (const l of allLectures) {
-    if (l.progressStatus === PROGRESS_CANCELLED) continue;
-    const fee    = Number(l.fee) || 0;
-    const status = calcPaymentStatus(l, today, allLectures);
-    if (status === 'na') continue;
-    if (fee > 0) { totalAmt += fee; totalCnt++; }
-    if      (status === 'paid')    { paidAmt    += fee; paidCnt++;    }
-    else if (status === 'pending') { pendingAmt += fee; pendingCnt++; }
-    else if (status === 'overdue') { overdueAmt += fee; overdueCnt++; }
+  const savedTab = _filters.tab;
+  function _tabResult(tab) {
+    _filters.tab = tab;
+    const rows = _filtered();
+    return { cnt: rows.length, amt: rows.reduce((s, l) => s + (Number(l.fee) || 0), 0) };
   }
+  const total   = _tabResult('all');
+  const paid    = _tabResult('paid');
+  const pending = _tabResult('pending');
+  const overdue = _tabResult('overdue');
+  _filters.tab = savedTab;
+  localStorage.setItem('sync_overdueAmt',   overdue.amt);
+  localStorage.setItem('sync_pendingAmt',   pending.amt);
+  localStorage.setItem('sync_overdueCount', overdue.cnt);
+  localStorage.setItem('sync_pendingCount', pending.cnt);
 
   bar.innerHTML = `
     <div class="sl-stat-card" data-tab="all" style="cursor:pointer;">
       <div class="sl-stat-icon sl-stat-icon--blue">📊</div>
       <div class="sl-stat-body">
-        <div class="sl-stat-value">${fmt(totalAmt)}</div>
-        <div class="sl-stat-label">전체 강의 수익 (${totalCnt}건)</div>
+        <div class="sl-stat-value">${fmt(total.amt)}</div>
+        <div class="sl-stat-label">전체 강의 수익 (${total.cnt}건)</div>
       </div>
     </div>
     <div class="sl-stat-card" data-tab="paid" style="cursor:pointer;">
       <div class="sl-stat-icon sl-stat-icon--green">✅</div>
       <div class="sl-stat-body">
-        <div class="sl-stat-value">${fmt(paidAmt)}</div>
-        <div class="sl-stat-label">입금 완료 (${paidCnt}건)</div>
+        <div class="sl-stat-value">${fmt(paid.amt)}</div>
+        <div class="sl-stat-label">입금 완료 (${paid.cnt}건)</div>
       </div>
     </div>
     <div class="sl-stat-card" data-tab="pending" style="cursor:pointer;">
       <div class="sl-stat-icon sl-stat-icon--yellow">⏳</div>
       <div class="sl-stat-body">
-        <div class="sl-stat-value">${fmt(pendingAmt)}</div>
-        <div class="sl-stat-label">입금 대기 (${pendingCnt}건)</div>
+        <div class="sl-stat-value">${fmt(pending.amt)}</div>
+        <div class="sl-stat-label">입금 대기 (${pending.cnt}건)</div>
       </div>
     </div>
-    <div class="sl-stat-card${overdueCnt > 0 ? ' sl-stat-card--overdue' : ''}" data-tab="overdue" style="cursor:pointer;">
+    <div class="sl-stat-card${overdue.cnt > 0 ? ' sl-stat-card--overdue' : ''}" data-tab="overdue" style="cursor:pointer;">
       <div class="sl-stat-icon sl-stat-icon--red">🚨</div>
       <div class="sl-stat-body">
-        <div class="sl-stat-value">${fmt(overdueAmt)}</div>
-        <div class="sl-stat-label">미입금 / 연체 (${overdueCnt}건)</div>
+        <div class="sl-stat-value">${fmt(overdue.amt)}</div>
+        <div class="sl-stat-label">미입금 / 연체 (${overdue.cnt}건)</div>
       </div>
     </div>`;
 
@@ -448,7 +463,7 @@ function _bindEvents() {
 function _applyUrlParams() {
   const params = new URLSearchParams(location.search);
   const filter = params.get('filter');
-  if (filter === 'overdue' || filter === 'pending' || filter === 'paid' || filter === 'scheduled' || filter === 'na') {
+  if (filter === 'overdue' || filter === 'pending' || filter === 'paid' || filter === 'scheduled' || filter === 'na' || filter === 'review_cancel') {
     _filters.tab = filter;
     document.querySelectorAll('.sl-tab').forEach(t => {
       t.classList.remove('active', 'active--paid', 'active--pending', 'active--overdue', 'active--scheduled', 'active--na');
@@ -481,6 +496,9 @@ authGuard(async user => {
 
   _unsub = subscribeLectures(user.uid, snap => {
     allLectures = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    console.log('=== CRITICAL RAW DB DUMP ===');
+    allLectures.forEach(l => console.log(`ID: ${l.id} | Title: ${l.title} | Date: ${l.date} | Group: ${l.groupId} | Fee: ${l.fee} | FeeAmt: ${l.feeAmount} | Status: ${l.progressStatus}`));
+    console.log('============================');
     _isLoading  = false;
     setLectureCache(user.uid, allLectures);
     render();

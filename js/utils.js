@@ -114,9 +114,9 @@ export function calcPaymentDate(date, cycle, lastDate) {
    단일 함수에서 계산하므로 두 페이지 간 값이 항상 일치
 ════════════════════════════════════════ */
 /**
- * 강의 객체에서 수강료(만원 단위)를 읽는다. feeAmount 우선, fee 폴백.
+ * 강의 객체에서 수강료를 읽는다. feeAmount 우선, fee 폴백.
  * @param {Object} lec - 강의 Firestore 문서 데이터
- * @returns {number} 수강료(만원 단위), 없으면 0
+ * @returns {number} 수강료(원 단위), 없으면 0
  */
 export function calcFee(lec) {
   return Number(lec.feeAmount != null ? lec.feeAmount : (lec.fee != null ? lec.fee : 0));
@@ -154,8 +154,8 @@ export function calcPaymentStatus(lec, todayStr, allLectures = []) {
   // 3. No paymentDate set → not tracked
   if (!lec.paymentDate) return 'na';
 
-  // 4. Past payment deadline
-  if (lec.paymentDate < todayStr) return 'overdue';
+  // 4. Past payment deadline (오늘 기한 포함 → 당일 미납도 연체)
+  if (lec.paymentDate <= todayStr) return 'overdue';
 
   // 5. Classify by lecture completion
   const lecDate    = lec.endDate != null ? lec.endDate : (lec.date != null ? lec.date : '');
@@ -184,6 +184,9 @@ export function calculateSettlementStats(allLectures, todayStr) {
   let totalAmt = 0, totalCnt = 0;
   let paidAmt = 0, pendingAmt = 0, overdueAmt = 0, scheduledAmt = 0;
   let paidCnt = 0, pendingCnt = 0, overdueCnt = 0, scheduledCnt = 0;
+  // 상태 버킷별 독립 Set — 같은 groupId라도 overdue/pending 각각 1회만 금액 집계
+  const processedOverdueGroups  = new Set();
+  const processedPendingGroups  = new Set();
   for (const l of allLectures) {
     if (l.progressStatus === PROGRESS_CANCELLED) continue;
     const fee    = calcFee(l);
@@ -191,9 +194,35 @@ export function calculateSettlementStats(allLectures, todayStr) {
     if (status === 'na') continue;
     if (fee > 0) { totalAmt += fee; totalCnt++; }
     if (status === 'scheduled') { scheduledLecs.push(l); scheduledAmt += fee; scheduledCnt++; }
-    else if (status === 'paid')    { paidAmt    += fee; paidCnt++;    }
-    else if (status === 'pending') { pendingLecs.push(l); pendingAmt += fee; pendingCnt++; }
-    else if (status === 'overdue') { overdueLecs.push(l); overdueAmt += fee; overdueCnt++; }
+    else if (status === 'paid') { paidAmt += fee; paidCnt++; }
+    else if (status === 'pending') {
+      pendingLecs.push(l);
+      const pgid = (l.groupId != null) ? String(l.groupId).trim() : '';
+      if (pgid !== '') {
+        if (!processedPendingGroups.has(pgid)) {
+          pendingAmt += fee;
+          pendingCnt++;
+          processedPendingGroups.add(pgid);
+        }
+      } else {
+        pendingAmt += fee;
+        pendingCnt++;
+      }
+    }
+    else if (status === 'overdue') {
+      overdueLecs.push(l);
+      const ogid = (l.groupId != null) ? String(l.groupId).trim() : '';
+      if (ogid !== '') {
+        if (!processedOverdueGroups.has(ogid)) {
+          overdueAmt += fee;
+          overdueCnt++;
+          processedOverdueGroups.add(ogid);
+        }
+      } else {
+        overdueAmt += fee;
+        overdueCnt++;
+      }
+    }
   }
   return {
     totalAmt, totalCnt,
@@ -234,12 +263,12 @@ export function escapeHtml(str) {
 }
 
 /**
- * 금액(만원 단위)을 ₩ 포맷 문자열로 변환한다.
- * @param {number} n - 만원 단위 금액
- * @returns {string} '₩1,234,000' 형식 문자열, n <= 0이면 '₩0'
+ * 금액(원 단위)을 ₩ 포맷 문자열로 변환한다.
+ * @param {number} n - 원화 단위 금액 (raw 원)
+ * @returns {string} '₩500,000' 형식 문자열, n <= 0이면 '₩0'
  */
 export function fmt(n) {
-  return n > 0 ? `₩${(n * REVENUE_UNIT).toLocaleString()}` : '₩0';
+  return n > 0 ? `₩${n.toLocaleString()}` : '₩0';
 }
 
 /**
@@ -537,9 +566,6 @@ export async function loadSidebar() {
       }
     });
 
-    const count  = parseInt(localStorage.getItem('navBadgeCount') || '0', 10);
-    const badge  = document.getElementById('nav-badge-lectures');
-    if (badge) { badge.textContent = count; badge.style.display = count > 0 ? '' : 'none'; }
   } catch (err) {
     console.error('[강비서] 사이드바 로드 오류:', err);
   }
@@ -1207,6 +1233,7 @@ export function positionPanel(triggerEl, panelEl) {
   panelEl.style.left  = `${left}px`;
   panelEl.style.right = '';
 }
+
 
 /* ════════════════════════════════════════
    강의 모달 HTML 동적 로드 — components/modal.html fetch 후 주입

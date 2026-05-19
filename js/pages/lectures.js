@@ -12,7 +12,7 @@ import { initMultiSessionModal, openAddModal as openMultiSessionModal } from '..
 ════════════════════════════════════════ */
 let currentUser   = null;
 let allLectures   = [];
-let currentFilter = 'all';
+let currentFilter = 'urgent';
 let searchQuery   = '';
 let searchStatus  = '';
 let dateFrom      = '';
@@ -101,7 +101,6 @@ function updateSummaryChips() {
   const excludedStatuses = ['discussing', 'onhold', 'cancelled'];
 
   const activeLectures = allLectures.filter(l => !excludedStatuses.includes(l._status));
-
   const thisMonthFee = activeLectures
     .filter(l => l.date?.startsWith(monthStr))
     .reduce((s, l) => s + (Number(l.fee) || 0), 0);
@@ -111,23 +110,12 @@ function updateSummaryChips() {
 
   const $ = id => document.getElementById(id);
   if ($('chip-total'))    $('chip-total').textContent    = `총 ${allLectures.filter(FILTER_FN.all).length}건`;
-  if ($('chip-fee'))      $('chip-fee').textContent      = `이번 달 총 강사료 ₩${(thisMonthFee).toFixed(0)}만원`;
+  if ($('chip-fee'))      $('chip-fee').textContent      = `이번 달 총 강사료 ₩${(thisMonthFee).toFixed(0)}원`;
   if ($('chip-unpaid'))   $('chip-unpaid').textContent   = `미입금 ${unpaid.length}건`;
   if ($('chip-upcoming')) $('chip-upcoming').textContent = `예정 ${upcoming.length}건`;
 }
 
 
-function updateNavBadge() {
-  const todayStr = `${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,'0')}-${String(TODAY.getDate()).padStart(2,'0')}`;
-  const count = allLectures.filter(l =>
-    l.date >= todayStr && !['cancelled', 'done'].includes(l._status)
-  ).length;
-  localStorage.setItem('navBadgeCount', String(count));
-  const badgeEl = document.getElementById('nav-badge-lectures');
-  if (!badgeEl) return;
-  badgeEl.textContent   = count;
-  badgeEl.style.display = count > 0 ? '' : 'none';
-}
 
 /* ════════════════════════════════════════
    테이블 렌더링
@@ -219,7 +207,7 @@ function renderTable() {
         </td>
         <td class="td-client">${escapeHtml(lec.client)}</td>
         <td class="td-place col-place">${escapeHtml(lec.place || '')}${lec.classroom ? `<span class="td-place-room"> (${escapeHtml(lec.classroom)})</span>` : ''}</td>
-        <td class="td-fee col-fee">₩${(Number(lec.fee)*10000 || 0).toLocaleString()}</td>
+        <td class="td-fee col-fee">₩${(Number(lec.fee) || 0).toLocaleString()}</td>
         <td class="col-status"><span class="lec-badge ${meta.cls}">${meta.label}</span></td>
       </tr>`;
   }).join('');
@@ -671,15 +659,15 @@ function _initBatchModal() {
         const feeAmountInput = document.getElementById('bm-feeAmount')?.value;
         if (feeAmountInput !== '') {
           const totalFee = Number(feeAmountInput) || 0;
-          payload.feeAmount = totalFee;
+          payload.feeAmount = Math.round(totalFee);
           // Derive unique per-session fee for each lecture only when fee isn't being set explicitly
           if (!document.getElementById('bm-cb-fee')?.checked) {
             for (const id of selectedIds) {
               const lec = allLectures.find(l => l.id === id);
-              const sessions = lec?.sessionTotal || 1;
+              const sessions = seqUpdates[id]?.sessionTotal || lec?.sessionTotal || 1;
               seqUpdates[id] = {
                 ...(seqUpdates[id] ?? {}),
-                fee: Math.floor(totalFee / sessions)
+                fee: Math.round(totalFee / sessions)
               };
             }
           }
@@ -955,10 +943,10 @@ function initLectures(uid) {
   const cached = getLectureCache(uid);
   if (cached && cached.length > 0) {
     allLectures = cached.map(d => ({ ...d, _status: classifyStatus(d) }));
+    window.allLectures = allLectures;
     _isLoading  = false;
     updateTabCounts();
     updateSummaryChips();
-    updateNavBadge();
     renderTable();
   }
 
@@ -967,6 +955,7 @@ function initLectures(uid) {
     allLectures = snapshot.docs
       .map(d => { const data = d.data(); return { id: d.id, ...data, _status: classifyStatus(data) }; })
       .sort((a, b) => a.date.localeCompare(b.date));
+    window.allLectures = allLectures;
 
     /* 🚨 파이어베이스 실시간 데이터가 들어올 때마다 브라우저 콘솔에 표를 그립니다.
     console.log("========== 🚨 DB 실시간 데이터 topicTagId 전수 조사 ==========");
@@ -982,7 +971,6 @@ function initLectures(uid) {
     setLectureCache(uid, allLectures);
     updateTabCounts();
     updateSummaryChips();
-    updateNavBadge();
     renderTable();
   }, err => { console.error('[강비서] 강의 구독 오류:', err); });
 }

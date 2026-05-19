@@ -65,6 +65,7 @@ let currentPhotoUrl    = null;   // Firebase Storage URL (null이면 이니셜 �
 let fbKeywords         = [];
 let fbTopics           = [];
 let fbMembership       = { status: 'trial', monthlyPrice: 9900, expiresAt: null };
+let allLectures        = [];
 let selectedTopicColor = '#2563c4';
 let topicIdCounter     = 1;
 let _colorExpanded     = false;
@@ -83,16 +84,6 @@ const COLOR_NAMES = {
   '#be123c':'크림슨','#15803d':'숲녹색','#1d4ed8':'진파랑','#78716c':'웜그레이',
 };
 
-/* ════════════════════════════════════════
-   nav-badge (localStorage에서 즉시 초기화)
-════════════════════════════════════════ */
-function initNavBadge() {
-  const count = parseInt(localStorage.getItem('navBadgeCount') || '0', 10);
-  const el = document.getElementById('nav-badge-lectures');
-  if (!el) return;
-  el.textContent = count;
-  el.style.display = count > 0 ? '' : 'none';
-}
 
 /* ════════════════════════════════════════
    섹션 내비 + IntersectionObserver
@@ -385,7 +376,7 @@ function initSettlement() {
 
 function updateFeeDisplay(val) {
   const el = document.getElementById('fee-display');
-  if (el) el.textContent = `= 시간당 ${(Number(val)/10000 || 0).toLocaleString('ko-KR')}만원`;
+  if (el) el.textContent = `= 시간당 ${(Math.round(Number(val) / 10000) || 0).toLocaleString('ko-KR')}원`;
 }
 
 function markDocUploaded(key, filename) {
@@ -533,6 +524,501 @@ function initSubscription() {
 
   const payBtn = document.getElementById('sub-payment-btn');
   if (payBtn && isAdmin) payBtn.style.display = 'none';
+}
+
+/* ════════════════════════════════════════
+   데이터 내보내기 / 일괄 업로드 (프리미엄 전용)
+════════════════════════════════════════ */
+async function _loadAllLectures(uid) {
+  try {
+    const snap = await getDocs(query(collection(db, 'lectures'), where('uid', '==', uid)));
+    allLectures = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.error('[강비서] 강의 데이터 로드 오류:', err);
+    allLectures = [];
+  }
+}
+
+const _CSV_HEADERS = [
+  'ID', '카테고리', '강의명', '현재 회차', '총 회차', '강의 주제',
+  '시작 날짜', '종료 날짜', '시작 시간', '종료 시간',
+  '회차별 강사료', '총 강사료', '정산 주기', '정산 상태', '진행 상태',
+  '온라인 수업', '강의장 주소', '강의실', '수강 인원', '그룹 구성',
+  '담당자 이름', '메모',
+];
+
+const _esc = v => {
+  const s = String(v ?? '');
+  return (s.includes(',') || s.includes('"') || s.includes('\n'))
+    ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+function _isPremiumGated() {
+  const isAdmin = SUPER_ADMIN_EMAILS.has(currentUser?.email || '');
+  if (isAdmin) return true;
+  return fbMembership.status !== 'trial' && fbMembership.status !== 'free' && fbMembership.status !== '';
+}
+
+function _showPremiumGateModal() {
+  const m = document.getElementById('modal-premium-gate');
+    if (!m) return;
+    m.style.display = 'flex';
+  }
+
+function _triggerCsvDownload(csv, filename) {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function _downloadTemplate() {
+  if (!_isPremiumGated()) {
+    _showPremiumGateModal();
+    return;
+  }
+  const csv = '﻿' + _CSV_HEADERS.join(',');
+  _triggerCsvDownload(csv, '강비서_강의업로드_양식.csv');
+}
+
+function _exportData() {
+  if (!_isPremiumGated()) {
+    _showPremiumGateModal();
+    return;
+  }
+  const rows = allLectures.map(l => [
+    _esc(l.id                 || ''),
+    _esc(l.topicTagId         ?? ''),
+    _esc(l.title              || ''),
+    _esc(l.sessionCurrent     ?? ''),
+    _esc(l.sessionTotal       ?? ''),
+    _esc(l.topic              || ''),
+    _esc(l.date               || ''),
+    _esc(l.endDate            || ''),
+    _esc(l.timeStart          || ''),
+    _esc(l.timeEnd            || ''),
+    Number(l.fee              || 0),
+    Number(l.feeAmount        || 0),
+    _esc(l.settlementCycle    || ''),
+    _esc(l.paidStatus         || ''),
+    _esc(l.progressStatus     || 'needs_review'),
+    _esc(l.isOnline           ?? ''),
+    _esc(l.place              || ''),
+    _esc(l.classroom          || ''),
+    _esc(l.participants       ?? ''),
+    _esc(l.groupInfo          || ''),
+    _esc(l.managerName        || ''),
+    _esc(l.memo               || ''),
+  ].join(','));
+  const csv = '﻿' + [_CSV_HEADERS.join(','), ...rows].join('\r\n');
+  _triggerCsvDownload(csv, '강비서_강의데이터_내보내기.csv');
+}
+
+/* ════════════════════════════════════════
+   일괄 업로드 — CSV 파싱 & 미리보기 모달
+════════════════════════════════════════ */
+
+/* RFC 4180 단일 행 파서 — 이중 인용부호 처리 포함 */
+function _parseCsvRow(row) {
+  const cells = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < row.length; i++) {
+    const ch = row[i];
+    if (inQuotes) {
+      if (ch === '"' && row[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"')                  { inQuotes = false; }
+      else                                  { cur += ch; }
+    } else {
+      if (ch === '"')  { inQuotes = true; }
+      else if (ch === ',') { cells.push(cur); cur = ''; }
+      else                 { cur += ch; }
+    }
+  }
+  cells.push(cur);
+  return cells;
+}
+
+/* 22-column 인덱스 상수 (헤더 순서 기준) */
+const _COL = {
+  ID: 0, TOPIC_TAG: 1, TITLE: 2, SESSION_CUR: 3, SESSION_TOT: 4, TOPIC: 5,
+  DATE: 6, END_DATE: 7, TIME_START: 8, TIME_END: 9,
+  FEE: 10, FEE_AMOUNT: 11, SETTLE_CYCLE: 12, PAID_STATUS: 13, PROGRESS: 14,
+  IS_ONLINE: 15, PLACE: 16, CLASSROOM: 17, PARTICIPANTS: 18,
+  GROUP_INFO: 19, MANAGER: 20, MEMO: 21,
+};
+
+let _importRows        = [];   // parsed row objects pending confirmation
+let _importErrorIndices = new Set();
+
+function _openImportModal(rows) {
+  _importRows        = rows;
+  _importErrorIndices = new Set();
+
+  const dupSet = new Set(
+    allLectures.map(l => `${l.date || ''}|${l.timeStart || ''}`)
+  );
+
+  let newCount = 0, dupCount = 0, errorCount = 0;
+
+  const tbody = document.getElementById('import-preview-tbody');
+  if (!tbody) return;
+
+  tbody.innerHTML = rows.map((r, i) => {
+    const title     = (r[_COL.TITLE]      || '').trim();
+    const date      = (r[_COL.DATE]       || '').trim();
+    const timeStart = (r[_COL.TIME_START] || '').trim();
+    const feeRaw    = (r[_COL.FEE]        || '').trim();
+    const isInvalid = !title || !date || !timeStart || !feeRaw;
+
+    const isDup = !isInvalid && dupSet.has(`${date}|${timeStart}`);
+
+    if (isInvalid) { _importErrorIndices.add(i); errorCount++; }
+    else if (isDup)  dupCount++;
+    else             newCount++;
+
+    const rowBg = isInvalid ? '#fff1f2' : isDup ? '#fffbeb' : '#fff';
+    const badge = isInvalid
+      ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:600;background:#fee2e2;color:#991b1b;">❌ 오류 - 필수값 누락</span>'
+      : isDup
+      ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:600;background:#fef3c7;color:#92400e;">⚠️ 중복 - 업데이트 예정</span>'
+      : '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:600;background:#d1fae5;color:#065f46;">✅ 신규 등록 예정</span>';
+
+    const fmtFee = n => {
+      const v = Number(n) || 0;
+      return v > 0 ? '₩' + v.toLocaleString('ko-KR') : '—';
+    };
+
+    const sessionStr = [r[_COL.SESSION_CUR], r[_COL.SESSION_TOT]]
+      .filter(Boolean).join(' / ') || '—';
+
+    return `<tr style="background:${rowBg};border-bottom:1px solid #f3f4f6;">
+      <td style="padding:9px 12px;color:#9ca3af;">${i + 1}</td>
+      <td style="padding:9px 12px;font-weight:600;color:#111827;max-width:180px;
+                 overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+          title="${_escHtml(title)}">${_escHtml(title || '—')}</td>
+      <td style="padding:9px 12px;color:#374151;">${_escHtml(sessionStr)}</td>
+      <td style="padding:9px 12px;color:#374151;white-space:nowrap;">${_escHtml(date || '—')}</td>
+      <td style="padding:9px 12px;color:#374151;white-space:nowrap;">${_escHtml(timeStart || '—')}</td>
+      <td style="padding:9px 12px;text-align:right;color:#374151;">${fmtFee(feeRaw)}</td>
+      <td style="padding:9px 12px;text-align:right;color:#374151;">${fmtFee(r[_COL.FEE_AMOUNT])}</td>
+      <td style="padding:9px 12px;color:#374151;white-space:nowrap;">${_escHtml(r[_COL.PROGRESS] || '—')}</td>
+      <td style="padding:9px 12px;">${badge}</td>
+    </tr>`;
+  }).join('');
+
+  const summary = document.getElementById('import-preview-summary');
+  if (summary) {
+    summary.textContent = `총 ${rows.length}행 — 신규 ${newCount}건 / 중복 ${dupCount}건` +
+      (errorCount > 0 ? ` / ❌ 오류 ${errorCount}건 (파일 수정 필요)` : '');
+  }
+
+  const confirmBtn = document.getElementById('btn-confirm-import');
+  if (confirmBtn) confirmBtn.disabled = errorCount > 0;
+
+  const modal = document.getElementById('modal-import-preview');
+  if (modal) { modal.style.display = 'block'; document.body.style.overflow = 'hidden'; }
+}
+
+function _closeImportModal() {
+  const modal = document.getElementById('modal-import-preview');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+  const inp = document.getElementById('input-import-csv');
+  if (inp) inp.value = '';
+  _importRows = [];
+}
+
+function _escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function initImportCsv() {
+  const input = document.getElementById('input-import-csv');
+  input?.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!_isPremiumGated()) {
+      _showPremiumGateModal();
+      input.value = '';
+      return;
+    }
+
+    /* 인코딩 자동 감지: UTF-8 시도 후 깨진 문자 발견 시 EUC-KR 재시도 */
+    const _decodeBuffer = buf => {
+      const utf8 = new TextDecoder('utf-8', { fatal: false }).decode(buf);
+      /* 대체 문자(U+FFFD) 또는 흔한 EUC-KR 깨짐 패턴 감지 */
+      if (utf8.includes('�') || /[\xC0-\xFF][\x80-\xBF]/.test(utf8)) {
+        try { return new TextDecoder('euc-kr', { fatal: true }).decode(buf); } catch (_) {}
+      }
+      return utf8;
+    };
+
+    const reader = new FileReader();
+    reader.onload = ev => {
+      let text = _decodeBuffer(ev.target.result);
+      /* UTF-8 BOM 제거 */
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
+      const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+      if (lines.length < 2) {
+        showToast('데이터가 없거나 헤더만 있는 파일입니다.', 'warn');
+        input.value = '';
+        return;
+      }
+
+      /* 첫 행(헤더) 제외하고 파싱 */
+      const rows = lines.slice(1).map(_parseCsvRow);
+      _openImportModal(rows);
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
+  /* 닫기 버튼 (헤더 X + 푸터 취소) */
+  document.getElementById('btn-cancel-import')?.addEventListener('click', _closeImportModal);
+  document.getElementById('btn-cancel-import-footer')?.addEventListener('click', _closeImportModal);
+
+  /* 백드롭 클릭 닫기 */
+  document.getElementById('modal-import-preview')?.addEventListener('click', e => {
+    if (e.target === e.currentTarget) _closeImportModal();
+  });
+
+  document.getElementById('btn-confirm-import')?.addEventListener('click', () => {
+    _handleConfirmImport();
+  });
+}
+
+/* ── 중복 선택 서브 프롬프트 ── */
+function _showDupChoicePrompt(dupCount, onUpdate, onSkip, onCancel) {
+  const existing = document.getElementById('dup-choice-backdrop');
+  if (existing) existing.remove();
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'dup-choice-backdrop';
+  Object.assign(backdrop.style, {
+    position: 'fixed', inset: '0', background: 'rgba(0,0,0,0.55)',
+    zIndex: '1400', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    padding: '16px',
+  });
+
+  backdrop.innerHTML = `
+    <div style="background:#fff;border-radius:14px;max-width:420px;width:100%;
+                padding:28px 24px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+      <h4 style="margin:0 0 8px;font-size:1rem;font-weight:700;color:#111827;">⚠️ 중복 강의 발견</h4>
+      <p style="margin:0 0 20px;font-size:0.88rem;color:#4b5563;line-height:1.6;">
+        업로드하려는 강의 중 이미 등록된 시간대의 강의가
+        <strong>${dupCount}건</strong> 존재합니다. 어떻게 처리할까요?
+      </p>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button id="dup-btn-update" type="button"
+                style="padding:10px 16px;border-radius:8px;border:none;background:#2563c4;
+                       color:#fff;font-weight:600;font-size:0.88rem;cursor:pointer;text-align:left;">
+          🔄 최신 정보로 업데이트 (Overwrite)
+        </button>
+        <button id="dup-btn-skip" type="button"
+                style="padding:10px 16px;border-radius:8px;border:1px solid #e5e7eb;
+                       background:#fff;color:#374151;font-weight:600;font-size:0.88rem;cursor:pointer;text-align:left;">
+          ⏭ 중복 강의 건너뛰기 (Skip Duplicates)
+        </button>
+        <button id="dup-btn-cancel" type="button"
+                style="padding:10px 16px;border-radius:8px;border:1px solid #e5e7eb;
+                       background:#fff;color:#9ca3af;font-weight:500;font-size:0.88rem;cursor:pointer;text-align:left;">
+          취소
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(backdrop);
+
+  const remove = () => backdrop.remove();
+  backdrop.getElementById = id => backdrop.querySelector(`#${id}`);
+  backdrop.querySelector('#dup-btn-update').addEventListener('click', () => { remove(); onUpdate(); });
+  backdrop.querySelector('#dup-btn-skip').addEventListener('click',   () => { remove(); onSkip();  });
+  backdrop.querySelector('#dup-btn-cancel').addEventListener('click', () => { remove(); onCancel(); });
+}
+
+/* ── 상태 한→영 매핑 ── */
+const _PROGRESS_MAP = {
+  '검토 필요': 'needs_review', '진행중': 'scheduled', '완료': 'done',
+};
+const _PAID_MAP = {
+  '대기': 'pending', '완료': 'paid',
+};
+
+/* ── CSV 행 → Firestore 페이로드 변환 ── */
+function _rowToPayload(r, resolveTagId = () => null) {
+  const sessionTotal  = (r[_COL.SESSION_TOT] || '').trim() !== ''
+    ? Number(r[_COL.SESSION_TOT]) || null : null;
+
+  /* 강사료: CSV 입력값을 원화 단위 그대로 사용 */
+  let fee       = Number(r[_COL.FEE])        || 0;
+  let feeAmount = Number(r[_COL.FEE_AMOUNT]) || 0;
+
+  /* 교차 계산 (원화 단위 기준) */
+  const totalSessions = Number(sessionTotal || 1);
+  if (fee > 0 && feeAmount === 0) feeAmount = fee * totalSessions;
+  else if (feeAmount > 0 && fee === 0) fee = Math.round(feeAmount / totalSessions);
+
+  const rawProgress  = (r[_COL.PROGRESS]    || '').trim();
+  const rawPaidStatus = (r[_COL.PAID_STATUS] || '').trim();
+
+  return {
+    topicTagId:      resolveTagId((r[_COL.TOPIC_TAG] || '').trim()),
+    title:           (r[_COL.TITLE]        || '').trim(),
+    sessionCurrent:  (r[_COL.SESSION_CUR]  || '').trim() !== ''
+      ? Number(r[_COL.SESSION_CUR]) || null : null,
+    sessionTotal,
+    topic:           (r[_COL.TOPIC]        || '').trim(),
+    date:            (r[_COL.DATE]         || '').trim(),
+    startDate:       (r[_COL.DATE]         || '').trim(),
+    endDate:         (r[_COL.END_DATE]     || '').trim(),
+    timeStart:       (r[_COL.TIME_START]   || '').trim(),
+    startTime:       (r[_COL.TIME_START]   || '').trim(),
+    timeEnd:         (r[_COL.TIME_END]     || '').trim(),
+    endTime:         (r[_COL.TIME_END]     || '').trim(),
+    fee,
+    feeAmount,
+    settlementCycle: (r[_COL.SETTLE_CYCLE] || '').trim(),
+    paidStatus:      _PAID_MAP[rawPaidStatus]      ?? 'pending',
+    progressStatus:  _PROGRESS_MAP[rawProgress]   ?? 'needs_review',
+    isOnline:        r[_COL.IS_ONLINE] === 'true' || r[_COL.IS_ONLINE] === true,
+    place:           (r[_COL.PLACE]        || '').trim(),
+    classroom:       (r[_COL.CLASSROOM]    || '').trim(),
+    participants:    (r[_COL.PARTICIPANTS] || '').trim() !== ''
+      ? Number(r[_COL.PARTICIPANTS]) || null : null,
+    groupInfo:       (r[_COL.GROUP_INFO]   || '').trim(),
+    managerName:     (r[_COL.MANAGER]      || '').trim(),
+    memo:            (r[_COL.MEMO]         || '').trim(),
+  };
+}
+
+/* ── Firestore 배치 커밋 (500개 청크 자동 분할) ── */
+async function _commitInChunks(ops) {
+  const CHUNK = 499;
+  for (let i = 0; i < ops.length; i += CHUNK) {
+    const batch = writeBatch(db);
+    ops.slice(i, i + CHUNK).forEach(({ ref, data, merge }) => {
+      batch.set(ref, data, merge ? { merge: true } : {});
+    });
+    await batch.commit();
+  }
+}
+
+/* ── 확정 업로드 진입점 ── */
+async function _handleConfirmImport() {
+  if (!_importRows.length) return;
+
+  const dupMap = new Map(
+    allLectures
+      .filter(l => l.id)
+      .map(l => [`${l.date || ''}|${l.timeStart || ''}`, l.id])
+  );
+
+  const dupRows  = _importRows.filter(r => dupMap.has(`${r[_COL.DATE] || ''}|${r[_COL.TIME_START] || ''}`));
+  const newRows  = _importRows.filter(r => !dupMap.has(`${r[_COL.DATE] || ''}|${r[_COL.TIME_START] || ''}`));
+
+  const proceed = async (overwrite) => {
+    /* 오류 행 제외 — 원본 배열에서의 인덱스로 판단 */
+    const finalRows = (overwrite ? _importRows : newRows)
+      .filter(r => !_importErrorIndices.has(_importRows.indexOf(r)));
+
+    if (!finalRows.length) {
+      showToast('처리할 강의가 없습니다.', 'info');
+      return;
+    }
+
+    const confirmBtn = document.getElementById('btn-confirm-import');
+    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = '업로드 중...'; }
+
+    try {
+      /* ── 카테고리 해석 및 신규 생성 ── */
+      const newTagMap = new Map(); // 생성된 카테고리 이름 → 새 ID
+
+      const resolveTagId = raw => {
+        if (!raw) return null;
+        const asNum = Number(raw);
+        /* 숫자 ID로 먼저 시도 */
+        if (!isNaN(asNum) && asNum > 0) {
+          const byId = fbTopics.find(t => t.id === asNum);
+          if (byId) return byId.id;
+        }
+        /* 이름으로 탐색 */
+        const byName = fbTopics.find(t => t.name === raw);
+        if (byName) return byName.id;
+        /* 신규 생성 예약된 이름 */
+        if (newTagMap.has(raw)) return newTagMap.get(raw);
+        return null;
+      };
+
+      /* 알 수 없는 카테고리 이름 수집 */
+      finalRows.forEach(r => {
+        const raw = (r[_COL.TOPIC_TAG] || '').trim();
+        if (!raw) return;
+        const asNum = Number(raw);
+        const alreadyExists =
+          (!isNaN(asNum) && asNum > 0 && fbTopics.some(t => t.id === asNum)) ||
+          fbTopics.some(t => t.name === raw);
+        if (!alreadyExists && !newTagMap.has(raw)) {
+          const newId = topicIdCounter++;
+          newTagMap.set(raw, newId);
+          fbTopics.push({ id: newId, name: raw, color: '#64748b' });
+        }
+      });
+
+      /* 신규 카테고리가 생겼으면 Firestore 사용자 문서 갱신 */
+      if (newTagMap.size > 0) {
+        await setDoc(doc(db, 'users', currentUser.uid), { topicTags: fbTopics }, { merge: true });
+        renderTopicTags();
+      }
+
+      /* ── Firestore 배치 구성 ── */
+      const ops = finalRows.map(r => {
+        const key     = `${r[_COL.DATE] || ''}|${r[_COL.TIME_START] || ''}`;
+        const existId = dupMap.get(key);
+        const isMerge = overwrite && !!existId;
+        const ref     = isMerge
+          ? doc(db, 'lectures', existId)
+          : doc(collection(db, 'lectures'));
+        const data = {
+          uid: currentUser.uid,
+          ..._rowToPayload(r, resolveTagId),
+          ...(isMerge ? {} : { createdAt: serverTimestamp() }),
+          updatedAt: serverTimestamp(),
+        };
+        return { ref, data, merge: isMerge };
+      });
+
+      await _commitInChunks(ops);
+
+      _closeImportModal();
+      showToast(`총 ${ops.length}건의 강의 처리가 완료되었습니다!`, 'success');
+      await _loadAllLectures(currentUser.uid);
+    } catch (err) {
+      console.error('[강비서] 일괄 업로드 오류:', err);
+      showToast('업로드 중 오류가 발생했습니다.', 'error');
+    } finally {
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '최종 업로드 완료'; }
+    }
+  };
+
+  if (dupRows.length > 0) {
+    _showDupChoicePrompt(
+      dupRows.length,
+      () => proceed(true),
+      () => proceed(false),
+      () => { /* stay on preview modal */ },
+    );
+  } else {
+    await proceed(false);
+  }
 }
 
 /* ════════════════════════════════════════
@@ -1004,7 +1490,6 @@ window.deleteUserLectures = deleteUserLectures;
 /* ════════════════════════════════════════
    인증 상태 감지 — 진입점
 ════════════════════════════════════════ */
-initNavBadge();
 initSectionNav();
 
 authGuard(async user => {
@@ -1030,4 +1515,19 @@ authGuard(async user => {
   initSubscription();
   initFloatingSave();
   initGcalImport();
+
+  await _loadAllLectures(user.uid);
+  document.getElementById('btn-download-template')?.addEventListener('click', _downloadTemplate);
+  document.getElementById('btn-export-data')?.addEventListener('click', _exportData);
+  initImportCsv();
+
+  /* 프리미엄 게이트 모달 닫기 */
+  const _pgModal = document.getElementById('modal-premium-gate');
+  document.getElementById('btn-premium-gate-close')?.addEventListener('click', () => {
+    if (_pgModal) _pgModal.style.display = 'none';
+  });
+    _pgModal?.addEventListener('click', e => {
+    if (e.target === _pgModal) _pgModal.style.display = 'none';
+  });
+
 });

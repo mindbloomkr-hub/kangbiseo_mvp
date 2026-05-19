@@ -322,17 +322,6 @@ function updateCalendarEvents() {
   applyWeekSlotMin();
 }
 
-/* ════════════════════════════════════════
-   nav-badge 업데이트
-════════════════════════════════════════ */
-function updateNavBadge() {
-  const count = allLectures.filter(l => l.date >= getTodayString()).length;
-  localStorage.setItem('navBadgeCount', String(count));
-  const badgeEl = document.getElementById('nav-badge-lectures');
-  if (!badgeEl) return;
-  badgeEl.textContent   = count;
-  badgeEl.style.display = count > 0 ? '' : 'none';
-}
 
 /* ════════════════════════════════════════
    뷰 전환 버튼
@@ -360,8 +349,8 @@ function initLectures(uid) {
   unsubLectures = subscribeLectures(uid, snapshot => {
     document.getElementById('cal-loading')?.classList.add('hidden');
     allLectures = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    window.allLectures = allLectures;
     updateCalendarEvents();
-    updateNavBadge();
   }, err => {
     console.error('[강비서] 강의 구독 오류:', err);
     document.getElementById('cal-loading')?.classList.add('hidden');

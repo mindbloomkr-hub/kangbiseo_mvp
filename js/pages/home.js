@@ -107,6 +107,21 @@ function getLectureColor(lec) {
 }
 
 /* ════════════════════════════════════════
+   홈 전용 — 회차당 강사료 (일일 단가)
+   lec.fee = 회차 단가 (unit·fixed 공통, lectureModal이 보장)
+   lec.feeAmount = 패키지 총액 → 홈 대시보드에는 부적합
+════════════════════════════════════════ */
+function _calcDailyFee(lec) {
+  const perSession = Number(lec.fee);
+  if (perSession > 0) return perSession;
+  // 구형 데이터(fee 미설정) 폴백: 총액 ÷ 회차수
+  if (lec.feeAmount != null) {
+    return Number(lec.feeAmount) / (Number(lec.sessionTotal) || 1);
+  }
+  return 0;
+}
+
+/* ════════════════════════════════════════
    날짜 유틸 (home 전용)
 ════════════════════════════════════════ */
 function getWeekDateStrings() {
@@ -142,18 +157,6 @@ function getDisplayName() {
       || '강사';
 }
 
-/* ════════════════════════════════════════
-   1. nav-badge
-════════════════════════════════════════ */
-function updateNavBadge() {
-  const todayStr = getTodayString();
-  const count = allLectures.filter(l => l.date >= todayStr).length;
-  localStorage.setItem('navBadgeCount', String(count));
-  const badgeEl = document.getElementById('nav-badge-lectures');
-  if (!badgeEl) return;
-  badgeEl.textContent = count;
-  badgeEl.style.display = count > 0 ? '' : 'none';
-}
 
 /* ════════════════════════════════════════
    2. 환영 인사
@@ -187,31 +190,33 @@ function renderStatBar() {
   const container = document.getElementById('stat-bar');
   if (!container) return;
 
-  const totalFee = todayLectures.reduce((sum, l) => sum + calcFee(l), 0);
+  const totalFee = todayLectures.reduce((sum, l) => sum + _calcDailyFee(l), 0);
   const todayStr = getTodayString();
 
-  const { overdueLecs, pendingLecs, overdueAmt, pendingAmt } = calculateSettlementStats(allLectures, todayStr);
-  console.log('[home] overdueLecs:', overdueLecs.length, 'pendingLecs:', pendingLecs.length);
+  const overdueAmt   = Number(localStorage.getItem('sync_overdueAmt')   || 0);
+  const pendingAmt   = Number(localStorage.getItem('sync_pendingAmt')   || 0);
+  const overdueCount = Number(localStorage.getItem('sync_overdueCount') || 0);
+  const pendingCount = Number(localStorage.getItem('sync_pendingCount') || 0);
 
-  const unpaidIconCls = overdueLecs.length > 0
+  const unpaidIconCls = overdueCount > 0
     ? 'stat-icon--red'
-    : (pendingLecs.length > 0 ? 'stat-icon--yellow' : 'stat-icon--green');
+    : (pendingCount > 0 ? 'stat-icon--yellow' : 'stat-icon--green');
 
   const stats = [
-    { icon: '📅', iconCls: 'stat-icon--blue',   value: `${todayLectures.length}건`,                         label: '오늘 강의',      delta: '', delta2: '' },
-    { icon: '💰', iconCls: 'stat-icon--green',  value: totalFee > 0 ? `${totalFee.toFixed(0)}만원` : '—',   label: '오늘 예상 수익', delta: '', delta2: '' },
-    { icon: '⏱',  iconCls: 'stat-icon--yellow', value: todayLectures.length > 1 ? '이동 확인' : '—',         label: '이동 버퍼 타임', delta: '', delta2: '' },
+    { icon: '📅', iconCls: 'stat-icon--blue',   value: `${todayLectures.length}건`,                        label: '오늘 강의',      delta: '', delta2: '' },
+    { icon: '💰', iconCls: 'stat-icon--green',  value: totalFee > 0 ? fmt(totalFee) : '—',                 label: '오늘 예상 수익', delta: '', delta2: '' },
+    { icon: '⏱',  iconCls: 'stat-icon--yellow', value: todayLectures.length > 1 ? '이동 확인' : '—',        label: '이동 버퍼 타임', delta: '', delta2: '' },
     {
       icon: '💳', iconCls: unpaidIconCls,
-      value:  `${overdueLecs.length + pendingLecs.length}건`,
+      value:  `${overdueCount + pendingCount}건`,
       label:  '미입금 정산',
       delta:  overdueAmt > 0 ? `${fmt(overdueAmt)} 연체` : '',
       delta2: pendingAmt > 0 ? `${fmt(pendingAmt)} 대기` : '',
     },
   ];
 
-  const hasUnpaid = overdueLecs.length + pendingLecs.length > 0;
-  const filterParam = overdueLecs.length > 0 ? 'overdue' : 'pending';
+  const hasUnpaid = overdueCount + pendingCount > 0;
+  const filterParam = overdueCount > 0 ? 'overdue' : 'pending';
 
   container.innerHTML = stats.map((s, i) => {
     const isUnpaid = i === 3;
@@ -305,8 +310,7 @@ function renderBriefingCards() {
       : '';
 
     // Fee
-    const fee    = calcFee(l);
-    const feeHtml = fee > 0 ? `${fmt(fee)}원` : '';
+    const fee = _calcDailyFee(l);
 
     // Parking
     const parkingHtml = l.parkingInfo
@@ -320,7 +324,7 @@ function renderBriefingCards() {
     if (l.timeEnd)    tbParts.push(`<span class="briefing-tb-main">■&nbsp;${l.timeEnd}</span>`);*/
     if (durationHtml) tbParts.push(`<span>⏱ &nbsp;${durationHtml}</span>`);
     if (l.wrapupTime) tbParts.push(`<span>📦 정리&nbsp;${l.wrapupTime}분</span>`);
-    tbParts.push(`<span>💸 &nbsp;${feeHtml}</span>`);
+    if (fee > 0) tbParts.push(`<span>💸 &nbsp;${fmt(fee)}</span>`);
     const timeBarHtml = tbParts.length > 0
       ? `<div class="briefing-timebar">${tbParts.map(part => `<div class="briefing-tb-cell">${part}</div>`).join('')}</div>`
       : '';    
@@ -1067,7 +1071,7 @@ function renderWeekly() {
   if (summaryEl) {
     summaryEl.innerHTML = `
       <div class="weekly-summary-item"><span>📋</span><span>이번 주 강의</span><span class="weekly-summary-value">${weekTotal}건</span></div>
-      <div class="weekly-summary-item"><span>💰</span><span>예상 수익</span><span class="weekly-summary-value">₩${(weekTotalFee).toFixed(0)}만원</span></div>
+      <div class="weekly-summary-item"><span>💰</span><span>예상 수익</span><span class="weekly-summary-value">₩${(weekTotalFee).toFixed(0)}원</span></div>
       <div class="weekly-summary-item"><span>🚗</span><span>강의 있는 날</span><span class="weekly-summary-value">${daysWithLec}일</span></div>`;
   }
 }
@@ -1079,6 +1083,7 @@ function initLectures(uid) {
   if (unsubscribeLectures) unsubscribeLectures();
   unsubscribeLectures = subscribeLectures(uid, snapshot => {
     allLectures = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    window.allLectures = allLectures;
 
     const todayStr    = getTodayString();
     const tomorrowObj = new Date(); tomorrowObj.setDate(tomorrowObj.getDate() + 1);
@@ -1099,7 +1104,6 @@ function initLectures(uid) {
     renderTimeline();
     renderTomorrowTimeline();
     renderWeekly();
-    updateNavBadge();
     // Refresh todo list so lecture-linked badges reflect current lecture data
     if (todos.length) _renderSidebarTodos();
   }, err => {
